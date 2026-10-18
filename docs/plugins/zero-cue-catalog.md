@@ -1,7 +1,7 @@
 <h1 align="center">Armiger Plugin #3 — Zero-Cue Catalog &amp; Structural Disambiguator (<code>armiger-zero-cue-catalog</code>)</h1>
 
 <p align="center">
-  <strong>Resolves bare-title ("zero-cue") torrents lacking season/episode syntax via an offline 929,400-key normalized media catalog and structural release rules, lifting Movie-vs-TV accuracy to <code>99.46%</code> and 11-class accuracy to <code>98.48%</code>.</strong><br>
+  <strong>Resolves bare-title ("zero-cue") torrents lacking season/episode syntax via an offline 929,400-entry <code>BLAKE2b-64</code> cryptographically hashed media catalog (<code>26.0 MB</code>) and deterministic structural rules, lifting 5-split (<code>N=10,262</code>) category accuracy from <code>94.00%</code> to <code>95.42%</code> and specialist zero-cue accuracy from <code>87.40%</code> to <code>91.50%</code> (<code>+4.10 pp</code>).</strong><br>
   Available standalone here and pre-bundled inside <a href="https://huggingface.co/NorviTech/armiger-ultra"><code>NorviTech/armiger-ultra</code></a>.
 </p>
 
@@ -18,18 +18,19 @@ In real-world BitTorrent/DHT indexing, **2% to 4%** of movie, TV, and anime torr
 - `[SubGroup] Bare Japanese/English Title [1080p].mkv` (a theatrical anime film vs. a TV OVA/series without an episode number)
 - `Director Name - Movies 1-6 Collection (1979-1998) 1080p` (a multi-file movie pack whose 6 `.mkv` files look identical in file-count to a 6-episode TV mini-series)
 
-Even a 70B+ parameter cloud baseline classifiers must guess when given only a bare title unless it can consult a media catalog. `NorviTech/armiger-zero-cue-catalog` pairs deterministic structural guards (for multi-item media collections, interactive software archives, and structured educational materials) with an offline, O(1) hash-table lookup across **929,400 normalized keys** (`472,017` `(title, year)` pairs, `257,016` anime title stems, and `200,367` unambiguous long titles).
+Even a 70B+ parameter cloud LLM must guess when given only a bare title unless it can consult a media catalog. `NorviTech/armiger-zero-cue-catalog` pairs deterministic structural guards with an offline, O(1) hash-table lookup across **929,400 `BLAKE2b-64` (`person=b"ArmigZCC"`) cryptographically hashed keys** (`472,017` `(title, year)` pairs, `257,016` anime title stems, and `200,367` unambiguous long titles — zero plain-text media titles stored on disk, zero `info_hash` memorization).
 
-## Measured Accuracy Lift Across All 6 Evaluation Cohorts
+## Measured Accuracy Lift Across All 6 Evaluation Cohorts (Unmutated Ground-Truth Keys)
 
-| Evaluation Cohort | Neural Backbone Only (`Armiger Ultra`) | + Structural Guards | **+ `armiger-zero-cue-catalog` (`Armiger Ultra`)** | **+ `armiger-zero-cue-catalog` (`Armiger 8.3 MB`)** |
+| Evaluation Cohort (Unmutated `rows.y`) | Valid `N` | Standalone Neural (`FP32` / `INT8`) | **Fair Blind Hybrid (`+ armiger-zero-cue-catalog` FP32 / INT8)** | Net Lift |
 | :--- | :---: | :---: | :---: | :---: |
-| **Gold Standard (`N=2,835`)** | `97.45%` | `97.81%` | **`98.48%`** (`99.46%` Movie-vs-TV) | **`97.92%`** (`99.15%` Movie-vs-TV) |
-| **Fresh Torrents (`N=1,354`)** | `95.79%` | `95.94%` | **`96.60%`** | **`96.38%`** |
-| **Hard Edge-Cases (`N=1,025`)** | `95.71%` | `96.10%` | **`97.17%`** | **`96.20%`** |
-| **Validation Holdout (`N=2,237`)** | `96.92%` | `97.05%` | **`97.32%`** | **`96.51%`** |
-| **Specialist Torrents (`N=1,837`)** | `93.85%` | `94.18%` | **`98.26%`** | **`97.82%`** |
-| **Multilingual Torrents (`N=2,828`)** | `95.44%` | `95.69%` | **`98.02%`** | **`97.81%`** |
+| **`oct15_confirmation` (Gold Standard)** | `2,835` | `95.03%` / `95.06%` (`96.60%` Movie-vs-TV) | **`95.49%`** / **`95.49%`** (**`97.15%`** Movie-vs-TV) | `+0.46 pp` |
+| **`fresh_confirmation` (Fresh Holdout)** | `1,402` | `94.51%` / `94.44%` | **`94.58%`** / **`94.51%`** | `+0.07 pp` |
+| **`beyond_confirmation` (Hard Edge-Cases)** | `1,025` | `92.88%` / `92.88%` (`88.74%` Movie-vs-TV) | **`95.12%`** / **`95.12%`** (**`96.54%`** Movie-vs-TV) | **`+2.24 pp`** |
+| **`tc_truespec_2000` (Specialist Zero-Cue)** | `2,000` | `87.40%` / `87.35%` | **`91.50%`** / **`91.50%`** | **`+4.10 pp`** |
+| **`tc_truespec_multilang_3000` (Multilingual)** | `3,000` | `97.50%` / `97.37%` | **`98.47%`** / **`98.40%`** | **`+0.97 pp`** |
+| **`calibration` (Calibration Split)** | `424` | `96.46%` / `96.46%` | **`96.70%`** / **`96.70%`** | `+0.24 pp` |
+| **5-Split Weighted Mean (`N=10,262`)** | **`10,262`** | **`94.00%`** / **`93.95%`** | **`95.42%`** / **`95.39%`** | **`+1.42 pp`** |
 
 ## Quickstart
 
@@ -49,14 +50,14 @@ print(res)
 
 ## Part of the Armiger Modular Plugin Suite
 
-| Plugin Repository | Bundled in `Armiger Ultra`? | Footprint | Core Capability & Measured Impact |
+| Plugin Repository | Bundled in `Armiger Ultra`? | Footprint | Core Capability & Measured Impact (Unmutated Ground-Truth Keys) |
 | :--- | :---: | :---: | :--- |
-| **[`NorviTech/armiger-swarm-survival`](https://huggingface.co/NorviTech/armiger-swarm-survival)** | **Yes** (`swarm_adapter.pt`, `swarm_survival.py`) | `163 KB` | **SwarmSurvivalNet v2 & Honeypot Residual Adapter:** **`96.83%`** Swarm Liveliness AUROC (vs. `53.04%` raw seeders), **`100.0%`** fake-seeder malware trap recall, **`0%`** content-category flip guarantee. |
-| **[`NorviTech/armiger-swarm-priors`](https://huggingface.co/NorviTech/armiger-swarm-priors)** | **Yes** (`swarm_priors.py`) | `29.4 KB` | **Empirical Bayes Swarm & Release-Group Priors:** 4-pathway tracker scrape prior engine, mandatory modality dropout (`p=0.60`), anomaly feature extraction, and public-tracker passkey safety filter. |
-| **[`NorviTech/armiger-zero-cue-catalog`](https://huggingface.co/NorviTech/armiger-zero-cue-catalog)** | **Yes** (`zero_cue_plugin.py`, `validated_zero_cue_catalog.json`) | `36.0 MB` | **Zero-Cue Catalog & Structural Disambiguator:** Offline 929,400-key normalized title-year & entity reference lookup + structural multi-file & format disambiguation rules; lifts Movie-vs-TV accuracy to **`99.46%`** and 11-class accuracy to **`98.48%`** (`98.93%` Hard Edge-Cases). |
-| **[`NorviTech/armiger-audio-guard`](https://huggingface.co/NorviTech/armiger-audio-guard)** | **Yes** (`audio_language_guard.py`) | `4.2 KB` | **Cross-Head Audio Language & Anime Dub Guard:** Couples `title_language` (`P(Foreign Title)`) with `lang` head to disambiguate `.en.` prepositions, `<Foreign>.ENG.Sub`, regional dubs, and `MULTi (FR EN)` tags; reaches **`98.72%`** Gold Standard and **`99.88%`** Hard Edge-Case audio accuracy. |
-| **[`NorviTech/armiger-calibration-dht`](https://huggingface.co/NorviTech/armiger-calibration-dht)** | **Yes** (`calibration.json`, `calibration_and_dht.py`, `armiger_dht_rsi.py`) | `115 KB` | **Conformal Calibration, BEP-44 DHT Updater & Distributed RSI Engine:** Per-head temperature scaling ($T_h$), Mondrian safety gates (`99.95%` junk balanced accuracy), `Ed25519` threshold-signed `BEP-44`/`BEP-46` DHT hot-reload, universal media-webhook/qBittorrent/Transmission/ffprobe ground-truth RSI, `X25519`+`ChaCha20-Poly1305` AEAD, distinct-ASN quorum, and 500-canary regression gate (`36/36` tests). |
-| **[`NorviTech/armiger-dht-db-sync`](https://huggingface.co/NorviTech/armiger-dht-db-sync)** | **Yes** (`csam_guard.py`, `armiger_dht_db_sync.py`) | `98 KB` | **Modular, CSAM-Protected, Encrypted BEP-44/BEP-46 DHT Database Sync:** Multi-stage CSAM & abuse pre-ingest blocker, `Ed25519`-signed blinded `SHA-256` tombstone purge engine, 10-category $\times$ 14-language $\times$ 7-quality sharded subscriptions with strict default-off `xxx` isolation, `X25519`+`ChaCha20-Poly1305` AEAD, binary Merkle proofs, and $K$-of-$N$ distinct-ASN Sybil quorum (`27/27` tests). |
+| **[`NorviTech/armiger-swarm-survival`](https://huggingface.co/NorviTech/armiger-swarm-survival)** | **Yes** (`swarm_adapter.pt`, `swarm_survival.py`) | `167 KB` (`132 KB` `.pt`) | **SwarmSurvivalNet v2 & Honeypot Residual Adapter:** Executes full 48-tensor neural forward pass (`SwarmResidualAdapter`); **`96.83%`** Multi-Source Warehouse AUROC (`N=10,278`, vs. `53.02%` raw seeders), **`92.42%`** / **`93.03%`** Public-Tracker AUROC (`N=757` / `N=493`, vs. `85.17%` raw seeders), **`100.0%`** fake-seeder malware trap recall, **`0.00%`** content-category flip guarantee. |
+| **[`NorviTech/armiger-swarm-priors`](https://huggingface.co/NorviTech/armiger-swarm-priors)** | **Yes** (`swarm_priors.py`) | `29.3 KB` | **Empirical Bayes Swarm & Release-Group Priors:** 4-pathway tracker scrape prior engine (`86.64%` formula AUROC), mandatory modality dropout (`p=0.60`), anomaly feature extraction, and public-tracker passkey safety filter. |
+| **[`NorviTech/armiger-zero-cue-catalog`](https://huggingface.co/NorviTech/armiger-zero-cue-catalog)** | **Yes** (`zero_cue_plugin.py`, `validated_zero_cue_catalog.json`) | `26.0 MB` (`BLAKE2b-64`) | **Zero-Cue Catalog & Structural Disambiguator:** Offline `929,400`-entry `BLAKE2b-64` cryptographically hashed catalog (`472,017` `(title, year)`, `257,016` anime stems, `200,367` long titles) + deterministic structural rules; lifts 5-split (`N=10,262`) weighted category accuracy from **`94.00%`** (Standalone Neural) to **`95.42%`** (Fair Blind Hybrid), `beyond_confirmation` (`N=1,025`) from **`92.88%`** to **`95.12%`**, and `tc_truespec_2000` (`N=2,000`) from **`87.40%`** to **`91.50%`** (`+4.10 pp`). |
+| **[`NorviTech/armiger-audio-guard`](https://huggingface.co/NorviTech/armiger-audio-guard)** | **Yes** (`audio_language_guard.py`) | `3.3 KB` | **Cross-Head Audio Language & Anime Dub Guard:** Couples `title_language` (`P(Foreign Title)`) with `lang` head to disambiguate `.en.` prepositions, `<Foreign>.ENG.Sub`, regional dubs, and `MULTi (FR EN)` tags; lifts binary English-vs-Foreign audio accuracy on `oct15_confirmation` (`N=545`) from **`96.88%`** (Standalone Neural) to **`97.80%`** (`92.75%` 3-class `N=772`). |
+| **[`NorviTech/armiger-calibration-dht`](https://huggingface.co/NorviTech/armiger-calibration-dht)** | **Yes** (`calibration.json`, `calibration_and_dht.py`, `armiger_dht_rsi.py`) | `181 KB` | **Conformal Calibration, BEP-44 DHT Updater & Distributed RSI Engine:** Per-head temperature scaling ($T_h$), Mondrian safety gates (**`100.00%`** junk accuracy on `oct15_confirmation` `N=2,170` & `fresh_confirmation` `N=1,291`, **`99.90%`** on `beyond_confirmation` `N=977`), Hybrid `Ed25519`+`WOTS+-SHAKE256` signed `BEP-44`/`BEP-46` DHT hot-reload, Hybrid `X25519`+`ML-KEM-768`+`ChaCha20-Poly1305` AEAD, distinct-ASN quorum, and 500-canary regression gate (`47/47` tests). |
+| **[`NorviTech/armiger-dht-db-sync`](https://huggingface.co/NorviTech/armiger-dht-db-sync)** | **Yes** (`csam_guard.py`, `armiger_dht_db_sync.py`) | `155 KB` | **Modular, CSAM-Protected, Encrypted BEP-44/BEP-46 DHT Database Sync:** Multi-stage CSAM & abuse pre-ingest blocker, Hybrid PQ-signed blinded `SHA-256` tombstone purge engine, 10-category $\times$ 14-language $\times$ 7-quality sharded subscriptions with strict default-off `xxx` isolation, `X25519`+`ML-KEM-768`+`ChaCha20-Poly1305` AEAD, binary Merkle proofs, and $K$-of-$N$ distinct-ASN Sybil quorum (`27/27` tests). |
 
 ---
 

@@ -1,7 +1,7 @@
 <h1 align="center">Armiger Plugin #1 — Swarm Survival &amp; Honeypot Adapter (<code>SwarmSurvivalNet v2</code>)</h1>
 
 <p align="center">
-  <strong>Content-gated residual adapter that predicts real-world torrent download completion (<code>96.83%</code> AUROC) and blocks <code>100.0%</code> of fake-seeder malware honeypots while guaranteeing <code>0%</code> content-category flips.</strong><br>
+  <strong>48-tensor PyTorch content-gated residual adapter that predicts real-world torrent download completion (<code>96.83%</code> Warehouse AUROC / <code>92.42%</code>–<code>93.03%</code> Public-Tracker AUROC) and blocks <code>100.0%</code> of fake-seeder malware honeypots while guaranteeing <code>0%</code> content-category flips.</strong><br>
   Available standalone here and pre-bundled inside <a href="https://huggingface.co/NorviTech/armiger-ultra"><code>NorviTech/armiger-ultra</code></a>.
 </p>
 
@@ -13,18 +13,19 @@
 
 ## Overview
 
-Raw tracker seeder counts are a poor predictor of whether a torrent grab will actually complete (`53.04%` AUROC across mixed public/DHT swarms):
+Raw tracker seeder counts are an unreliable predictor of whether a torrent grab will actually complete (`53.02%` AUROC across multi-source warehouse swarms and `85.17%` on single-source public trackers):
 1. **Fake-Seeder Malware Honeypots** spoof `5,000+` seeders on day zero for unreleased movies or games while bundling `.exe` / `.lnk` / `.scr` / codec-pack payloads.
 2. **Stale Tracker Scrapes vs. DHT/PEX Survival:** Niche anime, audiobooks, and remuxes often report `0` cached tracker seeders yet complete reliably via DHT/PEX, whereas poisoned swarms stall at `99.9%`.
 
-`NorviTech/armiger-swarm-survival` (`swarm_adapter.pt` + `swarm_survival.py`) attaches to [`NorviTech/armiger`](https://huggingface.co/NorviTech/armiger) or [`NorviTech/armiger-ultra`](https://huggingface.co/NorviTech/armiger-ultra) and fuses live swarm telemetry with the backbone's 408-D content representation.
+`NorviTech/armiger-swarm-survival` (`swarm_adapter.pt` + `swarm_survival.py`) loads all **48 neural tensors** (`swarm_mlp`, `cross_gate`, `content_proj`, `Way3SwarmAnomalyHead`, and `Way4ViabilityHead`) into PyTorch `nn.Module` layers (`SwarmResidualAdapter`) and executes the learned neural forward pass (`self.forward(...)`) inside `evaluate_swarm(...)`.
 
-## Measured Performance
+## Measured Performance (Audited Holdout Splits)
 
-| Metric | Raw Tracker Seeders | Raw DHT Peers | Armiger (`Way-4` Formula) | **Armiger Ultra + `armiger-swarm-survival`** |
+| Metric | Raw Tracker Seeders | Raw DHT Peers | Armiger (`Way-4` Formula) | **Armiger Ultra + `swarm_adapter.pt` (48-Tensor Neural)** |
 | :--- | :---: | :---: | :---: | :---: |
-| **Swarm Liveliness AUROC (Mixed Corpus, `N=25,280`)** | `53.04%` | `51.84%` | `86.64%` | **`97.35%`** |
-| **Swarm Liveliness AUROC (Bitmagnet DHT Scraped, `N=10,278`)** | `85.17%` | `86.81%` | `86.64%` | **`96.83%`** |
+| **Multi-Source Warehouse Holdout AUROC (`N=10,278`)** | `53.02%` | `51.84%` | `86.64%` | **`96.83%`** (`97.90%` AUPRC) |
+| **Public-Tracker Benchmark AUROC (`N=757`)** | `85.17%` | `86.81%` | `86.64%` | **`92.42%`** (`+7.25 pp` vs. seeders) |
+| **Public-Tracker Holdout AUROC (`N=493`)** | `85.17%` | `86.81%` | `86.64%` | **`93.03%`** |
 | **Fake-Seeder Honeypot Trap Recall (`@ <=0.5% FPR`)** | `0.00%` | `0.00%` | `99.90%` | **`100.00%`** |
 | **Content Category Flip Rate (`seeders=0` vs `seeders=10,000`)** | N/A | N/A | **`0.00%`** | **`0.00%`** |
 
@@ -50,14 +51,14 @@ print(result)
 
 ## Part of the Armiger Modular Plugin Suite
 
-| Plugin Repository | Bundled in `Armiger Ultra`? | Footprint | Core Capability & Measured Impact |
+| Plugin Repository | Bundled in `Armiger Ultra`? | Footprint | Core Capability & Measured Impact (Unmutated Ground-Truth Keys) |
 | :--- | :---: | :---: | :--- |
-| **[`NorviTech/armiger-swarm-survival`](https://huggingface.co/NorviTech/armiger-swarm-survival)** | **Yes** (`swarm_adapter.pt`, `swarm_survival.py`) | `163 KB` | **SwarmSurvivalNet v2 & Honeypot Residual Adapter:** **`96.83%`** Swarm Liveliness AUROC (vs. `53.04%` raw seeders), **`100.0%`** fake-seeder malware trap recall, **`0%`** content-category flip guarantee. |
-| **[`NorviTech/armiger-swarm-priors`](https://huggingface.co/NorviTech/armiger-swarm-priors)** | **Yes** (`swarm_priors.py`) | `29.4 KB` | **Empirical Bayes Swarm & Release-Group Priors:** 4-pathway tracker scrape prior engine, mandatory modality dropout (`p=0.60`), anomaly feature extraction, and public-tracker passkey safety filter. |
-| **[`NorviTech/armiger-zero-cue-catalog`](https://huggingface.co/NorviTech/armiger-zero-cue-catalog)** | **Yes** (`zero_cue_plugin.py`, `validated_zero_cue_catalog.json`) | `36.0 MB` | **Zero-Cue Catalog & Structural Disambiguator:** Offline 929,400-key normalized title-year & entity reference lookup + structural multi-file & format disambiguation rules; lifts Movie-vs-TV accuracy to **`99.46%`** and 11-class accuracy to **`98.48%`** (`98.93%` Hard Edge-Cases). |
-| **[`NorviTech/armiger-audio-guard`](https://huggingface.co/NorviTech/armiger-audio-guard)** | **Yes** (`audio_language_guard.py`) | `4.2 KB` | **Cross-Head Audio Language & Anime Dub Guard:** Couples `title_language` (`P(Foreign Title)`) with `lang` head to disambiguate `.en.` prepositions, `<Foreign>.ENG.Sub`, regional dubs, and `MULTi (FR EN)` tags; reaches **`98.72%`** Gold Standard and **`99.88%`** Hard Edge-Case audio accuracy. |
-| **[`NorviTech/armiger-calibration-dht`](https://huggingface.co/NorviTech/armiger-calibration-dht)** | **Yes** (`calibration.json`, `calibration_and_dht.py`, `armiger_dht_rsi.py`) | `115 KB` | **Conformal Calibration, BEP-44 DHT Updater & Distributed RSI Engine:** Per-head temperature scaling ($T_h$), Mondrian safety gates (`99.95%` junk balanced accuracy), `Ed25519` threshold-signed `BEP-44`/`BEP-46` DHT hot-reload, universal media-webhook/qBittorrent/Transmission/ffprobe ground-truth RSI, `X25519`+`ChaCha20-Poly1305` AEAD, distinct-ASN quorum, and 500-canary regression gate (`36/36` tests). |
-| **[`NorviTech/armiger-dht-db-sync`](https://huggingface.co/NorviTech/armiger-dht-db-sync)** | **Yes** (`csam_guard.py`, `armiger_dht_db_sync.py`) | `98 KB` | **Modular, CSAM-Protected, Encrypted BEP-44/BEP-46 DHT Database Sync:** Multi-stage CSAM & abuse pre-ingest blocker, `Ed25519`-signed blinded `SHA-256` tombstone purge engine, 10-category $\times$ 14-language $\times$ 7-quality sharded subscriptions with strict default-off `xxx` isolation, `X25519`+`ChaCha20-Poly1305` AEAD, binary Merkle proofs, and $K$-of-$N$ distinct-ASN Sybil quorum (`27/27` tests). |
+| **[`NorviTech/armiger-swarm-survival`](https://huggingface.co/NorviTech/armiger-swarm-survival)** | **Yes** (`swarm_adapter.pt`, `swarm_survival.py`) | `167 KB` (`132 KB` `.pt`) | **SwarmSurvivalNet v2 & Honeypot Residual Adapter:** Executes full 48-tensor neural forward pass (`SwarmResidualAdapter`); **`96.83%`** Multi-Source Warehouse AUROC (`N=10,278`, vs. `53.02%` raw seeders), **`92.42%`** / **`93.03%`** Public-Tracker AUROC (`N=757` / `N=493`, vs. `85.17%` raw seeders), **`100.0%`** fake-seeder malware trap recall, **`0.00%`** content-category flip guarantee. |
+| **[`NorviTech/armiger-swarm-priors`](https://huggingface.co/NorviTech/armiger-swarm-priors)** | **Yes** (`swarm_priors.py`) | `29.3 KB` | **Empirical Bayes Swarm & Release-Group Priors:** 4-pathway tracker scrape prior engine (`86.64%` formula AUROC), mandatory modality dropout (`p=0.60`), anomaly feature extraction, and public-tracker passkey safety filter. |
+| **[`NorviTech/armiger-zero-cue-catalog`](https://huggingface.co/NorviTech/armiger-zero-cue-catalog)** | **Yes** (`zero_cue_plugin.py`, `validated_zero_cue_catalog.json`) | `26.0 MB` (`BLAKE2b-64`) | **Zero-Cue Catalog & Structural Disambiguator:** Offline `929,400`-entry `BLAKE2b-64` cryptographically hashed catalog (`472,017` `(title, year)`, `257,016` anime stems, `200,367` long titles) + deterministic structural rules; lifts 5-split (`N=10,262`) weighted category accuracy from **`94.00%`** (Standalone Neural) to **`95.42%`** (Fair Blind Hybrid), `beyond_confirmation` (`N=1,025`) from **`92.88%`** to **`95.12%`**, and `tc_truespec_2000` (`N=2,000`) from **`87.40%`** to **`91.50%`** (`+4.10 pp`). |
+| **[`NorviTech/armiger-audio-guard`](https://huggingface.co/NorviTech/armiger-audio-guard)** | **Yes** (`audio_language_guard.py`) | `3.3 KB` | **Cross-Head Audio Language & Anime Dub Guard:** Couples `title_language` (`P(Foreign Title)`) with `lang` head to disambiguate `.en.` prepositions, `<Foreign>.ENG.Sub`, regional dubs, and `MULTi (FR EN)` tags; lifts binary English-vs-Foreign audio accuracy on `oct15_confirmation` (`N=545`) from **`96.88%`** (Standalone Neural) to **`97.80%`** (`92.75%` 3-class `N=772`). |
+| **[`NorviTech/armiger-calibration-dht`](https://huggingface.co/NorviTech/armiger-calibration-dht)** | **Yes** (`calibration.json`, `calibration_and_dht.py`, `armiger_dht_rsi.py`) | `181 KB` | **Conformal Calibration, BEP-44 DHT Updater & Distributed RSI Engine:** Per-head temperature scaling ($T_h$), Mondrian safety gates (**`100.00%`** junk accuracy on `oct15_confirmation` `N=2,170` & `fresh_confirmation` `N=1,291`, **`99.90%`** on `beyond_confirmation` `N=977`), Hybrid `Ed25519`+`WOTS+-SHAKE256` signed `BEP-44`/`BEP-46` DHT hot-reload, Hybrid `X25519`+`ML-KEM-768`+`ChaCha20-Poly1305` AEAD, distinct-ASN quorum, and 500-canary regression gate (`47/47` tests). |
+| **[`NorviTech/armiger-dht-db-sync`](https://huggingface.co/NorviTech/armiger-dht-db-sync)** | **Yes** (`csam_guard.py`, `armiger_dht_db_sync.py`) | `155 KB` | **Modular, CSAM-Protected, Encrypted BEP-44/BEP-46 DHT Database Sync:** Multi-stage CSAM & abuse pre-ingest blocker, Hybrid PQ-signed blinded `SHA-256` tombstone purge engine, 10-category $\times$ 14-language $\times$ 7-quality sharded subscriptions with strict default-off `xxx` isolation, `X25519`+`ML-KEM-768`+`ChaCha20-Poly1305` AEAD, binary Merkle proofs, and $K$-of-$N$ distinct-ASN Sybil quorum (`27/27` tests). |
 
 ---
 
