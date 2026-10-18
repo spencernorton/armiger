@@ -1,0 +1,185 @@
+{
+  "model_name": "armiger-ultra",
+  "version": "2.1.0",
+  "bundle_type": "unified_armiger_plus_ultra_plus_swarm",
+  "architecture": "armiger-v2-byte-rope-transformer-8head + residual-swarm-health-adapter",
+  "artifacts": {
+    "armiger_cpu_int8_onnx": {
+      "file": "armiger.int8.onnx",
+      "size_bytes": 8276448,
+      "sha256": "655ea5c70ca43432439c4b215ecebea46b0a624cd5ea5689456ea0cc7d423a5f"
+    },
+    "armiger_ultra_fp32_onnx": {
+      "file": "armiger_ultra.fp32.onnx",
+      "size_bytes": 32262576,
+      "sha256": "3c43fd365f870d45e6b8e62c8cb770f8476ad7f21ff89042369082460a769c36"
+    },
+    "armiger_ultra_pytorch": {
+      "file": "armiger_ultra.pt",
+      "size_bytes": 32205583,
+      "sha256": "81d80224235dcab8f3eb7c439a3f1d40a55cad7678e1990f27881351713ede79"
+    },
+    "swarm_health_adapter": {
+      "file": "swarm_adapter.pt",
+      "size_bytes": 131718,
+      "sha256": "85effcb9e70af7bff6047d4ae45d2155444e9b691dc84431f19ad14f9daee9ea"
+    }
+  },
+  "heads": {
+    "category": [
+      "movie",
+      "tv_show",
+      "xxx",
+      "music",
+      "comic",
+      "game",
+      "audiobook",
+      "software",
+      "ebook",
+      "course",
+      "unknown"
+    ],
+    "adult": [
+      "non_adult",
+      "adult"
+    ],
+    "anime": [
+      "non_anime",
+      "anime"
+    ],
+    "lang": [
+      "english",
+      "non_english",
+      "multi_or_unknown"
+    ],
+    "junk": [
+      "clean",
+      "junk"
+    ],
+    "owner_scope": [
+      "allowed_type",
+      "excluded"
+    ],
+    "english_subs": [
+      "no_eng_subs",
+      "has_eng_subs",
+      "unknown"
+    ],
+    "title_language": [
+      "english_title",
+      "non_english_title"
+    ]
+  },
+  "mondrian_thresholds": {
+    "adult": 0.5451,
+    "junk": 0.101,
+    "owner_scope": 0.477
+  },
+  "benchmarks": {
+    "gold_standard_11class_category_acc": 98.48,
+    "movie_vs_tv_acc": 99.46,
+    "catalog_matching_rate_acc": 98.69,
+    "audio_language_acc": 98.72,
+    "anime_and_dub_acc": 97.92,
+    "adult_safety_gate_acc": 98.63,
+    "junk_malware_filter_acc": 99.95,
+    "swarm_liveliness_auroc": 96.83,
+    "fake_seeder_honeypot_recall": 100.0,
+    "overall_6dim_composite_mean": 98.74,
+    "gpu_batched_latency_ms": 0.5,
+    "gpu_single_item_latency_ms": 1.12,
+    "cpu_int8_batched_latency_ms": 0.42
+  },
+  "bundled_plugins": {
+    "armiger-swarm-survival": {
+      "standalone_repo": "NorviTech/armiger-swarm-survival",
+      "files": [
+        "swarm_adapter.pt",
+        "swarm_survival.py"
+      ],
+      "sha256": {
+        "swarm_adapter.pt": "85effcb9e70af7bff6047d4ae45d2155444e9b691dc84431f19ad14f9daee9ea",
+        "swarm_survival.py": "0bcae845363ad7b81fb136fed06e719a40e64dd4de4a8241da19c5e5c8b1f456"
+      }
+    },
+    "armiger-swarm-priors": {
+      "standalone_repo": "NorviTech/armiger-swarm-priors",
+      "files": [
+        "swarm_priors.py"
+      ],
+      "sha256": {
+        "swarm_priors.py": "c208d39207be6255540b15733bc9a83dd6e1371f24278789fd1f28ac3bc1f2fa"
+      }
+    },
+    "armiger-zero-cue-catalog": {
+      "standalone_repo": "NorviTech/armiger-zero-cue-catalog",
+      "files": [
+        "zero_cue_plugin.py",
+        "validated_zero_cue_catalog.json"
+      ],
+      "sha256": {
+        "zero_cue_plugin.py": "9e0fd58810f66bfffbef828dc1488f223833ec16111a49cb2633fbdfdf0db48c",
+        "validated_zero_cue_catalog.json": "3f42219f7e9ac1b38e7aa0f1301ae96298dd58e7d71960c371a4cdaf86c3d0b2"
+      }
+    },
+    "armiger-audio-guard": {
+      "standalone_repo": "NorviTech/armiger-audio-guard",
+      "files": [
+        "audio_language_guard.py"
+      ],
+      "sha256": {
+        "audio_language_guard.py": "e8b26fbb03f30eb47f2ff62f70f1670905ce17268ee1eabefc0a8f933b9d36ab"
+      }
+    },
+    "armiger-calibration-dht": {
+      "standalone_repo": "NorviTech/armiger-calibration-dht",
+      "files": [
+        "calibration.json",
+        "calibration_and_dht.py",
+        "armiger_dht_rsi.py",
+        "test_armiger_dht_rsi.py"
+      ],
+      "sha256": {
+        "calibration.json": "bd49efbc3e04e24a3bfeb0828e0c4dd69497f1902ed81d5d883c795e1504538b",
+        "calibration_and_dht.py": "de0d87b16711cf500251d5fc4f4908f327792063f36589dc6db47fb026bd3fbe",
+        "armiger_dht_rsi.py": "918ffb7b50490fa41213772e0a32debcfff177dadca3a41a603eaf67961c5271",
+        "test_armiger_dht_rsi.py": "f284d290cc2a847f152e51ff40112556caf6c256ee2629aa9f31afbefa73d2df"
+      }
+    },
+    "armiger-dht-db-sync": {
+      "standalone_repo": "NorviTech/armiger-dht-db-sync",
+      "files": [
+        "csam_guard.py",
+        "armiger_dht_db_sync.py",
+        "test_dht_db_sync.py"
+      ],
+      "sha256": {
+        "csam_guard.py": "24d58db9aea6a5efe9f9b7cc483636190ab37f60ffa76a16b2b97921ef0fd71f",
+        "armiger_dht_db_sync.py": "4ef834f352b3725be2e5d92ce6c29f92f59ef0e5c584971a9d26954ad9502539",
+        "test_dht_db_sync.py": "ed6cebbcbaebc0d43516f68952937696a6b6c88ec54da8536112f9127b4f4290"
+      }
+    }
+  },
+  "sdk": {
+    "entrypoint": "armiger_ultra_pipeline.py",
+    "class_name": "ArmigerUltraPipeline",
+    "test_suite": "test_armiger_ultra_pipeline.py",
+    "unified_heads": [
+      "category",
+      "adult",
+      "junk",
+      "anime",
+      "english_subs",
+      "lang",
+      "owner_scope",
+      "title_language",
+      "swarm_viability",
+      "honeypot_trap",
+      "csam_safety"
+    ],
+    "sha256": {
+      "armiger_ultra_pipeline.py": "92c379a3e6c1dfd50312011264c407462e85daef11ec2ee203cc6963395be293",
+      "test_armiger_ultra_pipeline.py": "b309d0edf87a189f41e95c18511fd26b0d748f981d93f1a0782cd8163015e18d"
+    }
+  }
+}

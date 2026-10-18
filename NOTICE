@@ -1,0 +1,41 @@
+Armiger & Armiger Ultra
+Copyright 2026 NorviTech / Spencer Norton
+
+This product includes software, neural network weights, calibration parameters,
+and cryptographically hashed lookup tables developed by NorviTech and released
+under the Apache License, Version 2.0.
+
+================================================================================
+Creative Commons & Public-Domain Example Media Attributions
+================================================================================
+All media titles and filenames used in documentation, benchmarks, and unit tests
+in this repository reference open-source, Creative Commons, or public-domain
+works:
+
+- "Big Buck Bunny" (2008), "Sintel" (2010), "Tears of Steel" (2012),
+  "Cosmos Laundromat" (2015), "Caminandes" (2013-2016), "Spring" (2019),
+  "Coffee Run" (2020), "Charge" (2022), "Wing It!" (2023), and
+  "Elephants Dream" (2006) are Open Movies produced by the Blender Foundation
+  (https://studio.blender.org/films/), licensed under Creative Commons
+  Attribution (CC-BY 3.0 / CC-BY 4.0).
+- "Pepper&Carrot" is an open-source webcomic by David Revoy
+  (https://www.peppercarrot.com/), licensed under Creative Commons Attribution
+  4.0 International (CC-BY 4.0).
+- "Open Goldberg Variations" (BWV 988) by J.S. Bach, performed by Kimiko Ishizaka,
+  is released into the public domain under Creative Commons Zero (CC0 1.0).
+- "Pride and Prejudice" by Jane Austen (1813) and LibriVox audiobooks
+  (https://librivox.org/) are in the public domain worldwide.
+
+================================================================================
+Zero-Knowledge Hash Representation & Non-Affiliation Notice
+================================================================================
+- The Zero-Cue Title Catalog (`validated_zero_cue_catalog.json`) and release-tag
+  feature extractors store all keys exclusively as keyed 64-bit BLAKE2b digests
+  (`person=b"armiger-zc-v2"` / 8-byte hex digests). No copyrighted media titles,
+  proprietor databases, or release-group names are redistributed in plaintext.
+- BitTorrent, BEP-15, BEP-44, and BEP-46 are open protocol specifications.
+  All third-party product names, open-source project names (including GuessIt,
+  RTN/Parsett, MIMMO, Bitmagnet, ONNX Runtime, and PyTorch), and trademarks
+  referenced in comparative benchmarks remain the property of their respective
+  owners. Use of these names is strictly nominative for comparative technical
+  evaluation and implies no endorsement or affiliation.

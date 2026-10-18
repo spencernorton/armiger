@@ -1,0 +1,143 @@
+{
+  "temperature_scaling_stop_fit": {
+    "category": {
+      "temperature_T": 1.225,
+      "cal_uncalibrated": {
+        "n": 424,
+        "acc": 96.7,
+        "nll": 0.0905
+      },
+      "cal_temp_scaled": {
+        "n": 424,
+        "acc": 96.7,
+        "nll": 0.0967
+      }
+    },
+    "adult": {
+      "temperature_T": 1.4,
+      "cal_uncalibrated": {
+        "n": 409,
+        "acc": 99.76,
+        "nll": 0.0127
+      },
+      "cal_temp_scaled": {
+        "n": 409,
+        "acc": 99.76,
+        "nll": 0.0211
+      }
+    },
+    "anime": {
+      "temperature_T": 1.0,
+      "cal_uncalibrated": {
+        "n": 64,
+        "acc": 100.0,
+        "nll": 0.0041
+      },
+      "cal_temp_scaled": {
+        "n": 64,
+        "acc": 100.0,
+        "nll": 0.0038
+      }
+    },
+    "lang": {
+      "temperature_T": 1.275,
+      "cal_uncalibrated": {
+        "n": 103,
+        "acc": 97.09,
+        "nll": 0.0932
+      },
+      "cal_temp_scaled": {
+        "n": 103,
+        "acc": 97.09,
+        "nll": 0.0992
+      }
+    },
+    "junk": {
+      "temperature_T": 1.4,
+      "cal_uncalibrated": {
+        "n": 341,
+        "acc": 99.71,
+        "nll": 0.011
+      },
+      "cal_temp_scaled": {
+        "n": 341,
+        "acc": 99.71,
+        "nll": 0.0146
+      }
+    },
+    "owner_scope": {
+      "temperature_T": 1.125,
+      "cal_uncalibrated": {
+        "n": 408,
+        "acc": 98.77,
+        "nll": 0.0243
+      },
+      "cal_temp_scaled": {
+        "n": 408,
+        "acc": 99.02,
+        "nll": 0.0269
+      }
+    },
+    "english_subs": {
+      "temperature_T": 1.2,
+      "cal_uncalibrated": null,
+      "cal_temp_scaled": null
+    },
+    "title_language": {
+      "temperature_T": 1.55,
+      "cal_uncalibrated": {
+        "n": 162,
+        "acc": 94.44,
+        "nll": 0.1087
+      },
+      "cal_temp_scaled": {
+        "n": 162,
+        "acc": 94.44,
+        "nll": 0.1087
+      }
+    }
+  },
+  "menon_logit_adjustment_stop_fit": {
+    "D80000": {
+      "tau": 0.0
+    },
+    "D100000": {
+      "tau": 0.0
+    },
+    "E100000_TC_v3": {
+      "tau": 0.0
+    },
+    "E100000_TC_v4": {
+      "tau": 0.0
+    },
+    "G250000_Unified": {
+      "tau": 0.0
+    },
+    "G500000_Unified": {
+      "tau": 0.0
+    },
+    "H350000_Curated_Wave2": {
+      "tau": 0.0
+    },
+    "I350000_Distilled": {
+      "tau": 0.0
+    }
+  },
+  "mondrian_conformal_thresholds": {
+    "owner_scope": {
+      "alpha": 0.02,
+      "threshold_I350": 0.5917,
+      "threshold_H350": 0.6433
+    },
+    "junk": {
+      "alpha": 0.005,
+      "threshold_I350": 0.0631,
+      "threshold_H350": 0.0564
+    },
+    "adult": {
+      "alpha": 0.01,
+      "threshold_I350": 0.7801,
+      "threshold_H350": 0.7175
+    }
+  }
+}
