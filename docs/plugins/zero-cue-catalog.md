@@ -24,7 +24,7 @@ Even a 70B+ parameter cloud LLM must guess when given only a bare title unless i
 
 | Evaluation Cohort (Unmutated `rows.y`) | Valid `N` | Standalone Neural (`FP32` / `INT8`) | **Fair Blind Hybrid (`+ armiger-zero-cue-catalog` FP32 / INT8)** | Net Lift |
 | :--- | :---: | :---: | :---: | :---: |
-| **`oct15_confirmation` (Gold Standard)** | `2,835` | `95.03%` / `95.06%` (`96.60%` Movie-vs-TV) | **`95.49%`** / **`95.49%`** (**`97.15%`** Movie-vs-TV) | `+0.46 pp` |
+| **`oct15_confirmation` (Gold Standard)** | `2,835` | `95.03%` / `95.06%` (`96.60%` Movie-vs-TV) | **`95.49%`** / **`95.49%`** (**`97.30%`** Movie-vs-TV) | `+0.46 pp` |
 | **`fresh_confirmation` (Fresh Holdout)** | `1,402` | `94.51%` / `94.44%` | **`94.58%`** / **`94.51%`** | `+0.07 pp` |
 | **`beyond_confirmation` (Hard Edge-Cases)** | `1,025` | `92.88%` / `92.88%` (`88.74%` Movie-vs-TV) | **`95.12%`** / **`95.12%`** (**`96.54%`** Movie-vs-TV) | **`+2.24 pp`** |
 | **`tc_truespec_2000` (Specialist Zero-Cue)** | `2,000` | `87.40%` / `87.35%` | **`91.50%`** / **`91.50%`** | **`+4.10 pp`** |

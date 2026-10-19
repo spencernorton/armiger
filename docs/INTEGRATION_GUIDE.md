@@ -116,7 +116,7 @@ If you configure `DH-Waypoint` via environment variables instead of `plugins.d`:
 
 ## Part B — Integrating Armiger with `Bitmagnet`
 
-Upstream `Bitmagnet` uses deterministic keyword/extension rules (`35.29%` 11-class accuracy on `N=10,262` audited torrents). Deploying [`examples/bitmagnet/bitmagnet_armiger_bridge.py`](../examples/bitmagnet/bitmagnet_armiger_bridge.py) upgrades a `Bitmagnet` deployment to **`95.49%` 11-class accuracy** (`97.55%` 6-dimension composite accuracy) and **`100%` fake-seeder malware trap recall**.
+Upstream `Bitmagnet` uses deterministic keyword/extension rules (`35.17%` 11-class accuracy on `N=10,262` audited torrents). Deploying [`examples/bitmagnet/bitmagnet_armiger_bridge.py`](../examples/bitmagnet/bitmagnet_armiger_bridge.py) upgrades a `Bitmagnet` deployment to **`95.49%` 11-class accuracy** (`97.60%` 6-dimension composite accuracy) and **`100%` fake-seeder malware trap recall**.
 
 ### 1. Turnkey `Bitmagnet` + `Armiger` Docker Compose Stack
 

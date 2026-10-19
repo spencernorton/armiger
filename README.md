@@ -2,7 +2,7 @@
 
 <p align="center">
   <strong>Unified neural torrent &amp; media classification suite bundling Armiger (8.3 MB INT8 CPU), Armiger Ultra (32.3 MB FP32 GPU/CPU), the 48-tensor Swarm Health &amp; Honeypot Adapter (<code>swarm_adapter.pt</code>), and all 6 official plugins.</strong><br>
-  Delivers 97.55% 6-dimension composite accuracy on unmutated ground-truth keys, 0.21 ms/item batched on NVIDIA RTX GPU (0.29 ms on Apple M4 Pro MPS GPU, 2.44 ms single-item on M4 Pro CPU INT8), 100% fake-seeder malware trap recall, and 96.83% warehouse / 92.42% public-tracker swarm liveliness AUROC.
+  Delivers 97.60% 6-dimension composite accuracy on unmutated ground-truth keys, 0.21 ms/item batched on NVIDIA RTX GPU (0.29 ms on Apple M4 Pro MPS GPU, 2.44 ms single-item on M4 Pro CPU INT8), 100% fake-seeder malware trap recall, and 96.83% warehouse / 92.42% public-tracker swarm liveliness AUROC.
 </p>
 
 <p align="center">
@@ -22,7 +22,7 @@
 
 ![Cost Benchmark vs Frontier Cloud LLMs and Local GPU LLM](assets/armiger_vs_llms_cost_comparison.png)
 
-- **Higher composite accuracy than frontier LLMs.** Achieves **`97.55%`** 6-dimension mean accuracy (**`96.50%`** standalone `8.3 MB` INT8 neural), outperforming `gemini-3.8-flash-low` (`96.35%`), `claude-haiku-4-5` (`93.02%`), `gpt-6-luna` (`87.85%`), and local `Vinci-MLE-8B` (`85.71%`).
+- **Higher composite accuracy than frontier LLMs.** Achieves **`97.60%`** 6-dimension mean accuracy (`95% CI [97.18%, 98.02%]`, and **`96.85%`** with `8.3 MB` INT8 + plugins / **`96.50%`** standalone neural), outperforming non-circular LOTO `gemini-3.8-flash-low` (`94.56%`), `claude-haiku-4-5` (`92.88%`), `gpt-6-luna` (`86.24%`), and local `Vinci-MLE-8B` (`84.79%`).
 - **600x–2,000x faster inference at zero API cost.** Classifies **`4,795 items/s`** (`0.21 ms/item`) on NVIDIA RTX GPU, **`3,416 items/s`** (`0.29 ms/item`) on Apple M4 Pro MPS GPU, and **`410 items/s` single-item** (`2.44 ms` p50) on Apple M4 Pro CPU INT8 — versus `185–450 ms/item` and `$94.90–$1,220.00` per million torrents for cloud LLM APIs.
 
 ### Open-Source Classifiers & 10-Category Breakdown
@@ -31,7 +31,7 @@
 
 ![Categorical Accuracy Breakdown Across All 10 Media & Software Categories](assets/armiger_categorical_breakdown.png)
 
-- **Universal 11-class coverage vs. video-only rule parsers.** Reaches **`95.49%`** 11-class accuracy (`97.15%` Movie-vs-TV) on `oct15_confirmation` (`N=2,835`) and **`95.42%`** weighted mean across all 5 evaluation splits (`N=10,262`), compared to `72.35%` for `MIMMO BERT 360M` (`~1.4 GB`), `53.77%` for `RTN`/`PTT`, `38.83%` for `GuessIt`, and `35.29%` for `Bitmagnet` built-in rules.
+- **Universal 11-class coverage vs. video-only rule parsers.** Reaches **`95.49%`** 11-class accuracy (`97.30%` Movie-vs-TV, `96.53%` Catalog Matching) on `oct15_confirmation` (`N=2,835`) and **`95.42%`** weighted mean across all 5 evaluation splits (`N=10,262`), compared to `72.24%` for `MIMMO BERT 360M` (`~1.4 GB`), `53.58%` for `RTN`/`PTT`, `38.69%` for `GuessIt`, and `35.17%` for `Bitmagnet` built-in rules on the identical `N=2,835` denominator.
 - **Calibrated safety & malware gates.** Mondrian conformal thresholds enforce **`100.00%`** junk/malware accuracy on `oct15_confirmation` (`N=2,170`) and `fresh_confirmation` (`N=1,291`), **`99.90%`** on `beyond_confirmation` (`N=977`), and **`98.53%`** adult/NSFW isolation (`N=2,781`).
 
 ---
@@ -78,7 +78,7 @@ pytest test_armiger_ultra_pipeline.py test_armiger_dht_rsi.py test_dht_db_sync.p
 Armiger and Armiger Ultra ship with turnkey HTTP services, Docker Compose stacks, and reference adapters in [`examples/`](examples) and [`docs/INTEGRATION_GUIDE.md`](docs/INTEGRATION_GUIDE.md):
 
 - **[`DH-Waypoint` Integration (`examples/dh-waypoint/`)](examples/dh-waypoint)** — Drop-in `processorapi/v1` service (`armiger_waypoint_processor.py`) and plugin manifest (`07-armiger-ultra.plugin.yml`) implementing batch classification (`dh-waypoint.processor.v1`), pre-ingest cohort admission (`dh-waypoint.processors.admission.v1`), and 4-tier `dh-waypoint.processors.feedback.v1` closed-loop telemetry for [`spencernorton/DH-Waypoint`](https://github.com/spencernorton/DH-Waypoint).
-- **[`Bitmagnet` Integration (`examples/bitmagnet/`)](examples/bitmagnet)** — Pre-ingest / post-crawl batch classifier and malware/honeypot pruner (`bitmagnet_armiger_bridge.py`) that upgrades upstream Bitmagnet from `35.29%` rule accuracy to **`95.49%` 11-class neural accuracy** and automatically prunes disguised `.mkv.exe`/`.scr`/`.lnk` malware traps via GraphQL `torrent.delete`.
+- **[`Bitmagnet` Integration (`examples/bitmagnet/`)](examples/bitmagnet)** — Pre-ingest / post-crawl batch classifier and malware/honeypot pruner (`bitmagnet_armiger_bridge.py`) that upgrades upstream Bitmagnet from `35.17%` rule accuracy to **`95.49%` 11-class neural accuracy** and automatically prunes disguised `.mkv.exe`/`.scr`/`.lnk` malware traps via GraphQL `torrent.delete`.
 - **[`*Arr` Stack & `qBittorrent` Integration (`examples/arr-stack/`)](examples/arr-stack)** — Pre-grab Torznab XML filtering proxy (`armiger_torznab_proxy.py`) between `Prowlarr` / `Bitmagnet` / `DH-Waypoint` and `Sonarr`, `Radarr`, `Lidarr`, `Readarr`, and `Whisparr`, paired with a post-import webhook & `ffprobe` ground-truth receiver (`armiger_arr_webhook_receiver.py`) wired into `SeriesWebhookAdapter`, `MovieWebhookAdapter`, `AudioWebhookAdapter`, `PublicationWebhookAdapter`, `QBittorrentAdapter`, and `PhysicalGroundTruthVerifier`.
 
 See the **[Complete Ecosystem Integration Guide (`docs/INTEGRATION_GUIDE.md`)](docs/INTEGRATION_GUIDE.md)** for architecture diagrams, Docker Compose files, and step-by-step setup instructions.
@@ -117,12 +117,12 @@ Every metric below is reproducibly verifiable on the original unmutated evaluati
 
 | Evaluation Split | Valid `N` | Standalone Neural (`FP32` / `INT8`) | Fair Hybrid (`+ ZeroCueCatalog`) | Lift |
 | :--- | :---: | :---: | :---: | :---: |
-| **`oct15_confirmation` (Gold Standard)** | `2,835` | `95.03%` / `95.06%` | **`95.49%`** (`97.15%` Video) | `+0.46 pp` |
-| **`fresh_confirmation` (Fresh Holdout)** | `1,402` | `94.51%` / `94.44%` | **`94.58%`** / `94.51%` | `+0.07 pp` |
+| **`oct15_confirmation` (Gold Standard)** | `2,835` | `95.03%` / `95.06%` | **`95.49%`** / **`95.49%`** (`97.30%` Video) | `+0.46 pp` |
+| **`fresh_confirmation` (Fresh Holdout)** | `1,402` | `94.51%` / `94.51%` | **`94.58%`** / **`94.58%`** | `+0.07 pp` |
 | **`beyond_confirmation` (Hard Edge-Cases)** | `1,025` | `92.88%` / `92.88%` | **`95.12%`** (`98.78%` 4-Med) | **`+2.24 pp`** |
-| **`tc_truespec_2000` (Zero-Cue Specialist)** | `2,000` | `87.40%` / `87.35%` | **`91.50%`** (`99.85%` 4-Med) | **`+4.10 pp`** |
-| **`tc_truespec_multilang_3000` (Multilingual)** | `3,000` | `97.50%` / `97.37%` | **`98.47%`** / `98.40%` | **`+0.97 pp`** |
-| **5-Split Weighted Mean** | **`10,262`** | **`94.00%`** / **`93.95%`** | **`95.42%`** / **`95.39%`** | **`+1.42 pp`** |
+| **`tc_truespec_2000` (Zero-Cue Specialist)** | `2,000` | `87.40%` / `87.30%` | **`91.50%`** / **`91.40%`** (`99.85%` 4-Med) | **`+4.10 pp`** |
+| **`tc_truespec_multilang_3000` (Multilingual)** | `3,000` | `97.50%` / `97.43%` | **`98.47%`** / **`98.43%`** | **`+0.97 pp`** |
+| **5-Split Weighted Mean** | **`10,262`** | **`94.00%`** / **`93.98%`** | **`95.42%`** / **`95.39%`** | **`+1.42 pp`** |
 
 ---
 
