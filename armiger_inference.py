@@ -95,7 +95,9 @@ _SIDE_VPN_TRAP_RE = re.compile(
 _SIDE_CJK_RE = re.compile(r"[\u4e00-\u9fff]")
 _SIDE_EP_ZIP_RE = re.compile(
     r"(?i)(?:^\[[^\[\]]{2,30}\].*?(?:\s-\s*\d{1,3}\b|\bS\d{1,2}E\d{1,3}\b).*?\b(?:1080p|720p|2160p|480p)\b|"
-    r"\bS\d{1,2}E\d{1,3}\b.*?\b(?:1080p|720p|2160p|WEB-DL|WEBRip|BluRay|HDTV)\b)"
+    r"\bS\d{1,2}E\d{1,3}\b.*?\b(?:1080p|720p|2160p|480p|WEB-DL|WEBRip|BluRay|BDRip|HDTV|x264|x265|HEVC)\b|"
+    r"\b(?:1080p|720p|2160p|480p|576p|4k)\b.*?\b(?:WEB-DL|WEBRip|BluRay|BDRip|BRRip|HDRip|HDTV|HDCAM|CAMRip|DVDRip|x264|x265|H\.?264|H\.?265|HEVC|AV1|XviD|DivX)\b|"
+    r"\b(?:WEB-DL|WEBRip|BDRip|BRRip|HDRip|HDTV|HDCAM|CAMRip|DVDRip)\b(?:.*?\b(?:x264|x265|H\.?264|H\.?265|HEVC|AV1|XviD|DivX))?)"
 )
 _SIDE_BENIGN_ZIP_RE = re.compile(
     r"(?i)\b(?:batch|complete|season[ ._-]*\d+|s\d{1,2}[ ._-]*complete|e?\d{1,3}[ ._-]*[~-][ ._-]*e?\d{1,3}|시즌\s*\d+|완결|全集|合集|"
@@ -298,7 +300,7 @@ def encode_torrent_features(
                 continue
             if e_str in scr_set:
                 has_any_scr_ext = True
-            if e_str in {"scr", "vbs", "vbe", "hta", "pif", "wsf", "wsh", "cpl", "one"}:
+            if e_str in {"scr", "vbs", "vbe", "hta", "pif", "wsf", "wsh", "cpl"}:
                 has_unconditional_trap_ext = True
             p_tok_h = _extract_token_hashes(p_i)
             is_benign_stub = (e_str == "exe") and (s_b < 15 or 16570 in w_i or bool(p_tok_h & _BENIGN_README_EXE_H))
@@ -310,7 +312,7 @@ def encode_torrent_features(
                     has_root_launcher = True
             elif e_str == "dll":
                 has_dll = True
-            if e_str in {"scr", "lnk", "hta", "vbs", "pif", "ps1", "wsf", "cmd", "com"} and s_b >= 12:
+            if e_str in {"scr", "lnk", "hta", "vbs", "pif", "ps1", "wsf", "cmd", "com", "one", "xll", "xlam"} and s_b >= 12:
                 has_scr_trap = True
                 if d_i == 0:
                     has_root_launcher = True

@@ -82,11 +82,11 @@ _EXEC_OR_TRAP_EXTS = frozenset({
     "appref-ms", "library-ms", "search-ms", "settingcontent-ms", "diagcab",
 })
 _ALWAYS_TRAP_EXTS_SP = frozenset({
-    "scr", "vbs", "vbe", "hta", "pif", "wsf", "wsh", "cpl", "one", "xll", "xlam",
+    "scr", "vbs", "vbe", "hta", "pif", "wsf", "wsh", "cpl",
     "appref-ms", "library-ms", "search-ms", "settingcontent-ms", "diagcab",
 })
 _VIDEO_EXTS_SP = frozenset({"mkv", "mp4", "avi", "mov", "wmv", "m4v", "webm", "ts", "m2ts", "mpg", "mpeg", "flv"})
-_LAUNCHER_EXTS_SP = frozenset({"scr", "lnk", "hta", "vbs", "vbe", "pif", "ps1", "wsf", "wsh", "bat", "cmd", "com", "msi", "chm", "one"})
+_LAUNCHER_EXTS_SP = frozenset({"scr", "lnk", "hta", "vbs", "vbe", "pif", "ps1", "wsf", "wsh", "bat", "cmd", "com", "msi", "chm", "one", "xll", "xlam"})
 _BENIGN_CONTAINER_EXTS_SP = frozenset({"vcdiff", "apk", "bdmv", "clpi", "mpls", "ifo", "bup", "vob", "npa", "vpk", "pck", "umd", "pak", "xp3", "rgss3a", "wolf", "nsp", "xci", "wbfs", "rpa", "rpy", "rpyb"})
 _VID_OR_ANIME_CLAIM_SP_RE = re.compile(
     r"(?i)(?:\b(?:1080p|720p|2160p|480p|4k|bluray|blu-ray|bdrip|brrip|web-dl|webdl|webrip|hdtv|dvdrip|hdrip|x26[45]|h\.?26[45]|hevc|avc|s\d{1,2}[._ -]?e\d{1,3}|\d{1,2}x\d{2}|season[ ._-]*\d+)\b|"
@@ -101,10 +101,11 @@ _SW_OR_GAME_TITLE_SP_RE = re.compile(
 _ANIME_OR_EP_ZIP_SP_RE = re.compile(
     r"(?i)(?:^\[[^\[\]]{2,30}\].*?(?:\s-\s*\d{1,3}\b|\bS\d{1,2}E\d{1,3}\b).*?\b(?:1080p|720p|2160p|480p)\b|"
     r"\b(?:S\d{1,2}[._ -]?E\d{1,3}|\d{1,2}x\d{2})\b.*?\b(?:1080p|720p|2160p|480p|WEB-DL|WEBRip|BluRay|BDRip|HDTV|x264|x265|HEVC)\b|"
-    r"\b(?:1080p|720p|2160p)\b.*?\b(?:WEB-DL|WEBRip|BDRip|BRRip|HDTV|x264|x265|HEVC)\b)"
+    r"\b(?:1080p|720p|2160p|480p|576p|4k)\b.*?\b(?:WEB-DL|WEBRip|BluRay|BDRip|BRRip|HDRip|HDTV|HDCAM|CAMRip|DVDRip|x264|x265|H\.?264|H\.?265|HEVC|AV1|XviD|DivX)\b|"
+    r"\b(?:WEB-DL|WEBRip|BDRip|BRRip|HDRip|HDTV|HDCAM|CAMRip|DVDRip)\b(?:.*?\b(?:x264|x265|H\.?264|H\.?265|HEVC|AV1|XviD|DivX))?)"
 )
 _OPTICAL_DISC_SP_RE = re.compile(
-    r"(?i)\b(?:dvd(?:[59]|rip|r|-r|-rom)?|bd(?:25|50|66|100|mv|rom|-r)|blu-?ray[\s._-]*disc|full[\s._-]*bd|untouched|remux|pal|ntsc|iso|udf|sacd|dvd-?audio|3d[\s._-]*iso)\b"
+    r"(?i)\b(?:dvd(?:[59]|r|-r|-rom)?|bd(?:25|50|66|100|mv|rom|-r)|blu-?ray[\s._-]*disc|full[\s._-]*bd|untouched|remux|pal|ntsc|iso|udf|sacd|dvd-?audio|3d[\s._-]*iso)\b"
 )
 _BENIGN_ZIP_SP_RE = re.compile(
     r"(?i)\b(?:batch|complete|season[ ._-]*\d+|s\d{1,2}[ ._-]*complete|e?\d{1,3}[ ._-]*[~-][ ._-]*e?\d{1,3}|시즌\s*\d+|완결|全集|合集|"
