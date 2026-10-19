@@ -1062,7 +1062,14 @@ class SeriesWebhookAdapter:
         title = series.get("title", "")
         release_title = release.get("releaseTitle") or episode_file.get("relativePath") or title
         size = int(release.get("size") or episode_file.get("size") or 0)
-        series_cat_id = series.get("seriesCatalogId") or series.get("series_catalog_id")
+        series_cat_id = (
+            series.get("seriesCatalogId")
+            or series.get("series_catalog_id")
+            or series.get("tvdbId")
+            or series.get("tmdbId")
+            or series.get("imdbId")
+            or series.get("id")
+        )
 
         is_complete = bool(event_type in ("Download", "EpisodeFileDelete", "Rename") and series_cat_id and size > 0)
 
@@ -1105,7 +1112,13 @@ class MovieWebhookAdapter:
         title = movie.get("title", "")
         release_title = release.get("releaseTitle") or movie_file.get("relativePath") or title
         size = int(release.get("size") or movie_file.get("size") or 0)
-        movie_cat_id = movie.get("movieCatalogId") or movie.get("movie_catalog_id")
+        movie_cat_id = (
+            movie.get("movieCatalogId")
+            or movie.get("movie_catalog_id")
+            or movie.get("tmdbId")
+            or movie.get("imdbId")
+            or movie.get("id")
+        )
 
         is_complete = bool(event_type in ("Download", "MovieFileDelete") and movie_cat_id and size > 0)
 
@@ -1144,7 +1157,15 @@ class AudioWebhookAdapter:
         album = payload.get("album", {})
         track_files = payload.get("trackFiles", [])
 
-        mb_id = artist.get("audioCatalogId") or album.get("audioCatalogId")
+        mb_id = (
+            artist.get("audioCatalogId")
+            or album.get("audioCatalogId")
+            or artist.get("mbId")
+            or album.get("mbId")
+            or album.get("foreignAlbumId")
+            or artist.get("foreignArtistId")
+            or album.get("id")
+        )
         title = f"{artist.get('name', '')} - {album.get('title', '')}"
         total_size = sum(int(t.get("size", 0)) for t in track_files) or 100000000
         is_complete = bool(event_type in ("Download", "TrackFileImported", "AlbumImported") and mb_id)

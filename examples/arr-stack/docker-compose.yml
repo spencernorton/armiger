@@ -1,0 +1,49 @@
+services:
+  armiger-torznab-proxy:
+    image: python:3.12-slim
+    container_name: armiger-torznab-proxy
+    restart: unless-stopped
+    working_dir: /app
+    ports:
+      - "8097:8097"
+    environment:
+      ARMIGER_MODEL_DIR: /app
+      ARMIGER_VARIANT: "${ARMIGER_VARIANT:-int8}"
+      UPSTREAM_TORZNAB_URL: "${UPSTREAM_TORZNAB_URL:-http://prowlarr:9696/1/api}"
+      ARMIGER_PROXY_HOST: "localhost"
+      ARMIGER_PROXY_PORT: "8097"
+      ARMIGER_REQUIRE_ENGLISH_AUDIO: "${ARMIGER_REQUIRE_ENGLISH_AUDIO:-false}"
+      ARMIGER_ALLOW_ENGLISH_SUBS: "${ARMIGER_ALLOW_ENGLISH_SUBS:-true}"
+      ARMIGER_REJECT_DEAD_SWARMS: "${ARMIGER_REJECT_DEAD_SWARMS:-true}"
+      ARMIGER_USE_ZERO_CUE_CATALOG: "true"
+    volumes:
+      - ../..:/app:ro
+    command:
+      - sh
+      - -c
+      - "pip install --no-cache-dir numpy onnxruntime cryptography && python3 examples/arr-stack/armiger_torznab_proxy.py"
+
+  armiger-arr-webhook-receiver:
+    image: python:3.12-slim
+    container_name: armiger-arr-webhook-receiver
+    restart: unless-stopped
+    working_dir: /app
+    ports:
+      - "8098:8098"
+    environment:
+      ARMIGER_MODEL_DIR: /app
+      ARMIGER_VARIANT: "int8"
+      ARMIGER_WEBHOOK_HOST: "localhost"
+      ARMIGER_WEBHOOK_PORT: "8098"
+      ARMIGER_RUN_FFPROBE: "true"
+      ARMIGER_DHT_RSI_MODE: "${ARMIGER_DHT_RSI_MODE:-pull_only}"
+    volumes:
+      - ../..:/app:ro
+      - media_library:/data/media:ro
+    command:
+      - sh
+      - -c
+      - "apt-get update && apt-get install -y --no-install-recommends ffmpeg && pip install --no-cache-dir numpy onnxruntime cryptography && python3 examples/arr-stack/armiger_arr_webhook_receiver.py"
+
+volumes:
+  media_library:
