@@ -267,7 +267,7 @@ def encode_torrent_features(
         htm_set = {"html", "htm", "url", "mht", "torrent"}
         scr_set = {"scr", "lnk", "vbs", "hta", "pif", "ps1", "wsf", "reg"}
         vid_set = {"mkv", "mp4", "avi", "ts", "m2ts", "wmv", "mov", "webm", "flv", "mpg", "mpeg", "m4v", "vob", "ogv", "rmvb", "3gp", "asf", "divx"}
-        bd_game_benign = {"vcdiff", "apk", "bdmv", "clpi", "mpls", "ifo", "bup", "vob", "npa", "vpk", "pck", "umd", "pak", "xp3", "rgss3a", "wolf", "nsp", "xci", "wbfs", "rpa", "rpy", "rpyb"}
+        bd_game_benign = {"vcdiff", "apk", "bdmv", "clpi", "mpls", "ifo", "bup", "vob", "npa", "vpk", "pck", "umd", "pak", "xp3", "rgss3a", "wolf", "nsp", "xci", "wbfs"}
 
         side[0] = sum(1 for e in f_exts_str if e in ebk_set) / n_f
         side[1] = sum(1 for e in f_exts_str if e in pdf_set) / n_f
@@ -277,10 +277,14 @@ def encode_torrent_features(
         side[5] = sum(1 for e in f_exts_str if e in app_set) / n_f
 
         vc = bool(_SIDE_VID_CLAIM_RE.search(name) or _SIDE_ANIME_KW_RE.search(name) or has_sub_grp or has_dub_grp)
-        has_renpy_structure = not vc and any(
-            p_i.replace("\\", "/").lower().endswith((".rpa", ".rpy", ".rpyb"))
-            or "/renpy/" in "/" + p_i.replace("\\", "/").lower()
-            for p_i, _ in items
+        has_any_vid_inf = any(e in vid_set for e in f_exts_str)
+        has_renpy_structure = (
+            not vc
+            and not has_any_vid_inf
+            and any(
+                p_i.replace("\\", "/").lower().endswith((".rpa", ".rpyb")) and int(sz_i or 0) >= 65536
+                for p_i, sz_i in items
+            )
         )
         renpy_say_re = re.compile(r"(?i)(?:^|/)lib/(?:py\d+-)?windows-[^/]+/say\.vbs$")
 
