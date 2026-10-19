@@ -586,7 +586,7 @@ def build_all_charts_and_manifest(
         "Armiger Ultra (M4 Pro / RTX GPU FP32)",
         "Local 8B Instruct LLM (FP16)",
         "Google Gemini Flash",
-        "Cheap OpenAI GPT (Fast Tier)",
+        "OpenAI GPT (Fast Tier)",
         "Anthropic Claude Haiku 4.5",
     ]
     colors_cost = [C_INT8, C_ULTRA, C_VINCI, C_GEMINI, C_GPT, C_CLAUDE]
@@ -788,7 +788,7 @@ def build_all_charts_and_manifest(
             "Armiger Ultra (M4 Pro / RTX GPU FP32)",
             "Local 8B Instruct LLM (FP16)",
             "Google Gemini Flash",
-            "Cheap OpenAI GPT (Fast Tier)",
+            "OpenAI GPT (Fast Tier)",
             "Anthropic Claude Haiku 4.5",
         ]
         colors_cost = [C_INT8, C_ULTRA, C_VINCI, C_GEMINI, C_GPT, C_CLAUDE]
@@ -948,7 +948,7 @@ def build_all_charts_and_manifest(
 
     y_tc2k_ani = d["tc2000_ani_y_true"]
     c3_p4_tc2k_stats = compute_paired_panel_stats(
-        "chart3_4_tc2000_anime_dub",
+        "chart3_4_zero_cue_2000_anime_dub",
         {
             models_10[4]: (d["tc2000_ani_pred_rtn"] == y_tc2k_ani).astype(np.float32),
             models_10[5]: (d["tc2000_ani_pred_ptt"] == y_tc2k_ani).astype(np.float32),
@@ -1177,7 +1177,7 @@ def build_all_charts_and_manifest(
                 v = s_item["point_pct"]
                 ax4.barh(idx, v, height=0.58, color=colors_10[idx], zorder=3)
                 draw_ci_whiskers(ax4, np.array([idx]), [s_item])
-                ax4.text(max(v, s_item["ci95_hi"]) + 0.6, idx, f"{v:.2f}% (95.8% tc2000)", va="center", ha="left", fontsize=8.4, fontweight="bold", color=TEXT_MAIN)
+                ax4.text(max(v, s_item["ci95_hi"]) + 0.6, idx, f"{v:.2f}% (95.8% zero_cue_2000)", va="center", ha="left", fontsize=8.4, fontweight="bold", color=TEXT_MAIN)
             elif m in c3_p4_tc2k_stats["models"]:
                 s_item = c3_p4_tc2k_stats["models"][m]
                 v = s_item["point_pct"]
@@ -1190,7 +1190,7 @@ def build_all_charts_and_manifest(
         ax4.set_yticks(y10)
         ax4.set_yticklabels(models_10, fontsize=9.5, fontweight="bold", color=TEXT_MAIN)
         ax4.invert_yaxis()
-        ax4.set_xlim(45, 122)
+        ax4.set_xlim(45, 128)
         ax4.set_xticks([50, 60, 70, 80, 90, 100])
         ax4.set_xlabel("99.61% on oct15_confirmation (505/507); 95.80% on zero_cue_2000 (N=2,000)", fontsize=8.6, color=TEXT_SUB, labelpad=6)
         ax4.set_title("4. Anime & Anime Dub Detection (%)\n(oct15_confirmation N = 507 & zero_cue_2000 N = 2,000)", fontsize=11, fontweight="bold", color=TEXT_MAIN, pad=8)
@@ -1433,7 +1433,7 @@ def build_all_charts_and_manifest(
     ]:
         y_sp = d[f"split5_{sp_code}_y_cat"]
         sp_stats = compute_paired_panel_stats(
-            f"five_split_{sp_code}",
+            f"five_split_{sp_label}",
             {
                 "armiger_ultra_hyb": (d[f"split5_{sp_code}_fp32_hyb_pred"] == y_sp).astype(np.float32),
                 "armiger_ultra_raw": (d[f"split5_{sp_code}_fp32_raw_pred"] == y_sp).astype(np.float32),
@@ -1506,7 +1506,7 @@ def build_all_charts_and_manifest(
                 "panel_2_catalog_matching_oct15": c3_p2_stats,
                 "panel_3_audio_strict_oct15": c3_p3_stats,
                 "panel_4_anime_oct15": c3_p4_oct_stats,
-                "panel_4_anime_dub_tc2000": c3_p4_tc2k_stats,
+                "panel_4_anime_dub_zero_cue_2000": c3_p4_tc2k_stats,
                 "panel_5_adult_oct15": c3_p5_stats,
                 "panel_6a_junk_oct15": c3_p6a_stats,
             },

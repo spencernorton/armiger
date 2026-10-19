@@ -36,10 +36,10 @@
   ],
   "provenance_sha256": {
     "canonical_eval_vectors.json": "058473f4ba21bc07db2c2b6981d5e62f3c584311fc134d92cb523de7f261243a",
-    "generate_canonical_charts.py": "409e9cd324b8e14acd8db58f46ebab9d0ea623e57cf0b7eabb2343f0a9237daa",
+    "generate_canonical_charts.py": "1f35073d35e7e7e82d6c3274ef2c29238424fa5885e36c2e68a86148e38edb78",
     "assets/armiger_vs_llms_overall_and_6dims.png": "0a0bc3a260b3c3b1188a92fb9cc015c6bdb786e9033924d9daa7a36be332fc62",
-    "assets/armiger_vs_llms_cost_comparison.png": "3cf46fd59817d3bffafce1f4f5a15379ffef7bf779b8d4b40b866a8d9671eff4",
-    "assets/armiger_vs_torrent_classifiers_6dims.png": "3768e7ec5bef503027375f87f089362798ab2ec74f96a7ea450458de325154dd",
+    "assets/armiger_vs_llms_cost_comparison.png": "7344ba71b9041ac737296c98079c30bcae33c237c5b6549509596d6eb5c3ec52",
+    "assets/armiger_vs_torrent_classifiers_6dims.png": "51e1f2293aada2d42fc8d0feaef976c2b59eb5f648a27e5c32df041c1c7f3edc",
     "assets/armiger_categorical_breakdown.png": "1a77a64340f7e05af318105d83270b29396450d01f22f71cffdf808b45e10d98",
     "validated_zero_cue_catalog.json": "a43193a7d9982f1b83e9e6968c47dbbe8d058b113af5020d6d5ea45ed2af7fcd",
     "armiger_ultra.fp32.onnx": "24c65e1af1be68c923bfdf774afb862c54b66a30f40c4b65cf5961929f149d48",
@@ -529,13 +529,13 @@
       }
     },
     "armiger_vs_llms_cost_comparison.png": {
-      "sha256": "3cf46fd59817d3bffafce1f4f5a15379ffef7bf779b8d4b40b866a8d9671eff4",
+      "sha256": "7344ba71b9041ac737296c98079c30bcae33c237c5b6549509596d6eb5c3ec52",
       "models": [
         "Armiger (8.3 MB M4 Pro CPU INT8)",
         "Armiger Ultra (M4 Pro / RTX GPU FP32)",
         "Local 8B Instruct LLM (FP16)",
         "Google Gemini Flash",
-        "Cheap OpenAI GPT (Fast Tier)",
+        "OpenAI GPT (Fast Tier)",
         "Anthropic Claude Haiku 4.5"
       ],
       "batched_usd_per_1m": [
@@ -556,7 +556,7 @@
       ]
     },
     "armiger_vs_torrent_classifiers_6dims.png": {
-      "sha256": "3768e7ec5bef503027375f87f089362798ab2ec74f96a7ea450458de325154dd",
+      "sha256": "51e1f2293aada2d42fc8d0feaef976c2b59eb5f648a27e5c32df041c1c7f3edc",
       "panel_1_category_11class_oct15": {
         "panel_name": "chart3_1_oct15_cat11",
         "n": 2835,
@@ -997,8 +997,8 @@
           }
         }
       },
-      "panel_4_anime_dub_tc2000": {
-        "panel_name": "chart3_4_tc2000_anime_dub",
+      "panel_4_anime_dub_zero_cue_2000": {
+        "panel_name": "chart3_4_zero_cue_2000_anime_dub",
         "n": 2000,
         "metric_type": "mean",
         "reference_model": "RTN (rank-torrent-name)",
@@ -1332,7 +1332,7 @@
   },
   "five_split_category_summary": {
     "oct15_confirmation": {
-      "panel_name": "five_split_oct15",
+      "panel_name": "five_split_oct15_confirmation",
       "n": 2835,
       "metric_type": "mean",
       "reference_model": "armiger_ultra_hyb",
@@ -1380,7 +1380,7 @@
       }
     },
     "fresh_confirmation": {
-      "panel_name": "five_split_fresh",
+      "panel_name": "five_split_fresh_confirmation",
       "n": 1402,
       "metric_type": "mean",
       "reference_model": "armiger_ultra_hyb",
@@ -1428,7 +1428,7 @@
       }
     },
     "beyond_confirmation": {
-      "panel_name": "five_split_beyond",
+      "panel_name": "five_split_beyond_confirmation",
       "n": 1025,
       "metric_type": "mean",
       "reference_model": "armiger_ultra_hyb",
@@ -1476,7 +1476,7 @@
       }
     },
     "zero_cue_2000": {
-      "panel_name": "five_split_tc2000",
+      "panel_name": "five_split_zero_cue_2000",
       "n": 2000,
       "metric_type": "mean",
       "reference_model": "armiger_ultra_hyb",
@@ -1524,7 +1524,7 @@
       }
     },
     "multilang_3000": {
-      "panel_name": "five_split_tc3000",
+      "panel_name": "five_split_multilang_3000",
       "n": 3000,
       "metric_type": "mean",
       "reference_model": "armiger_ultra_hyb",

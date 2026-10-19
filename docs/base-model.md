@@ -21,7 +21,7 @@
 
 ![Armiger vs Open-Source Torrent Classifiers Across 7 Core Dimensions](../assets/armiger_vs_torrent_classifiers_6dims.png)
 
-![Categorical Accuracy Breakdown Across All 10 Media & Software Categories](../assets/armiger_categorical_breakdown.png)
+![Per-Category Recall Breakdown Across All 10 Media & Software Categories](../assets/armiger_categorical_breakdown.png)
 
 ---
 

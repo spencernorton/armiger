@@ -29,7 +29,7 @@
 
 ![Armiger vs Open-Source Torrent Classifiers Across 7 Core Dimensions](assets/armiger_vs_torrent_classifiers_6dims.png)
 
-![Categorical Accuracy Breakdown Across All 10 Media & Software Categories](assets/armiger_categorical_breakdown.png)
+![Per-Category Recall Breakdown Across All 10 Media & Software Categories](assets/armiger_categorical_breakdown.png)
 
 - **Universal 11-class coverage vs. video-only rule parsers.** Reaches **`95.49%`** 11-class accuracy (`97.30%` Movie-vs-TV, `96.53%` Catalog Matching) on `oct15_confirmation` (`N=2,835`) and **`95.42%`** weighted mean across all 5 evaluation splits (`N=10,262`), compared to `72.24%` for `MIMMO BERT 360M` (`~1.4 GB`), `53.58%` for `RTN`/`PTT`, `38.69%` for `GuessIt`, and `35.17%` for `Bitmagnet` built-in rules on the identical `N=2,835` denominator.
 - **Calibrated safety & malware gates.** Mondrian conformal thresholds enforce **`100.00%`** junk/malware accuracy on `oct15_confirmation` (`N=2,170`) and `fresh_confirmation` (`N=1,291`), **`99.90%`** on `beyond_confirmation` (`N=977`), and **`98.53%`** adult/NSFW isolation (`N=2,781`).
