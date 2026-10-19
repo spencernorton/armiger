@@ -1,6 +1,7 @@
 """Tracker Scrape, Swarm Liveliness & Bayesian Grab-Outcome Priors Integration for Armiger.
 
-Implements the four strictly separated signal pathways for Armiger Ultra:
+Implements the four strictly separated signal pathways required by the BitAgent x Armiger
+architecture contract:
   - Way 1: Active Teacher Sampling & Queue Priority Weighting (`compute_sampling_priority_weight`)
   - Way 2: Tracker/Source Identity & Bayesian Prior Features (`extract_way2_source_features`)
            with Mandatory Modality Dropout (`apply_modality_dropout`, p in [0.50, 0.70])
@@ -10,15 +11,14 @@ Implements the four strictly separated signal pathways for Armiger Ultra:
   - Way 4: Orthogonal Swarm Viability & Stage-2 Grab Ranking Multiplier
            (`compute_swarm_viability`), guaranteeing `seeders == 0` never flips content `category`.
 
-Also enforces the public-tracker privacy invariant:
-private-tracker names, private categories, and passkey URLs are rejected/stripped
+Also enforces the BitAgent privacy invariant (`catalogueguard.PrivacyTagSQL` / `privacySQL`):
+private-tracker names, categories (`private`, `bitgrab`), and passkey URLs are rejected/stripped
 and never exported to external or unapproved stages.
 """
 from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime
-import hashlib
 import time
 import math
 import random
@@ -30,7 +30,7 @@ try:
 except ImportError:  # pragma: no cover - stdlib fallback for bare plugin supervisor
     np = None  # type: ignore[assignment]
 
-# Canonical top-9 public BEP-15 UDP tracker domains in the public BEP-15 scrape pool (ordered by corpus volume)
+# Canonical top-9 public BEP-15 UDP tracker domains in the BitAgent scrape pool (ordered by corpus volume)
 PUBLIC_TRACKER_DOMAINS: tuple[str, ...] = (
     "tracker.opentrackr.org",
     "open.stealth.si",
@@ -59,68 +59,55 @@ TRACKER_DOMAIN_PRIORS: dict[str, tuple[float, float, float, float]] = {
     "explodie.org":           (0.069, 0.017, 0.103, 0.972),
 }
 
-# Privacy guard patterns (stored as 8-byte BLAKE2b-64 token digests)
-def _h64(s: str) -> str:
-    return hashlib.blake2b(s.strip().lower().encode("utf-8"), digest_size=8).hexdigest()
-
-
-_ALNUM_TOK_RE = re.compile(r"[a-z0-9]+")
-_PRIVATE_SOURCE_TOKEN_H = frozenset(['082ab7fa9149dbf4', '197fd653f21bcd3f', '1e9e51be9bfe0478', '2b7cc4b13aaf5631', '2c5b4f6c5cb07666', '3146c85d8bf00b54', '33166d153470fedb', '51e7ac6cfb86ce1e', '558c32ff1565ab8a', '6844231d004c75ee', '6b8e34b62dc05441', '6d479673e9f41ac2', '718b4352fe485cd6', '7329eb8d5f5decef', '736dca33fd629f77', '83643b9fee17bbd6', '9cf8cff25aba5388', '9d4f13dad34e5314', 'af5fd04ddfd2ec2e', 'b360c56b9b34d8c1', 'ba864ede2b9589ff', 'c2bcff7cc3bd3aa7', 'cbf6bab6256fcd67', 'd0a6205effdf0b95', 'dde53c1ffcea1151', 'efc58939ec80925e', 'fd6ac68bd7d5a87b'])
-_ANIME_BRACKET_GRP_H = frozenset(['0380c309e464115a', '17addcc669201a7b', '1bf62e9b91086379', '33b21e80d5dbfa62', '3658912d4f05f762', '4297edae7e25ba02', '44e08227cfda9421', '65dfe6849ae4bb0d', '66ced9df20d8f558', '6cff013c3e752ac8', '7bc52c5f863149cc', '7c8a9737c2812ae0', 'a7637cb5c531d8e9', 'b61d75b73d8e0c59', 'bed3322685febfa5', 'e20a8d50ddf1aa2e', 'e3fd326207da261c', 'fc94bcdf9fcb0164'])
-_SW_GAME_GRP_H = frozenset(['0ae36a7939ac0be1', '1c8f3166691fa2c6', '4509f87fe97d6ed9', 'a65a1816debe0915', 'aa89d2a9d5d18f01', 'ee7b45399bcf968a', 'f766dbb74e38db04'])
-_BENIGN_STUB_EXE_H = frozenset([
-    '9a9f15179701c6ae',
-])
-
-
-def _has_private_source_token(s: str) -> bool:
-    return any(_h64(m.group(0)) in _PRIVATE_SOURCE_TOKEN_H for m in _ALNUM_TOK_RE.finditer(s.lower()))
-
-
+# Privacy guard patterns matching bitagent/internal/catalogueguard and internal/seeds/admission.go
+_PRIVATE_SOURCE_RE = re.compile(
+    r"(?i)(?:^|[^a-z0-9])(?:private|bitgrab|passkey|authkey|torrentleech|broadcastthenet|broadcasthenet|passthepopcorn|"
+    r"redacted|orpheus|bibliotik|myanonamouse|filelist|beyondhd|blutopia|uhdbits|morethantv|alpharatio|"
+    r"iptorrents|hdbits|gazellegames|animebytes|avistaz|cinemaz|exoticaz|empornium|empirnium)(?:$|[^a-z0-9])"
+)
 _PASSKEY_QUERY_RE = re.compile(
     r"(?i)(?:[?&]|://[^/\s@]+@|/[a-f0-9]{16,}(?:/|$)|/[a-z0-9_-]{24,}(?:/|$))"
 )
 _SAFE_URL_PATH_RE = re.compile(r"(?i)^(?:/(?:announce(?:\.php)?|scrape(?:\.php)?)?/?)?$")
 
-# Feature extractors for release-group and media quality priors
+# Feature extractors matching bitagent/internal/evidence/priors/features.go
 _RG_BRACKET_RE = re.compile(r"^\[([^\[\]]{2,32})\]")
 _RG_SUFFIX_RE = re.compile(r"-([A-Za-z0-9]+)(?:\.[a-z0-9]{2,5})?$")
 _RES_RE = re.compile(r"(?i)\b(2160p|1080p|720p|480p|576p|4k)\b")
 _QUAL_RE = re.compile(r"(?i)\b(web-dl|webdl|webrip|bluray|blu-ray|bdrip|brrip|hdtv|dvdrip|remux|hdrip|cam|ts|telesync)\b")
 _CODEC_RE = re.compile(r"(?i)\b(x265|h265|hevc|x264|h264|avc|av1|xvid|divx)\b")
 _EXEC_OR_TRAP_EXTS = frozenset({
-    "exe", "msi", "bat", "cmd", "sh", "com", "scr", "lnk", "vbs", "hta", "pif", "ps1", "wsf", "reg", "html", "htm", "url", "mht", "dll"
+    "exe", "msi", "bat", "cmd", "sh", "com", "scr", "lnk", "vbs", "vbe", "hta", "pif", "ps1", "wsf", "wsh",
+    "reg", "html", "htm", "url", "mht", "dll", "cpl", "one", "xll", "xlam",
+    "appref-ms", "library-ms", "search-ms", "settingcontent-ms", "diagcab",
+})
+_ALWAYS_TRAP_EXTS_SP = frozenset({
+    "scr", "vbs", "vbe", "hta", "pif", "wsf", "wsh", "cpl", "one", "xll", "xlam",
+    "appref-ms", "library-ms", "search-ms", "settingcontent-ms", "diagcab",
 })
 _VIDEO_EXTS_SP = frozenset({"mkv", "mp4", "avi", "mov", "wmv", "m4v", "webm", "ts", "m2ts", "mpg", "mpeg", "flv"})
-_LAUNCHER_EXTS_SP = frozenset({"scr", "lnk", "hta", "vbs", "pif", "ps1", "wsf", "cmd", "com"})
-_BENIGN_CONTAINER_EXTS_SP = frozenset({"vcdiff", "apk", "bdmv", "clpi", "mpls", "ifo", "bup", "vob", "npa", "vpk", "pck", "umd", "pak", "xp3", "rgss3a", "wolf", "nsp", "xci", "wbfs"})
+_LAUNCHER_EXTS_SP = frozenset({"scr", "lnk", "hta", "vbs", "vbe", "pif", "ps1", "wsf", "wsh", "bat", "cmd", "com", "msi", "chm", "one"})
+_BENIGN_CONTAINER_EXTS_SP = frozenset({"vcdiff", "apk", "bdmv", "clpi", "mpls", "ifo", "bup", "vob", "npa", "vpk", "pck", "umd", "pak", "xp3", "rgss3a", "wolf", "nsp", "xci", "wbfs", "rpa", "rpy", "rpyb"})
 _VID_OR_ANIME_CLAIM_SP_RE = re.compile(
-    r"(?i)\b(?:1080p|720p|2160p|480p|4k|bluray|blu-ray|bdrip|brrip|web-dl|webdl|webrip|hdtv|dvdrip|hdrip|x26[45]|h\.?26[45]|hevc|avc|s\d{1,2}e\d{1,3}|season[ ._-]*\d+)\b"
+    r"(?i)(?:\b(?:1080p|720p|2160p|480p|4k|bluray|blu-ray|bdrip|brrip|web-dl|webdl|webrip|hdtv|dvdrip|hdrip|x26[45]|h\.?26[45]|hevc|avc|s\d{1,2}[._ -]?e\d{1,3}|\d{1,2}x\d{2}|season[ ._-]*\d+)\b|"
+    r"^\[(?:SubsPlease|Erai-raws|HorribleSubs|Judas|Ember|ToonsHub|ASW|Sakurato|LoliHouse|Nekomoe|ANi|B-Global|Ohys-Raws|Leopard-Raws|ReinForce|Moozzi2|Beatrice-Raws|OpenAnime)\])"
 )
 _SW_OR_GAME_TITLE_SP_RE = re.compile(
-    r"(?i)\b(?:v?\d+\.\d+\.\d+|repack|portable|cracked|keygen|patch|patcher|activat(?:ed|or)|"
-    r"multilingual|win(?:32|64)|x64|x86|macos|android|apk|pc[ ._-]?game|gog|emulator|driver|firmware|"
-    r"setup|installer|downloader|studio|pro[ ._-]+v?\d|ce[ ._-]+v?\d)\b"
+    r"(?i)\b(?:v?\d+\.\d+\.\d+|portable|cracked|keygen|patch|patcher|activat(?:ed|or)|"
+    r"multilingual|win(?:32|64)|x64|x86|macos|android|apk|pc[ ._-]?game|fitgirl|dodi|elamigos|"
+    r"codex|rune|tenoke|skidrow|gog|emulator|driver|firmware|setup|installer|downloader|"
+    r"pro[ ._-]+v?\d|ce[ ._-]+v?\d)\b"
 )
 _ANIME_OR_EP_ZIP_SP_RE = re.compile(
     r"(?i)(?:^\[[^\[\]]{2,30}\].*?(?:\s-\s*\d{1,3}\b|\bS\d{1,2}E\d{1,3}\b).*?\b(?:1080p|720p|2160p|480p)\b|"
-    r"\bS\d{1,2}E\d{1,3}\b.*?\b(?:1080p|720p|2160p|WEB-DL|WEBRip|BluRay|HDTV)\b)"
+    r"\b(?:S\d{1,2}[._ -]?E\d{1,3}|\d{1,2}x\d{2})\b.*?\b(?:1080p|720p|2160p|480p|WEB-DL|WEBRip|BluRay|BDRip|HDTV|x264|x265|HEVC)\b|"
+    r"\b(?:1080p|720p|2160p)\b.*?\b(?:WEB-DL|WEBRip|BDRip|BRRip|HDTV|x264|x265|HEVC)\b)"
 )
-
-
-def _has_vid_or_anime_claim_sp(name: str) -> bool:
-    if _VID_OR_ANIME_CLAIM_SP_RE.search(name):
-        return True
-    m = _RG_BRACKET_RE.match(name.strip())
-    return bool(m and _h64(m.group(1)) in _ANIME_BRACKET_GRP_H)
-
-
-def _has_sw_or_game_title_sp(name: str) -> bool:
-    if _SW_OR_GAME_TITLE_SP_RE.search(name):
-        return True
-    return any(_h64(m.group(0)) in _SW_GAME_GRP_H for m in _ALNUM_TOK_RE.finditer(name.lower()))
+_OPTICAL_DISC_SP_RE = re.compile(
+    r"(?i)\b(?:dvd(?:[59]|rip|r|-r|-rom)?|bd(?:25|50|66|100|mv|rom|-r)|blu-?ray[\s._-]*disc|full[\s._-]*bd|untouched|remux|pal|ntsc|iso|udf|sacd|dvd-?audio|3d[\s._-]*iso)\b"
+)
 _BENIGN_ZIP_SP_RE = re.compile(
-    r"(?i)\b(?:batch|complete|season[ ._-]*\d+|s\d{1,2}[ ._-]*complete|\d{1,3}[ ._-]*-[ ._-]*\d{1,3}|"
+    r"(?i)\b(?:batch|complete|season[ ._-]*\d+|s\d{1,2}[ ._-]*complete|e?\d{1,3}[ ._-]*[~-][ ._-]*e?\d{1,3}|시즌\s*\d+|완결|全集|合集|"
     r"ost|soundtrack|artbook|scans?|wallpapers?|fonts?|subs?|subtitles?)\b"
 )
 _STOP_RG = frozenset({
@@ -131,7 +118,7 @@ _STOP_RG = frozenset({
 
 
 def normalise_source(s: str | None) -> str:
-    """Normalize a tracker or indexer source identifier.
+    """Exact Python parity with `bitagent/internal/evidence/priors/features.go:normaliseSource`.
 
     Strips Prowlarr's ` (Prowlarr)` suffix, lowercases, and collapses whitespace, `/`, and `.` to `_`.
     """
@@ -181,7 +168,7 @@ def is_public_safe_source(source_or_url: str | None) -> bool:
         return False
     if _PASSKEY_QUERY_RE.search(s):
         return False
-    if _has_private_source_token(s):
+    if _PRIVATE_SOURCE_RE.search(s):
         return False
     if "://" in s or "/" in s:
         u = s.split("://", 1)[1] if "://" in s else s
@@ -191,7 +178,7 @@ def is_public_safe_source(source_or_url: str | None) -> bool:
             if not _SAFE_URL_PATH_RE.fullmatch(path_part):
                 return False
     norm = normalise_source(s)
-    if _has_private_source_token(norm):
+    if norm in ("private", "bitgrab") or _PRIVATE_SOURCE_RE.search(norm):
         return False
     return True
 
@@ -223,7 +210,7 @@ def sanitize_sources_for_export(sources: list[dict[str, Any]] | None) -> list[di
 
 
 def extract_release_group(name: str | None) -> str:
-    """Extract normalized release group from bracket prefix or hyphenated suffix."""
+    """Extract normalized release group matching `bitagent/internal/evidence/priors/features.go`."""
     if not name or not isinstance(name, str):
         return ""
     s = name.strip()
@@ -279,7 +266,7 @@ def normalise_extension(ext: str | None) -> str:
 
 
 def extract_prior_features(name: str | None, ext: str | None = None, source: str | None = None) -> dict[str, str]:
-    """Return the feature dictionary for Bayesian prior lookup."""
+    """Return the feature dictionary matching `bitagent/internal/evidence/priors.Extract`."""
     out: dict[str, str] = {}
     ns = normalise_source(source) if is_public_safe_source(source) else ""
     if ns:
@@ -508,14 +495,21 @@ def extract_way3_anomaly_features(
         has_root_launcher = False
         vid_depths: list[int] = []
 
+        vc_pre = bool(_VID_OR_ANIME_CLAIM_SP_RE.search(name))
+        has_renpy_sp = not vc_pre and any(
+            (((x.get("path") or x.get("p")) if isinstance(x, dict) else str(x or "")) or "").replace("\\", "/").lower().endswith((".rpa", ".rpy", ".rpyb"))
+            for x in files[:64]
+        )
         for f in files[:64]:
             p = ((f.get("path") or f.get("p")) if isinstance(f, dict) else str(f or "")) or ""
             p = p.replace("\\", "/")
+            if has_renpy_sp and p.lower().endswith("/say.vbs") and "windows-" in p.lower():
+                continue
             sz = int((f.get("size") or f.get("s") or 0) if isinstance(f, dict) else 0)
             if "." in p:
                 f_ext = p.rsplit(".", 1)[-1].lower()
                 f_exts.add(f_ext)
-                is_rarbg_exe = (f_ext == "exe") and (any(_h64(m.group(0)) in _BENIGN_STUB_EXE_H for m in _ALNUM_TOK_RE.finditer(p.lower())) or (0 < sz < 32768))
+                is_rarbg_exe = (f_ext == "exe") and ("rarbg" in p.lower() or (0 < sz < 32768))
                 if f_ext in _EXEC_OR_TRAP_EXTS and not is_rarbg_exe:
                     has_exec_or_trap = True
                 depth = p.count("/")
@@ -533,23 +527,33 @@ def extract_way3_anomaly_features(
                 elif f_ext in _VIDEO_EXTS_SP:
                     vid_depths.append(depth)
 
-        vc = _has_vid_or_anime_claim_sp(name)
-        is_sw_game = bool(_has_sw_or_game_title_sp(name) or (f_exts & _BENIGN_CONTAINER_EXTS_SP))
-        if not is_sw_game and len(files) <= 12:
+        vc = bool(_VID_OR_ANIME_CLAIM_SP_RE.search(name))
+        is_sw_game = bool((not vc and _SW_OR_GAME_TITLE_SP_RE.search(name)) or (f_exts & _BENIGN_CONTAINER_EXTS_SP))
+        if f_exts & _ALWAYS_TRAP_EXTS_SP:
+            is_structural_malware_trap = True
+            has_exec_or_trap = True
+        elif not is_sw_game:
             if vc and has_real_exe and has_dll:
                 is_structural_malware_trap = True
-            elif vc and (1 <= len(vid_depths) <= 2) and min(vid_depths) >= 1 and has_root_launcher:
+            elif vc and len(vid_depths) >= 1 and (has_real_exe or has_root_launcher):
                 is_structural_malware_trap = True
             elif (vc or len(vid_depths) > 0) and has_oversized_lnk:
                 is_structural_malware_trap = True
             elif vc and len(vid_depths) == 0 and (has_real_exe or has_root_launcher):
                 is_structural_malware_trap = True
-            elif len(files) == 1 and f_exts == {"zip"} and _ANIME_OR_EP_ZIP_SP_RE.search(name) and not _BENIGN_ZIP_SP_RE.search(name):
+            elif len(files) <= 2 and len(vid_depths) == 0 and (f_exts & {"zip", "zipx", "rar", "7z"}) and _ANIME_OR_EP_ZIP_SP_RE.search(name) and not _BENIGN_ZIP_SP_RE.search(name):
                 is_structural_malware_trap = True
                 has_exec_or_trap = True
-    elif _has_vid_or_anime_claim_sp(name) and ext == "zip" and _ANIME_OR_EP_ZIP_SP_RE.search(name) and not _BENIGN_ZIP_SP_RE.search(name):
-        is_structural_malware_trap = True
-        has_exec_or_trap = True
+            elif len(files) <= 2 and len(vid_depths) == 0 and (f_exts & {"iso", "img", "vhd", "vhdx", "udf"}):
+                name_stem = re.sub(r"\.(?:iso|img|vhd|vhdx|udf|dmg)$", "", name.strip(), flags=re.IGNORECASE)
+                if _ANIME_OR_EP_ZIP_SP_RE.search(name_stem) and not _OPTICAL_DISC_SP_RE.search(name_stem):
+                    is_structural_malware_trap = True
+                    has_exec_or_trap = True
+    elif _VID_OR_ANIME_CLAIM_SP_RE.search(name) and ext in ("zip", "zipx", "rar", "7z", "iso", "img", "vhd", "vhdx", "udf"):
+        name_stem = re.sub(r"\.(?:iso|img|vhd|vhdx|udf|dmg)$", "", name.strip(), flags=re.IGNORECASE)
+        if _ANIME_OR_EP_ZIP_SP_RE.search(name_stem) and not _BENIGN_ZIP_SP_RE.search(name_stem) and not _OPTICAL_DISC_SP_RE.search(name_stem):
+            is_structural_malware_trap = True
+            has_exec_or_trap = True
 
     inline_priors = sw.get("outcome_priors") if isinstance(sw, dict) else None
 
@@ -581,7 +585,7 @@ def extract_way3_anomaly_features(
         if tr_known and has_tr_s and s_val >= 50 and has_tr_c and c_val == 0:
             vec[2] = min(1.0, math.log1p(s_val) / math.log1p(500.0))
 
-        if d_val >= 25 and tr_known and has_tr_s and s_val == 0 and not last_pos:
+        if d_val >= 25 and tr_known and has_tr_s and s_val == 0 and (not has_tr_c or c_val == 0) and not last_pos:
             vec[3] = min(1.0, math.log1p(d_val) / math.log1p(250.0))
 
         max_s = max(s_val if has_tr_s else 0, d_val)

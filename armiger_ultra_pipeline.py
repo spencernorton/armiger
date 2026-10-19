@@ -1168,7 +1168,7 @@ class ArmigerUltraPipeline:
             p_excluded = float(scope_probs[1])
 
             if not csam_result.is_safe and csam_result.violation_type == CSAMViolationType.MALWARE_PAYLOAD:
-                p_junk = max(p_junk, 0.99)
+                p_junk = max(p_junk, 0.92)
                 junk_probs = np.array([1.0 - p_junk, p_junk], dtype=np.float64)
 
             gate_passed, gate_reason, gate_violation = self.safety_gate.evaluate(
@@ -1179,7 +1179,10 @@ class ArmigerUltraPipeline:
             )
 
             pred_adult = "adult" if p_adult >= self.safety_gate.adult_threshold else "non_adult"
-            pred_junk = "junk" if (p_junk >= self.safety_gate.junk_threshold or not csam_result.is_safe) else "clean"
+            pred_junk = "junk" if (
+                p_junk >= self.safety_gate.junk_threshold
+                or (not csam_result.is_safe and csam_result.violation_type != CSAMViolationType.MALWARE_PAYLOAD)
+            ) else "clean"
             pred_scope = "excluded" if p_excluded >= self.safety_gate.scope_threshold else "allowed_type"
             pred_anime = NEURAL_HEAD_CLASSES["anime"][int(np.argmax(anime_probs))]
             pred_eng_subs = NEURAL_HEAD_CLASSES["english_subs"][int(np.argmax(eng_subs_probs))]

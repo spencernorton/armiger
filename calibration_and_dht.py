@@ -14,7 +14,6 @@ import hashlib
 import json
 import math
 import pathlib
-import time
 from typing import Any
 
 
@@ -33,25 +32,119 @@ def _softmax(logits: list[float], temperature: float = 1.0, bias: list[float] | 
 class ArmigerCalibrator:
     """Applies `calibration.json` temperature scaling, Menon prior adjustments, and Mondrian gates."""
 
-    def __init__(self, calibration_path: str | pathlib.Path | None = None) -> None:
-        if calibration_path is None:
-            calibration_path = pathlib.Path(__file__).with_name("calibration.json")
-        self.calibration_path = pathlib.Path(calibration_path)
-        self.config: dict[str, Any] = (
-            json.loads(self.calibration_path.read_text()) if self.calibration_path.exists() else {}
-        )
-        self.heads = self.config.get("heads", {})
-        self.mondrian = self.config.get("mondrian_thresholds", {
-            "adult": 0.5451,
-            "junk": 0.1010,
-            "owner_scope": 0.4770,
-        })
+    DEFAULT_MONDRIAN = {
+        "adult": 0.5451,
+        "junk": 0.1010,
+        "scope": 0.4770,
+        "owner_scope": 0.4770,
+    }
+
+    def __init__(
+        self,
+        calibration_path: str | pathlib.Path | dict[str, Any] | None = None,
+        *,
+        profile: str | None = None,
+    ) -> None:
+        if isinstance(calibration_path, dict):
+            self.calibration_path = None
+            raw_cfg = dict(calibration_path)
+        else:
+            if calibration_path is None:
+                calibration_path = pathlib.Path(__file__).with_name("calibration.json")
+            self.calibration_path = pathlib.Path(calibration_path)
+            raw_cfg = (
+                json.loads(self.calibration_path.read_text(encoding="utf-8"))
+                if self.calibration_path.exists()
+                else {}
+            )
+        if not isinstance(raw_cfg, dict):
+            raise ValueError("calibration config must be a JSON object")
+        self.config: dict[str, Any] = raw_cfg
+
+        eff_profile = profile or raw_cfg.get("active_profile")
+        profiles = raw_cfg.get("profiles") if isinstance(raw_cfg.get("profiles"), dict) else {}
+        active_block = profiles.get(eff_profile, raw_cfg) if eff_profile and eff_profile in profiles else raw_cfg
+
+        raw_heads = active_block.get("heads")
+        if not isinstance(raw_heads, dict):
+            raw_heads = raw_cfg.get("temperature_scaling_stop_fit") or {}
+        parsed_heads: dict[str, dict[str, Any]] = {}
+        for h_name, h_val in raw_heads.items():
+            if not isinstance(h_val, dict):
+                raise ValueError(f"invalid head calibration block for {h_name}")
+            t_raw = h_val.get("temperature", h_val.get("temperature_T", 1.0))
+            if isinstance(t_raw, bool) or not isinstance(t_raw, (int, float)) or not math.isfinite(float(t_raw)) or float(t_raw) <= 0.0:
+                raise ValueError(f"invalid temperature for head {h_name}")
+            entry: dict[str, Any] = {"temperature": float(t_raw)}
+            if "logit_bias" in h_val and h_val["logit_bias"] is not None:
+                if not isinstance(h_val["logit_bias"], list) or any(
+                    isinstance(x, bool) or not isinstance(x, (int, float)) or not math.isfinite(float(x))
+                    for x in h_val["logit_bias"]
+                ):
+                    raise ValueError(f"invalid logit_bias for head {h_name}")
+                entry["logit_bias"] = [float(x) for x in h_val["logit_bias"]]
+            parsed_heads[h_name] = entry
+        self.heads = parsed_heads
+
+        raw_m = active_block.get("mondrian_thresholds")
+        if not isinstance(raw_m, dict):
+            m_Legacy = raw_cfg.get("mondrian_conformal_thresholds")
+            if isinstance(m_Legacy, dict):
+                raw_m = {}
+                for k_m, gk in (("adult", "adult"), ("junk", "junk"), ("owner_scope", "owner_scope")):
+                    v_m = m_Legacy.get(k_m)
+                    if isinstance(v_m, dict):
+                        t_v = v_m.get("threshold", v_m.get("threshold_G250", v_m.get("threshold_H350", self.DEFAULT_MONDRIAN[gk])))
+                        raw_m[gk] = float(t_v)
+                    elif isinstance(v_m, (int, float)):
+                        raw_m[gk] = float(v_m)
+            else:
+                raw_m = {}
+
+        adult_t = float(raw_m.get("adult", self.DEFAULT_MONDRIAN["adult"]))
+        junk_t = float(raw_m.get("junk", self.DEFAULT_MONDRIAN["junk"]))
+        scope_t = float(raw_m.get("scope", raw_m.get("owner_scope", self.DEFAULT_MONDRIAN["scope"])))
+        for tk, tv in (("adult", adult_t), ("junk", junk_t), ("scope", scope_t)):
+            if not math.isfinite(tv) or not (0.0 < tv < 1.0):
+                raise ValueError(f"invalid mondrian threshold {tk}={tv}")
+        self.mondrian = {
+            "adult": adult_t,
+            "junk": junk_t,
+            "scope": scope_t,
+            "owner_scope": scope_t,
+        }
+
+    def thresholds(self) -> dict[str, float]:
+        return {
+            "adult": float(self.mondrian["adult"]),
+            "junk": float(self.mondrian["junk"]),
+            "scope": float(self.mondrian["scope"]),
+        }
 
     def calibrate_head(self, head_name: str, raw_logits: list[float]) -> list[float]:
         hcfg = self.heads.get(head_name, {})
         temp = float(hcfg.get("temperature", 1.0))
         bias = hcfg.get("logit_bias")
         return _softmax(raw_logits, temperature=temp, bias=bias)
+
+    def calibrate_probs(self, probs: dict[str, list[float]]) -> dict[str, list[float]]:
+        out: dict[str, list[float]] = {}
+        for head_name, vec in probs.items():
+            hcfg = self.heads.get(head_name, {})
+            temp = float(hcfg.get("temperature", 1.0))
+            bias = hcfg.get("logit_bias")
+            if abs(temp - 1.0) <= 1e-6 and not bias:
+                out[head_name] = [float(v) for v in vec]
+            else:
+                pseudo_logits = [math.log(max(float(v), 1e-12)) for v in vec]
+                scaled = _softmax(pseudo_logits, temperature=temp, bias=bias)
+                rounded = [round(float(v), 6) for v in scaled]
+                if rounded:
+                    diff = round(1.0 - sum(rounded), 6)
+                    best_i = max(range(len(rounded)), key=lambda i: rounded[i])
+                    rounded[best_i] = round(max(0.0, min(1.0, rounded[best_i] + diff)), 6)
+                out[head_name] = rounded
+        return out
 
     def evaluate_safety_gates(
         self,
@@ -65,9 +158,9 @@ class ArmigerCalibrator:
             return bool(val >= thresh)
 
         return {
-            "adult_flagged": _flag(p_adult, float(self.mondrian.get("adult", 0.5451))),
-            "junk_flagged": _flag(p_junk, float(self.mondrian.get("junk", 0.1010))),
-            "scope_excluded": _flag(p_excluded_scope, float(self.mondrian.get("owner_scope", 0.4770))),
+            "adult_flagged": _flag(p_adult, float(self.mondrian["adult"])),
+            "junk_flagged": _flag(p_junk, float(self.mondrian["junk"])),
+            "scope_excluded": _flag(p_excluded_scope, float(self.mondrian["owner_scope"])),
         }
 
 
@@ -175,7 +268,10 @@ class ArmigerDHTUpdater:
                 return False, "untrusted_pq_pubkey_when_root_pq_unset"
             if manifest.pq_pubkey_hex and manifest.pq_pubkey_hex.lower() != self.root_pq_pubkey_hex:
                 return False, "pq_pubkey_mismatch_against_pinned_root"
-            from armiger_dht_rsi import WOTSPlusSHAKE256
+            try:
+                from armiger.csam_guard import WOTSPlusSHAKE256
+            except ImportError:
+                from csam_guard import WOTSPlusSHAKE256
             try:
                 pq_ok = WOTSPlusSHAKE256.verify(
                     bytes.fromhex(self.root_pq_pubkey_hex),
@@ -188,3 +284,6 @@ class ArmigerDHTUpdater:
                 return False, "pq_wots_signature_invalid"
 
         return True, "verified"
+
+
+ArmigerDHTRSIEngine = ArmigerDHTUpdater
