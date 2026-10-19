@@ -877,6 +877,8 @@ class TestOptInOutModesAndMasterEngine(unittest.TestCase):
             },
         )
 
+        import random
+        random.seed(42)
         now = 100000.0
         ok, reason, record = engine.ingest_candidate(cand, current_timestamp=now)
         self.assertTrue(ok)
