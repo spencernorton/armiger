@@ -185,14 +185,15 @@ def compute_paired_panel_stats(
 
     rng = np.random.default_rng(seed)
     model_names = list(vectors.keys())
-    mat = np.stack([np.asarray(vectors[m], dtype=np.float32) for m in model_names], axis=0)  # (M, N)
+    mat = np.stack([np.asarray(vectors[m], dtype=np.float64) for m in model_names], axis=0)  # (M, N)
 
     if metric_type == "mean":
-        # Multinomial weights: shape (n_boot, N) -> fast BLAS matrix multiply (n_boot, M)
-        weights = rng.multinomial(n_val, np.full(n_val, 1.0 / n_val), size=n_boot).astype(np.float32) * (100.0 / n_val)
-        boot_scores = weights @ mat.T  # (n_boot, M)
-        point_scores = {m: float(np.mean(vectors[m]) * 100.0) for m in model_names}
-        item_correctness = {m: np.asarray(vectors[m], dtype=np.float32) for m in model_names}
+        # Exact integer-scaled dot product in float64 (bit-exact across ARM64 Accelerate & x86_64 OpenBLAS)
+        mat_int6 = np.round(mat * 6.0)
+        weights = rng.multinomial(n_val, np.full(n_val, 1.0 / n_val), size=n_boot).astype(np.float64)
+        boot_scores = (weights @ mat_int6.T) * (100.0 / (6.0 * n_val))
+        point_scores = {m: float(np.sum(np.round(np.asarray(vectors[m], dtype=np.float64) * 6.0)) * 100.0 / (6.0 * n_val)) for m in model_names}
+        item_correctness = {m: np.asarray(vectors[m], dtype=np.float64) for m in model_names}
     elif metric_type == "balanced":
         if y_true is None:
             raise AssertionError(f"[{panel_name}] y_true required for metric_type='balanced'.")
@@ -201,18 +202,18 @@ def compute_paired_panel_stats(
         neg_mask = (y_arr == 0)
         n_pos = int(np.sum(pos_mask))
         n_neg = int(np.sum(neg_mask))
-        pos_mat = (mat[:, pos_mask] == 1).astype(np.float32)
-        neg_mat = (mat[:, neg_mask] == 0).astype(np.float32)
-        w_pos = rng.multinomial(n_pos, np.full(n_pos, 1.0 / n_pos), size=n_boot).astype(np.float32) * (100.0 / n_pos)
-        w_neg = rng.multinomial(n_neg, np.full(n_neg, 1.0 / n_neg), size=n_boot).astype(np.float32) * (100.0 / n_neg)
-        boot_scores = 0.5 * ((w_pos @ pos_mat.T) + (w_neg @ neg_mat.T))
+        pos_mat = (mat[:, pos_mask] == 1).astype(np.float64)
+        neg_mat = (mat[:, neg_mask] == 0).astype(np.float64)
+        w_pos = rng.multinomial(n_pos, np.full(n_pos, 1.0 / n_pos), size=n_boot).astype(np.float64)
+        w_neg = rng.multinomial(n_neg, np.full(n_neg, 1.0 / n_neg), size=n_boot).astype(np.float64)
+        boot_scores = 0.5 * ((w_pos @ pos_mat.T) * (100.0 / n_pos) + (w_neg @ neg_mat.T) * (100.0 / n_neg))
         point_scores = {}
         item_correctness = {}
         for idx, m in enumerate(model_names):
-            sens = float(np.mean(pos_mat[idx]) * 100.0)
-            spec = float(np.mean(neg_mat[idx]) * 100.0)
+            sens = float(np.sum(pos_mat[idx]) * 100.0 / n_pos)
+            spec = float(np.sum(neg_mat[idx]) * 100.0 / n_neg)
             point_scores[m] = 0.5 * (sens + spec)
-            item_corr = np.zeros(n_val, dtype=np.float32)
+            item_corr = np.zeros(n_val, dtype=np.float64)
             item_corr[pos_mask] = pos_mat[idx]
             item_corr[neg_mask] = neg_mat[idx]
             item_correctness[m] = item_corr
@@ -223,23 +224,28 @@ def compute_paired_panel_stats(
         pos_idx = np.where(y_arr == 1)[0]
         neg_idx = np.where(y_arr == 0)[0]
         n_pos, n_neg = len(pos_idx), len(neg_idx)
-        # Paired bootstrap over positive and negative instances using DeLong/placement values
-        placement_mat = np.zeros((len(model_names), n_val), dtype=np.float32)
+        # Exact integer-scaled placement counts in float64 (bit-exact across BLAS engines)
+        placement_int2 = np.zeros((len(model_names), n_val), dtype=np.float64)
+        placement_unit = np.zeros((len(model_names), n_val), dtype=np.float64)
         point_scores = {}
         for idx, m in enumerate(model_names):
             s = mat[idx]
             s_pos = s[pos_idx]
             s_neg = s[neg_idx]
-            # V10 placement for each positive item, V01 placement for each negative item
-            v10 = ((s_pos[:, None] > s_neg[None, :]).sum(axis=1) + 0.5 * (s_pos[:, None] == s_neg[None, :]).sum(axis=1)) / n_neg
-            v01 = ((s_pos[:, None] > s_neg[None, :]).sum(axis=0) + 0.5 * (s_pos[:, None] == s_neg[None, :]).sum(axis=0)) / n_pos
-            placement_mat[idx, pos_idx] = v10 * 100.0
-            placement_mat[idx, neg_idx] = v01 * 100.0
-            point_scores[m] = float(np.mean(v10) * 100.0)
-        w_pos = rng.multinomial(n_pos, np.full(n_pos, 1.0 / n_pos), size=n_boot).astype(np.float32) / n_pos
-        w_neg = rng.multinomial(n_neg, np.full(n_neg, 1.0 / n_neg), size=n_boot).astype(np.float32) / n_neg
-        boot_scores = 0.5 * ((w_pos @ placement_mat[:, pos_idx].T) + (w_neg @ placement_mat[:, neg_idx].T))
-        item_correctness = {m: placement_mat[idx] / 100.0 for idx, m in enumerate(model_names)}
+            v10_int2 = 2.0 * (s_pos[:, None] > s_neg[None, :]).sum(axis=1) + (s_pos[:, None] == s_neg[None, :]).sum(axis=1)
+            v01_int2 = 2.0 * (s_pos[:, None] > s_neg[None, :]).sum(axis=0) + (s_pos[:, None] == s_neg[None, :]).sum(axis=0)
+            placement_int2[idx, pos_idx] = v10_int2
+            placement_int2[idx, neg_idx] = v01_int2
+            placement_unit[idx, pos_idx] = v10_int2 / (2.0 * n_neg)
+            placement_unit[idx, neg_idx] = v01_int2 / (2.0 * n_pos)
+            point_scores[m] = float(np.sum(v10_int2) * 100.0 / (2.0 * n_pos * n_neg))
+        w_pos = rng.multinomial(n_pos, np.full(n_pos, 1.0 / n_pos), size=n_boot).astype(np.float64)
+        w_neg = rng.multinomial(n_neg, np.full(n_neg, 1.0 / n_neg), size=n_boot).astype(np.float64)
+        boot_scores = 0.5 * (
+            (w_pos @ placement_int2[:, pos_idx].T) * (100.0 / (2.0 * n_pos * n_neg))
+            + (w_neg @ placement_int2[:, neg_idx].T) * (100.0 / (2.0 * n_pos * n_neg))
+        )
+        item_correctness = {m: placement_unit[idx] for idx, m in enumerate(model_names)}
     else:
         raise ValueError(f"Unknown metric_type: {metric_type}")
 

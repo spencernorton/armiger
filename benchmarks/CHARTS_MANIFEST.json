@@ -36,7 +36,7 @@
   ],
   "provenance_sha256": {
     "canonical_eval_vectors.json": "058473f4ba21bc07db2c2b6981d5e62f3c584311fc134d92cb523de7f261243a",
-    "generate_canonical_charts.py": "49f18bf37ed2f9e0f89437b841b54adfdd2efe95ddc89800b28229223cb764dc",
+    "generate_canonical_charts.py": "dfe6262c4815ec8fa0ab47569b80faebe7a4d29fb85824c4cc05c1b921e32270",
     "assets/armiger_vs_llms_overall_and_6dims.png": "2367dbf6ae84cc2f75b0b13f377f7053f8f0e63ebe56cf42e1093b26aa18c082",
     "assets/armiger_vs_llms_cost_comparison.png": "ff33da1aa78dc14be919d34d5914db5efabe8c30d1698bda378962a3c92c5dbc",
     "assets/armiger_vs_torrent_classifiers_6dims.png": "a4ebfcb1565ed94c830846845ecf16e46061424180ea01a5852b8d4d1e614a6a",
@@ -599,7 +599,7 @@
             "ci95_hi": 72.95,
             "delta_vs_ref_pct": 24.16,
             "delta_ci95_lo": 22.5,
-            "delta_ci95_hi": 25.85,
+            "delta_ci95_hi": 25.86,
             "p_value_vs_ref": 7.860859e-169
           },
           "RTN (rank-torrent-name)": {
@@ -757,7 +757,7 @@
             "ci95_hi": 75.46,
             "delta_vs_ref_pct": 24.23,
             "delta_ci95_lo": 21.68,
-            "delta_ci95_hi": 26.78,
+            "delta_ci95_hi": 26.77,
             "p_value_vs_ref": 5.732874e-76
           },
           "Bitmagnet Built-In": {
@@ -1349,7 +1349,7 @@
         "armiger_ultra_raw": {
           "n": 2835,
           "point_pct": 95.03,
-          "ci95_lo": 94.21,
+          "ci95_lo": 94.22,
           "ci95_hi": 95.84,
           "delta_vs_ref_pct": 0.46,
           "delta_ci95_lo": 0.14,
