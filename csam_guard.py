@@ -251,7 +251,7 @@ _EXTREME_VIOLENCE_PATTERNS = [
 # High-risk dropper extensions that are NEVER legitimate standalone software/game/media torrents
 _ALWAYS_MALWARE_EXTENSIONS = {
     ".scr", ".pif", ".hta", ".vbs", ".vbe", ".wsf", ".wsh",
-    ".cpl", ".gadget", ".application", ".one", ".xll", ".xlam",
+    ".cpl", ".gadget", ".application",
     ".appref-ms", ".library-ms", ".search-ms", ".settingcontent-ms", ".diagcab",
 }
 
@@ -310,16 +310,19 @@ _ANIME_OR_EP_ZIP_CG_RE = re.compile(
     r"\s-\s\d{1,3}\s*(?:\(|\[).*?\b(?:1080p|720p|2160p|480p)\b)"
 )
 _VIDEO_RIP_CLAIM_CG_RE = re.compile(
-    r"(?i)\b(?:1080p|720p|2160p|480p)\b.*?\b(?:web-?dl|webrip|bluray|bdrip|brrip|hdrip|hdtv|hdcam|camrip|x264|x265|h\.?264|h\.?265|hevc|av1|xvid|divx)\b"
+    r"(?i)(?:"
+    r"\b(?:1080p|720p|2160p|480p|576p|4k)\b.*?\b(?:web-?dl|webrip|bluray|bdrip|brrip|hdrip|hdtv|hdcam|camrip|dvdrip|x264|x265|h\.?264|h\.?265|hevc|av1|xvid|divx)\b|"
+    r"\b(?:web-?dl|webrip|bdrip|brrip|hdrip|hdtv|hdcam|camrip|dvdrip)\b(?:.*?\b(?:x264|x265|h\.?264|h\.?265|hevc|av1|xvid|divx|aac|ac3|ddp?5\.?1))?|"
+    r"\b(?:19\d\d|20\d\d|s\d{1,2}[._ -]?e\d{1,3}|\d{1,2}x\d{2})\b.*?\b(?:x264|x265|h\.?264|h\.?265|hevc|av1|xvid|divx)\b"
+    r")"
 )
 _OPTICAL_DISC_TITLE_CG_RE = re.compile(
-    r"(?i)\b(?:dvd(?:[59]|rip|r|-r|-rom)?|bd(?:25|50|66|100|mv|rom|-r)|blu-?ray[\s._-]*disc|full[\s._-]*bd|untouched|remux|pal|ntsc|iso|udf|sacd|dvd-?audio|3d[\s._-]*iso)\b"
+    r"(?i)\b(?:dvd(?:[59]|r|-r|-rom)?|bd(?:25|50|66|100|mv|rom|-r)|blu-?ray[\s._-]*disc|full[\s._-]*bd|untouched|remux|pal|ntsc|iso|udf|sacd|dvd-?audio|3d[\s._-]*iso)\b"
 )
 _BENIGN_ZIP_CG_RE = re.compile(
     r"(?i)\b(?:batch|complete|season[ ._-]*\d+|s\d{1,2}[ ._-]*complete|e?\d{1,3}[ ._-]*[~-][ ._-]*e?\d{1,3}|시즌\s*\d+|완결|全集|合集|"
     r"ost|soundtrack|flac|mp3|wav|lossless|album|discography|artbook|scans?|wallpapers?|fonts?|subs?|subtitles?|"
-    r"cbz|cbr|comic|manga|magazine|ebook|epub|pdf|audiobook|m4b|templates?|presets?|samples?|stems|"
-    r"repack|fitgirl|dodi|gog|codex|rune|tenoke|skidrow|portable|installer|setup|linux|windows|macos|android|apk)\b"
+    r"cbz|cbr|comic|manga|magazine|ebook|epub|pdf|audiobook|m4b|templates?|presets?|samples?|stems)\b"
 )
 
 _SINGLE_ARCHIVE_TRAP_EXTS = {".zip", ".zipx", ".rar", ".7z", ".ace", ".cab"}
@@ -552,10 +555,16 @@ class CSAMGuard:
                     sanitized_title=res.sanitized_title,
                 )
 
+        title_claims_video = bool(_ANIME_OR_EP_ZIP_CG_RE.search(title_clean) or _VIDEO_RIP_CLAIM_CG_RE.search(title_clean))
+
         # 7. Title-level disguised media double-extension & unconditional dropper extension checks
         t_ext = _match_malware_ext(title_clean)
         if t_ext is not None:
-            if any(stem in title_clean for stem in _DISGUISED_MEDIA_STEMS) or t_ext in _ALWAYS_MALWARE_EXTENSIONS:
+            if (
+                any(stem in title_clean for stem in _DISGUISED_MEDIA_STEMS)
+                or t_ext in _ALWAYS_MALWARE_EXTENSIONS
+                or (title_claims_video and t_ext in (".one", ".xll", ".xlam"))
+            ):
                 return ContentFilterResult(
                     is_safe=False,
                     violation_type=CSAMViolationType.MALWARE_PAYLOAD,
@@ -576,6 +585,7 @@ class CSAMGuard:
         has_bdmv_structure = "bdmv" in title_clean
         has_renpy_structure = False
         benign_course_files = 0
+        benign_course_bytes = 0
         has_password_companion = False
         image_file_count = 0
         image_total_bytes = 0
@@ -590,8 +600,9 @@ class CSAMGuard:
                 has_password_companion = True
             dot = f_posix.rfind(".")
             f_ext = f_posix[dot:] if dot != -1 else ""
-            if f_ext in _BENIGN_COURSE_EXTS:
+            if f_ext in _BENIGN_COURSE_EXTS and fsize >= 65536:
                 benign_course_files += 1
+                benign_course_bytes += fsize
             if f_ext in (".jpg", ".jpeg", ".png", ".webp") and fsize > 0:
                 image_file_count += 1
                 image_total_bytes += fsize
@@ -600,13 +611,13 @@ class CSAMGuard:
                 if fsize >= 100_000_000:
                     has_large_real_video = True
         has_real_image_set = image_file_count >= 5 and image_total_bytes >= 5_000_000
+        has_real_course_media = benign_course_files >= 3 and benign_course_bytes >= 50_000_000
 
-        # Multi-lesson courses (>= 5 files and >= 3 benign video/doc/audio files) legitimately include
-        # .js, .ps1, .bat, or interactive player .exe files; small fake-course droppers are still checked.
+        # Multi-lesson courses (>= 5 files, >= 3 sized lesson files, >= 50 MB total lesson media) legitimately
+        # include .js, .ps1, .bat, or interactive player .exe files; zero-byte or tiny decoys are still checked.
         check_media_executables = is_strict_media_category or (
-            is_course_category and (len(parsed_files) < 5 or benign_course_files < 3)
+            is_course_category and (len(parsed_files) < 5 or not has_real_course_media)
         )
-        title_claims_video = bool(_ANIME_OR_EP_ZIP_CG_RE.search(title_clean) or _VIDEO_RIP_CLAIM_CG_RE.search(title_clean))
 
         # Contextual codec-pack lure check: blocks codec-pack installers disguised as or bundled with media
         # while sparing legitimate standalone codec-pack software utilities.
@@ -698,10 +709,15 @@ class CSAMGuard:
                     # Exempt legitimate Blu-ray BD-J Java menu JARs (BDMV/JAR/00000.jar)
                     if ext == ".jar" and has_bdmv_structure and _BDMV_JAR_PATH_RE.search(f_posix):
                         continue
-                    # Exempt companion tracker bookmark (.url) when real video/audio media is present
-                    if ext == ".url" and (has_any_video or benign_course_files > 0):
+                    # Exempt companion tracker bookmark (.url) when real video/audio/course media is present
+                    if ext == ".url" and (has_large_real_video or has_real_image_set or has_real_course_media):
                         continue
-                    if check_media_executables or is_disguised or ext in _ALWAYS_MALWARE_EXTENSIONS:
+                    if (
+                        check_media_executables
+                        or is_disguised
+                        or ext in _ALWAYS_MALWARE_EXTENSIONS
+                        or (title_claims_video and ext in (".one", ".xll", ".xlam"))
+                    ):
                         return ContentFilterResult(
                             is_safe=False,
                             violation_type=CSAMViolationType.MALWARE_PAYLOAD,
