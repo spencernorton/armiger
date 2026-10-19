@@ -1,6 +1,7 @@
 """Standalone Armiger v2.1 / Armiger Ultra ONNX Featurizer & Inference Runtime (`armiger_inference.py`).
 
-Implements exact feature parity with the Armiger v2.1 training pipeline (36-dim structural `stats` vector + `vocab.json` 4,096-extension lookup + CRC32
+Implements exact feature parity with the Armiger v2.1 training pipeline (`sift/prepare.py` +
+`enrich_side21_v2` 36-dim `stats` vector + `vocab.json` 4,096-extension lookup + CRC32
 digit-folded path-word hashing) with zero external codebase dependencies beyond `numpy`
 and `onnxruntime`.
 
@@ -12,12 +13,16 @@ from __future__ import annotations
 import hashlib
 import json
 import math
+import os
 from pathlib import Path
 import re
 from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple
 import zlib
 
-import numpy as np
+try:
+    import numpy as np
+except ImportError:
+    np = None  # type: ignore[assignment]
 
 NEURAL_HEAD_CLASSES: Dict[str, List[str]] = {
     "category": [
@@ -93,7 +98,7 @@ _SIDE_EP_ZIP_RE = re.compile(
     r"\bS\d{1,2}E\d{1,3}\b.*?\b(?:1080p|720p|2160p|WEB-DL|WEBRip|BluRay|HDTV)\b)"
 )
 _SIDE_BENIGN_ZIP_RE = re.compile(
-    r"(?i)\b(?:batch|complete|season[ ._-]*\d+|s\d{1,2}[ ._-]*complete|\d{1,3}[ ._-]*-[ ._-]*\d{1,3}|"
+    r"(?i)\b(?:batch|complete|season[ ._-]*\d+|s\d{1,2}[ ._-]*complete|e?\d{1,3}[ ._-]*[~-][ ._-]*e?\d{1,3}|시즌\s*\d+|완결|全集|合集|"
     r"ost|soundtrack|artbook|scans?|wallpapers?|fonts?|subs?|subtitles?)\b"
 )
 
@@ -115,6 +120,8 @@ def _get_vocab_ext_map() -> Dict[str, int]:
     if _VOCAB_EXT_MAP is not None:
         return _VOCAB_EXT_MAP
     vpath = Path(__file__).resolve().with_name("vocab.json")
+    if not vpath.exists() and os.environ.get("ARMIGER_MODEL_DIR"):
+        vpath = Path(os.environ["ARMIGER_MODEL_DIR"]) / "vocab.json"
     if vpath.exists():
         data = json.loads(vpath.read_text(encoding="utf-8"))
         _VOCAB_EXT_MAP = {e: i + 1 for i, e in enumerate(data.get("exts", []))}
@@ -258,7 +265,7 @@ def encode_torrent_features(
         htm_set = {"html", "htm", "url", "mht", "torrent"}
         scr_set = {"scr", "lnk", "vbs", "hta", "pif", "ps1", "wsf", "reg"}
         vid_set = {"mkv", "mp4", "avi", "ts", "m2ts", "wmv", "mov", "webm", "flv", "mpg", "mpeg", "m4v", "vob", "ogv", "rmvb", "3gp", "asf", "divx"}
-        bd_game_benign = {"vcdiff", "apk", "bdmv", "clpi", "mpls", "ifo", "bup", "vob", "npa", "vpk", "pck", "umd", "pak", "xp3", "rgss3a", "wolf", "nsp", "xci", "wbfs"}
+        bd_game_benign = {"vcdiff", "apk", "bdmv", "clpi", "mpls", "ifo", "bup", "vob", "npa", "vpk", "pck", "umd", "pak", "xp3", "rgss3a", "wolf", "nsp", "xci", "wbfs", "rpa", "rpy", "rpyb"}
 
         side[0] = sum(1 for e in f_exts_str if e in ebk_set) / n_f
         side[1] = sum(1 for e in f_exts_str if e in pdf_set) / n_f
@@ -267,15 +274,32 @@ def encode_torrent_features(
         side[4] = sum(1 for e in f_exts_str if e in con_set) / n_f
         side[5] = sum(1 for e in f_exts_str if e in app_set) / n_f
 
+        vc = bool(_SIDE_VID_CLAIM_RE.search(name) or _SIDE_ANIME_KW_RE.search(name) or has_sub_grp or has_dub_grp)
+        has_renpy_structure = not vc and any(
+            p_i.replace("\\", "/").lower().endswith((".rpa", ".rpy", ".rpyb"))
+            or "/renpy/" in "/" + p_i.replace("\\", "/").lower()
+            for p_i, _ in items
+        )
+        renpy_say_re = re.compile(r"(?i)(?:^|/)lib/(?:py\d+-)?windows-[^/]+/say\.vbs$")
+
         n_real_exec_dll = 0
         has_real_exe = False
         has_dll = False
         has_scr_trap = False
         has_oversized_lnk = False
         has_root_launcher = False
+        has_unconditional_trap_ext = False
+        has_any_scr_ext = False
         vid_depths: List[int] = []
 
         for (p_i, _), e_str, s_b, d_i, w_i in zip(items, f_exts_str, sizes, depths, words_list):
+            p_posix = p_i.replace("\\", "/")
+            if has_renpy_structure and renpy_say_re.search(p_posix):
+                continue
+            if e_str in scr_set:
+                has_any_scr_ext = True
+            if e_str in {"scr", "vbs", "vbe", "hta", "pif", "wsf", "wsh", "cpl", "one"}:
+                has_unconditional_trap_ext = True
             p_tok_h = _extract_token_hashes(p_i)
             is_benign_stub = (e_str == "exe") and (s_b < 15 or 16570 in w_i or bool(p_tok_h & _BENIGN_README_EXE_H))
             if e_str in exe_dll_set and not is_benign_stub:
@@ -299,28 +323,31 @@ def encode_torrent_features(
         side[7] = sum(1 for e in f_exts_str if e in iso_set) / n_f
         side[8] = sum(1 for e in f_exts_str if e in arc_set) / n_f
         side[9] = sum(1 for e in f_exts_str if e in htm_set) / n_f
-        side[10] = 1.0 if any(e in scr_set for e in f_exts_str) else 0.0
+        side[10] = 1.0 if has_any_scr_ext else 0.0
 
-        vc = bool(_SIDE_VID_CLAIM_RE.search(name) or _SIDE_ANIME_KW_RE.search(name) or has_sub_grp or has_dub_grp)
         is_sw_or_game = bool(
             has_game_grp
             or has_sw_grp
-            or _SIDE_SW_APP_TITLE_RE.search(name)
+            or (not vc and _SIDE_SW_APP_TITLE_RE.search(name))
             or any(e in bd_game_benign for e in f_exts_str)
         )
         vid_share = base_stats[2]
-        flagged = False
-        if not is_sw_or_game and len(items) <= 12:
+        flagged = has_unconditional_trap_ext
+        if not is_sw_or_game:
             if vc and has_real_exe and has_dll:
                 flagged = True
-            elif vc and (1 <= len(vid_depths) <= 2) and min(vid_depths) >= 1 and has_root_launcher:
+            elif vc and len(vid_depths) >= 1 and (has_real_exe or has_root_launcher or has_scr_trap):
                 flagged = True
             elif (vc or len(vid_depths) > 0) and has_oversized_lnk:
                 flagged = True
             elif vc and vid_share == 0.0 and (has_real_exe or has_scr_trap):
                 flagged = True
-            elif len(items) == 1 and f_exts_str[0] == "zip" and vid_share == 0.0:
+            elif len(items) <= 2 and f_exts_str[0] in ("zip", "zipx", "rar", "7z") and vid_share == 0.0:
                 if _SIDE_EP_ZIP_RE.search(name) and not _SIDE_BENIGN_ZIP_RE.search(name):
+                    flagged = True
+            elif len(items) <= 2 and f_exts_str[0] in ("iso", "img", "vhd", "vhdx", "udf") and vid_share == 0.0:
+                name_stem = re.sub(r"\.(?:iso|img|vhd|vhdx|udf|dmg)$", "", name.strip(), flags=re.IGNORECASE)
+                if _SIDE_EP_ZIP_RE.search(name_stem) and not re.search(r"(?i)\b(?:dvd|bd25|bd50|remux|untouched|pal|ntsc|iso)\b", name_stem):
                     flagged = True
 
         if flagged or _SIDE_VPN_TRAP_RE.search(name) or (vc and vid_share == 0.0 and (side[6] > 0 or side[9] > 0 or side[10] > 0)):
@@ -415,11 +442,16 @@ def _softmax(logits: np.ndarray) -> np.ndarray:
 class ArmigerStandaloneONNX:
     """Self-contained ONNX Runtime classifier for `NorviTech/armiger` and `NorviTech/armiger-ultra`."""
 
-    def __init__(self, onnx_path: Optional[ str | Path ] = None) -> None:
+    def __init__(
+        self,
+        onnx_path: Optional[str | Path] = None,
+        vocab_path: Optional[str | Path] = None,
+        calibration_path: Optional[str | Path] = None,
+    ) -> None:
         import onnxruntime as ort
 
+        base = Path(__file__).resolve().parent
         if onnx_path is None:
-            base = Path(__file__).resolve().parent
             for cand in ("armiger.onnx", "armiger.int8.onnx", "armiger_ultra.fp32.onnx"):
                 if (base / cand).exists():
                     onnx_path = base / cand
@@ -427,6 +459,8 @@ class ArmigerStandaloneONNX:
         if onnx_path is None:
             raise FileNotFoundError("Could not find armiger.onnx or armiger_ultra.fp32.onnx")
         self.onnx_path = Path(onnx_path)
+        self.vocab_path = Path(vocab_path) if vocab_path else (base / "vocab.json")
+        self.calibration_path = Path(calibration_path) if calibration_path else (base / "calibration.json")
         self.session = ort.InferenceSession(str(self.onnx_path), providers=["CPUExecutionProvider"])
         self.head_names = [o.name for o in self.session.get_outputs()]
 
@@ -447,9 +481,21 @@ class ArmigerStandaloneONNX:
                     classes[k]: round(float(probs[k]), 6) for k in range(min(len(classes), len(probs)))
                 }
             item_res["category"] = item_res["heads"].get("category", "unknown")
-            item_res["p_junk"] = item_res["probabilities"].get("junk", {}).get("junk", 0.0)
+            p_junk = item_res["probabilities"].get("junk", {}).get("junk", 0.0)
+            p_adult = item_res["probabilities"].get("adult", {}).get("adult", 0.0)
+            p_excl = item_res["probabilities"].get("owner_scope", {}).get("excluded", 0.0)
+            item_res["p_junk"] = p_junk
+            item_res["mondrian_gates"] = {
+                "adult_flagged": bool(p_adult >= 0.5451),
+                "junk_flagged": bool(p_junk >= 0.1010),
+                "scope_excluded": bool(p_excl >= 0.4770),
+                "passed_all": bool(p_adult < 0.5451 and p_junk < 0.1010 and p_excl < 0.4770),
+            }
             results.append(item_res)
         return results
 
     def predict(self, row: Mapping[str, Any]) -> Dict[str, Any]:
         return self.predict_batch([row])[0]
+
+
+ArmigerONNXClassifier = ArmigerStandaloneONNX

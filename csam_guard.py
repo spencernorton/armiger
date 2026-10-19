@@ -25,11 +25,16 @@ import time
 import unicodedata
 from typing import Any, List, Optional, Sequence, Tuple
 
-from cryptography.exceptions import InvalidSignature
-from cryptography.hazmat.primitives.asymmetric.ed25519 import (
-    Ed25519PrivateKey,
-    Ed25519PublicKey,
-)
+try:
+    from cryptography.exceptions import InvalidSignature
+    from cryptography.hazmat.primitives.asymmetric.ed25519 import (
+        Ed25519PrivateKey,
+        Ed25519PublicKey,
+    )
+except ImportError:  # pragma: no cover - stdlib fallback for bare CI
+    InvalidSignature = Exception  # type: ignore[misc,assignment]
+    Ed25519PrivateKey = None  # type: ignore[misc,assignment]
+    Ed25519PublicKey = None  # type: ignore[misc,assignment]
 
 
 class CSAMViolationType(str, enum.Enum):
@@ -141,6 +146,16 @@ _TRACKER_TAGS_RE = re.compile(
     re.IGNORECASE,
 )
 
+_HOMOGLYPH_TRANS = str.maketrans(_HOMOGLYPH_MAP)
+_LEET_TRANS = str.maketrans(_LEET_MAP)
+_PRESERVE_ALNUM_TOKENS = frozenset({
+    "1080p", "720p", "2160p", "480p", "1080i", "720i",
+    "x264", "x265", "h264", "h265", "av1", "vp8", "vp9", "vc1",
+    "mp3", "mp4", "m4a", "m4b", "m4v", "m2ts", "3gp", "ac3", "eac3",
+    "bd25", "bd50", "dvd5", "dvd9", "win32", "win64", "x64", "x86",
+    "8yo", "9yo", "10yo", "11yo", "12yo", "13yo", "14yo", "15yo", "16yo", "17yo",
+})
+
 
 def normalize_text(text: str) -> str:
     """Normalize text through unicode decomposition, leetspeak mapping, and token cleaning.
@@ -148,10 +163,11 @@ def normalize_text(text: str) -> str:
     Steps:
       1. Unicode NFKD decomposition + strip non-spacing diacritic marks.
       2. Strip zero-width & bidirectional formatting characters.
-      3. Lowercase.
-      4. Map leetspeak characters to ASCII equivalents.
-      5. Collapse repetitive runs of 3+ identical characters.
-      6. Normalize punctuation and delimiters to single spaces.
+      3. Lowercase & map confusable Cyrillic/Greek homoglyphs.
+      4. Normalize punctuation and delimiters to single spaces.
+      5. Map leetspeak characters on mixed/obfuscated tokens while preserving pure numbers
+         (so file numbers like 'CSS/43' never become 'cs ae') and age tokens ('14yo').
+      6. Collapse repetitive runs of 3+ identical characters.
     """
     if not text:
         return ""
@@ -172,19 +188,25 @@ def normalize_text(text: str) -> str:
         and not (0xE0000 <= ord(c) <= 0xE01EF)
     )
 
-    # 2. Strip zero-width characters
-    cleaned = _ZERO_WIDTH_RE.sub("", stripped).lower()
+    # 2. Strip zero-width characters & map homoglyphs
+    cleaned = _ZERO_WIDTH_RE.sub("", stripped).lower().translate(_HOMOGLYPH_TRANS)
 
-    # 3. Confusable homoglyph & leetspeak translation
-    leet_decoded = "".join(_LEET_MAP.get(_HOMOGLYPH_MAP.get(ch, ch), _HOMOGLYPH_MAP.get(ch, ch)) for ch in cleaned)
+    # 3. Punctuation (except leet symbols @$!+|) to space first so tokens are cleanly bounded
+    spaced = re.sub(r"[\._\-\[\]\(\)\{\}\\\/\:\,\;\*\^\~\`\'\"\?\&\=]+", " ", cleaned)
 
-    # 4. Collapse runs of repeating characters
-    collapsed = _REPEATED_CHARS_RE.sub(r"\1\1", leet_decoded)
+    # 4. Token-aware leetspeak translation: pure digits ("43", "2026") and preserved media/age tokens
+    # are kept intact; any token containing letters or leet symbols is leet-decoded.
+    out_tokens: list[str] = []
+    for tok in spaced.split():
+        if (len(tok) >= 2 and tok.isdigit()) or tok in _PRESERVE_ALNUM_TOKENS:
+            out_tokens.append(tok)
+        else:
+            decoded = tok.translate(_LEET_TRANS)
+            collapsed = _REPEATED_CHARS_RE.sub(r"\1\1", decoded)
+            out_tokens.append(collapsed)
 
-    # 5. Punctuation to space
-    punct_normalized = _PUNCT_RE.sub(" ", collapsed)
-
-    # 6. Collapse whitespace
+    joined = " ".join(out_tokens)
+    punct_normalized = _PUNCT_RE.sub(" ", joined)
     return " ".join(punct_normalized.split())
 
 
@@ -202,13 +224,14 @@ def sanitize_title(title: str) -> str:
 _CSAM_DIRECT_PATTERNS = [
     re.compile(r"\b(c\s*s\s*a\s*m|c\s*s\s*a\s*e)\b", re.IGNORECASE),
     re.compile(r"\b(pedophi[li]|paedophi[li]|pedofi[li]|paedofi[li])\w*", re.IGNORECASE),
-    re.compile(r"\b(chi[li]d\s*porn|cp\s*vids?|cp\s*[li]inks?|cp\s*megas?|chi[li]d\s*erotic|underage\s*porn)\b", re.IGNORECASE),
+    re.compile(r"\b(chi[li]d\s*porn|cp\s*vids?|cp\s*[li]inks?|cp\s*megas?|cp\s*pack\s*co[li]+ection|chi[li]d\s*erotic|underage\s*porn)\b", re.IGNORECASE),
     re.compile(r"\b(pre\s*teen\s*(sex|nude|porn|erotic|hardcore)|preteen[_\-\s]*(sex|nude|porn))\b", re.IGNORECASE),
     re.compile(r"\b([li]o[li]ita\s*(hardcore|hentai|sex|porn|nude|uncensored))\b", re.IGNORECASE),
     re.compile(r"\b(shotacon|shota\s*(sex|porn|hentai|hardcore))\b", re.IGNORECASE),
     re.compile(r"\b(todd[li]er|kindergarten|infant|e[li]ementary)\s*(sex|nude|erotic|porn)\b", re.IGNORECASE),
     re.compile(r"\b(jai[li]\s*bait|bare[li]y\s*[li]ega[li]\s*(underage|minor|chi[li]d))\b", re.IGNORECASE),
     re.compile(r"\b(incest\s*(chi[li]d|daughter|son|minor|underage))\b", re.IGNORECASE),
+    re.compile(r"\b(?:[89]|1[0-7])\s*y\s*o\s*(?:fuck\w*|sex|porn|nude|erotic|hardcore|anal|creampie)\b", re.IGNORECASE),
 ]
 
 # Non-consensual exploitation & sexual violence
@@ -225,23 +248,120 @@ _EXTREME_VIOLENCE_PATTERNS = [
     re.compile(r"\b(rea[li]\s*torture\s*(video|fi[li]m)|crush\s*fetish\s*(anima[li]|ki[li]+))\b", re.IGNORECASE),
 ]
 
+# High-risk dropper extensions that are NEVER legitimate standalone software/game/media torrents
+_ALWAYS_MALWARE_EXTENSIONS = {
+    ".scr", ".pif", ".hta", ".vbs", ".vbe", ".wsf", ".wsh",
+    ".cpl", ".gadget", ".application", ".one", ".xll", ".xlam",
+    ".appref-ms", ".library-ms", ".search-ms", ".settingcontent-ms", ".diagcab",
+}
+
 # Suspicious executable & dropper extensions that must never appear disguised as media
 _MALWARE_EXTENSIONS = {
     ".exe", ".scr", ".bat", ".cmd", ".vbs", ".vbe", ".js", ".jse",
     ".wsf", ".wsh", ".ps1", ".psm1", ".pif", ".application", ".gadget",
     ".msi", ".msp", ".com", ".hta", ".cpl", ".msc", ".jar", ".lnk", ".dll",
+    ".sys", ".drv", ".ocx", ".reg", ".url",
+    ".chm", ".one", ".xll", ".xlam", ".docm", ".xlsm",
+    ".appref-ms", ".library-ms", ".search-ms", ".settingcontent-ms", ".diagcab",
+    ".pkg", ".command",
 }
+
+_SAMPLE_SUFFIX_RE = re.compile(r"\.sample\d*$", re.IGNORECASE)
+_RTLO_SPOOF_RE = re.compile(r"[\u202d\u202e]")
+_BDMV_JAR_PATH_RE = re.compile(r"(?:^|/)bdmv/(?:backup/)?jar/[^/]+\.jar$", re.IGNORECASE)
+
+_RENPY_SAY_VBS_CG_RE = re.compile(r"(?i)(?:^|/)lib/(?:py\d-)?windows-[^/]+/say\.vbs$")
+
+_MEDIA_CODEC_LURE_RE = re.compile(
+    r"(?i)(?:^|(?<=[^a-z0-9]))(?:"
+    r"codec[\s._-]*pack|"
+    r"xvid[\s._-]*codec|"
+    r"x264[\s._-]*video[\s._-]*codec"
+    r")(?:$|(?=[^a-z0-9]))"
+)
+
+_MALWARE_LURE_RE = re.compile(
+    r"(?i)(?:^|(?<=[^a-z0-9]))(?:"
+    r"required[\s._-]*to[\s._-]*play|"
+    r"install[\s._-]*codec|"
+    r"nitro[\s._-]*generator|"
+    r"free[\s._-]*nitro|"
+    r"fake[\s._-]*seeder[\s._-]*swarm[\s._-]*trap|"
+    r"adware[\s._-]*bundle[\s._-]*installer|"
+    r"password[\s._-]*protected[\s._-]*trap|"
+    r"password[\s._-]*in[\s._-]*description|"
+    r"corrupted[\s._-]*dead[\s._-]*sample|"
+    r"corrupt\.part|"
+    r"spam[\s._-]*link[\s._-]*redirect|"
+    r"watch[\s._-]*full[\s._-]*movie\.url|"
+    r"importante[\s._-]*leeme|"
+    r"activar[\s._-]*sonido|"
+    r"\d+(?:\.\d+)?\s*tb\s+collection\.torrent"
+    r")(?:$|(?=[^a-z0-9]))"
+)
+
+_PASSWORD_COMPANION_RE = re.compile(
+    r"(?i)(?:password|contrase[nñ]a|parola|mot[\s._-]*de[\s._-]*passe|passwort|how[\s._-]*to[\s._-]*extract|readme[\s._-]*pass)"
+)
 
 _ANIME_OR_EP_ZIP_CG_RE = re.compile(
     r"(?i)(?:^\[[^\[\]]{2,30}\].*?(?:\s-\s*\d{1,3}\b|\bS\d{1,2}E\d{1,3}\b).*?\b(?:1080p|720p|2160p|480p)\b|"
-    r"\bS\d{1,2}E\d{1,3}\b.*?\b(?:1080p|720p|2160p|WEB-DL|WEBRip|BluRay|HDTV)\b)"
+    r"\b(?:S\d{1,2}[._ -]?E\d{1,3}|\d{1,2}x\d{2})\b.*?\b(?:1080p|720p|2160p|480p|WEB-DL|WEBRip|BluRay|BDRip|HDTV|x264|x265|HEVC)\b|"
+    r"\s-\s\d{1,3}\s*(?:\(|\[).*?\b(?:1080p|720p|2160p|480p)\b)"
+)
+_VIDEO_RIP_CLAIM_CG_RE = re.compile(
+    r"(?i)\b(?:1080p|720p|2160p|480p)\b.*?\b(?:web-?dl|webrip|bluray|bdrip|brrip|hdrip|hdtv|hdcam|camrip|x264|x265|h\.?264|h\.?265|hevc|av1|xvid|divx)\b"
+)
+_OPTICAL_DISC_TITLE_CG_RE = re.compile(
+    r"(?i)\b(?:dvd(?:[59]|rip|r|-r|-rom)?|bd(?:25|50|66|100|mv|rom|-r)|blu-?ray[\s._-]*disc|full[\s._-]*bd|untouched|remux|pal|ntsc|iso|udf|sacd|dvd-?audio|3d[\s._-]*iso)\b"
 )
 _BENIGN_ZIP_CG_RE = re.compile(
-    r"(?i)\b(?:batch|complete|season[ ._-]*\d+|s\d{1,2}[ ._-]*complete|\d{1,3}[ ._-]*-[ ._-]*\d{1,3}|"
-    r"ost|soundtrack|artbook|scans?|wallpapers?|fonts?|subs?|subtitles?)\b"
+    r"(?i)\b(?:batch|complete|season[ ._-]*\d+|s\d{1,2}[ ._-]*complete|e?\d{1,3}[ ._-]*[~-][ ._-]*e?\d{1,3}|시즌\s*\d+|완결|全集|合集|"
+    r"ost|soundtrack|flac|mp3|wav|lossless|album|discography|artbook|scans?|wallpapers?|fonts?|subs?|subtitles?|"
+    r"cbz|cbr|comic|manga|magazine|ebook|epub|pdf|audiobook|m4b|templates?|presets?|samples?|stems|"
+    r"repack|fitgirl|dodi|gog|codex|rune|tenoke|skidrow|portable|installer|setup|linux|windows|macos|android|apk)\b"
 )
 
-_ARCHIVE_EXTENSIONS = {".zip", ".rar", ".7z", ".tar", ".gz", ".bz2", ".xz", ".iso", ".img"}
+_SINGLE_ARCHIVE_TRAP_EXTS = {".zip", ".zipx", ".rar", ".7z", ".ace", ".cab"}
+_DISK_IMAGE_TRAP_EXTS = {".iso", ".img", ".vhd", ".vhdx", ".udf", ".dmg"}
+_VIDEO_MEDIA_EXTS = {".mp4", ".mkv", ".avi", ".mov", ".wmv", ".webm", ".flv", ".m4v", ".mpg", ".mpeg", ".ts", ".m2ts", ".vob", ".ogv", ".3gp"}
+_BENIGN_COURSE_EXTS = _VIDEO_MEDIA_EXTS | {
+    ".mp3", ".flac", ".m4a", ".m4b", ".aac", ".ogg", ".wav",
+    ".pdf", ".epub", ".mobi", ".djvu", ".cbz", ".cbr",
+    ".srt", ".ass", ".ssa", ".vtt", ".sub",
+    ".gp3", ".gp4", ".gp5", ".gpx", ".ptb", ".ipynb", ".md", ".html",
+}
+
+_ARCHIVE_EXTENSIONS = {".zip", ".zipx", ".rar", ".7z", ".tar", ".gz", ".bz2", ".xz", ".iso", ".img"}
+
+_DISGUISED_MEDIA_STEMS = (
+    ".mp4.", ".mkv.", ".avi.", ".mov.", ".wmv.", ".webm.", ".flv.", ".m4v.",
+    ".mp4 ", ".mkv ", ".avi ", ".mov ",
+    ".mp3.", ".flac.", ".wav.", ".m4a.", ".ogg.", ".aac.", ".opus.",
+    ".pdf.", ".epub.", ".mobi.", ".cbz.", ".cbr.", ".djvu.",
+    ".jpg.", ".jpeg.", ".png.", ".gif.", ".webp.", ".srt.", ".ass.", ".sub.",
+)
+
+
+def _clean_filename_for_ext(raw_name: str) -> str:
+    s = raw_name.lower().strip().rstrip(". \t\r\n\x00")
+    s = _SAMPLE_SUFFIX_RE.sub("", s).rstrip(". \t\r\n\x00")
+    return s
+
+
+def _match_malware_ext(clean_lower: str) -> str | None:
+    dot = clean_lower.rfind(".")
+    if dot == -1:
+        return None
+    ext = clean_lower[dot:]
+    return ext if ext in _MALWARE_EXTENSIONS else None
+
+
+def _is_disk_image_mount_trap_cg(title_raw: str) -> bool:
+    stem = re.sub(r"\.(?:iso|img|vhd|vhdx|udf|dmg)$", "", title_raw.strip(), flags=re.IGNORECASE)
+    if _OPTICAL_DISC_TITLE_CG_RE.search(stem) or _BENIGN_ZIP_CG_RE.search(stem):
+        return False
+    return bool(_VIDEO_RIP_CLAIM_CG_RE.search(stem) or _ANIME_OR_EP_ZIP_CG_RE.search(stem))
 
 
 # ---------------------------------------------------------------------------
@@ -268,9 +388,12 @@ class CSAMGuard:
 
         sanitized = sanitize_title(text)
         normalized = normalize_text(sanitized)
-        de_spaced = _SINGLE_CHAR_RUN_RE.sub(r"\1", normalized)
+        # Preserve standalone "css" (Cascading Style Sheets) before collapsing single-char runs or stretching
+        norm_css_safe = re.sub(r"\bcss\b", "css_style_token", normalized)
+        de_spaced = _SINGLE_CHAR_RUN_RE.sub(r"\1", norm_css_safe)
         # Collapse arbitrary character stretching while preserving valid English double letters in target stems
-        de_stretched = re.sub(r"(.)\1+", r"\1", de_spaced)
+        de_stretched = re.sub(r"(.)\1+", r"\1", de_spaced).replace("cs_style_token", "css")
+        de_spaced = de_spaced.replace("css_style_token", "css")
         for raw_stem, canonical_stem in (
             ("ten", "teen"),
             ("todler", "toddler"),
@@ -345,7 +468,7 @@ class CSAMGuard:
           1. Infohash is not on the Ed25519-signed blinded tombstone purge list.
           2. Torrent title contains no CSAM/abuse keywords or passkey leakage.
           3. None of the internal files contain CSAM tokens.
-          4. No disguised executable payloads (.exe/.scr/.bat/.vbs) exist in media categories.
+          4. No disguised executable payloads, RTLO spoofing, mount traps, or archive traps exist.
           5. Tags contain no prohibited content.
         """
         clean_infohash = str(infohash).strip().lower()
@@ -370,7 +493,7 @@ class CSAMGuard:
                 sanitized_title=sanitize_title(title),
             )
 
-        # 2. Inspect title
+        # 2. Inspect title for CSAM / non-consensual / extreme violence
         res = self.inspect_text(title)
         if not res.is_safe:
             return res
@@ -382,61 +505,250 @@ class CSAMGuard:
                 if not tag_res.is_safe:
                     return tag_res
 
-        # 4. Inspect file list & disguised extensions
-        cat_lower = (category or "").lower()
-        is_media_category = cat_lower in {"movie", "tv_show", "music", "anime", "book", "comic", "xxx", "course"}
-        disguised_media_stems = (
-            ".mp4.", ".mkv.", ".avi.", ".mov.", ".wmv.", ".webm.", ".flv.", ".m4v.",
-            ".mp3.", ".flac.", ".wav.", ".m4a.", ".ogg.", ".aac.", ".opus.",
-            ".pdf.", ".epub.", ".mobi.", ".cbz.", ".cbr.", ".djvu.",
-            ".jpg.", ".jpeg.", ".png.", ".gif.", ".webp.", ".srt.", ".ass.", ".sub.",
-        )
-
+        # 4. Inspect file list text for CSAM / abuse first (preserves violation_type priority)
+        parsed_files: list[tuple[str, str, int]] = []
         if file_list:
-            has_large_real_video = any(
-                isinstance(x, dict)
-                and int(x.get("size") or x.get("s") or 0) >= 100_000_000
-                and str(x.get("path") or x.get("p") or x.get("name") or "").lower().strip().endswith(
-                    (".mp4", ".mkv", ".avi", ".mov", ".m4v", ".webm")
-                )
-                for x in file_list
-            )
             for f in file_list:
                 fname = f if isinstance(f, str) else str(f.get("path") or f.get("p") or f.get("name") or "")
                 fsize = int((f.get("size") or f.get("s") or 0) if isinstance(f, dict) else 0)
-                # Text check on file path
                 f_res = self.inspect_text(fname)
                 if not f_res.is_safe:
                     return f_res
+                parsed_files.append((fname, _clean_filename_for_ext(fname), fsize))
 
-                # Malware extension check: media torrents & disguised double-extensions must never contain executables
-                f_lower = fname.lower().strip().rstrip(". \t\r\n\x00")
-                base_lower = f_lower.rsplit("/", 1)[-1].rsplit("\\", 1)[-1]
-                if base_lower == "do_not_mirror.exe" and 0 < fsize <= 128 and has_large_real_video:
-                    continue
-                for ext in _MALWARE_EXTENSIONS:
-                    if f_lower.endswith(ext):
-                        if is_media_category or any(stem in f_lower for stem in disguised_media_stems):
-                            return ContentFilterResult(
-                                is_safe=False,
-                                violation_type=CSAMViolationType.MALWARE_PAYLOAD,
-                                reason=f"Disguised executable or dropper found in media torrent: '{fname}'",
-                                matched_pattern=ext,
-                                risk_score=0.99,
-                                sanitized_title=res.sanitized_title,
-                            )
-            if len(file_list) == 1 and is_media_category:
-                f0 = file_list[0]
-                f0_name = (f0 if isinstance(f0, str) else str(f0.get("path") or f0.get("p") or f0.get("name") or "")).lower().strip()
-                if f0_name.endswith(".zip") and _ANIME_OR_EP_ZIP_CG_RE.search(title) and not _BENIGN_ZIP_CG_RE.search(title):
+        # 5. Check Unicode Right-to-Left Override (RTLO) extension spoofing in title or files
+        if _RTLO_SPOOF_RE.search(title) or any(_RTLO_SPOOF_RE.search(fn) for fn, _, _ in parsed_files):
+            return ContentFilterResult(
+                is_safe=False,
+                violation_type=CSAMViolationType.MALWARE_PAYLOAD,
+                reason=f"Blocked Unicode RTLO extension spoofing character in torrent: '{title}'",
+                matched_pattern="U+202E_RTLO",
+                risk_score=1.0,
+                sanitized_title=res.sanitized_title,
+            )
+
+        title_clean = _clean_filename_for_ext(title)
+
+        # 6. Universal malware/honeypot lure patterns (blocked across ALL categories)
+        m_lure = _MALWARE_LURE_RE.search(title_clean)
+        if m_lure:
+            return ContentFilterResult(
+                is_safe=False,
+                violation_type=CSAMViolationType.MALWARE_PAYLOAD,
+                reason=f"Blocked explicit malware/honeypot lure in title: '{title}'",
+                matched_pattern=m_lure.group(0),
+                risk_score=0.99,
+                sanitized_title=res.sanitized_title,
+            )
+        for fname, f_lower, _ in parsed_files:
+            m_flure = _MALWARE_LURE_RE.search(f_lower)
+            if m_flure:
+                return ContentFilterResult(
+                    is_safe=False,
+                    violation_type=CSAMViolationType.MALWARE_PAYLOAD,
+                    reason=f"Blocked explicit malware/honeypot lure in file: '{fname}'",
+                    matched_pattern=m_flure.group(0),
+                    risk_score=0.99,
+                    sanitized_title=res.sanitized_title,
+                )
+
+        # 7. Title-level disguised media double-extension & unconditional dropper extension checks
+        t_ext = _match_malware_ext(title_clean)
+        if t_ext is not None:
+            if any(stem in title_clean for stem in _DISGUISED_MEDIA_STEMS) or t_ext in _ALWAYS_MALWARE_EXTENSIONS:
+                return ContentFilterResult(
+                    is_safe=False,
+                    violation_type=CSAMViolationType.MALWARE_PAYLOAD,
+                    reason=f"Disguised executable or high-risk dropper in torrent title: '{title}'",
+                    matched_pattern=t_ext,
+                    risk_score=0.99,
+                    sanitized_title=res.sanitized_title,
+                )
+
+        cat_lower = (category or "").lower().strip()
+        is_strict_media_category = cat_lower in {
+            "movie", "tv_show", "music", "anime", "book", "ebook", "audiobook", "comic", "xxx"
+        }
+        is_course_category = cat_lower == "course"
+
+        has_large_real_video = False
+        has_any_video = False
+        has_bdmv_structure = "bdmv" in title_clean
+        has_renpy_structure = False
+        benign_course_files = 0
+        has_password_companion = False
+        image_file_count = 0
+        image_total_bytes = 0
+
+        for _, f_lower, fsize in parsed_files:
+            f_posix = f_lower.replace("\\", "/")
+            if "/bdmv/" in f_posix or f_posix.startswith("bdmv/") or f_posix.endswith((".m2ts", ".bdmv", ".mpls")):
+                has_bdmv_structure = True
+            if f_posix.endswith((".rpa", ".rpy", ".rpyb")) or "/renpy/" in f"/{f_posix}":
+                has_renpy_structure = True
+            if _PASSWORD_COMPANION_RE.search(f_posix):
+                has_password_companion = True
+            dot = f_posix.rfind(".")
+            f_ext = f_posix[dot:] if dot != -1 else ""
+            if f_ext in _BENIGN_COURSE_EXTS:
+                benign_course_files += 1
+            if f_ext in (".jpg", ".jpeg", ".png", ".webp") and fsize > 0:
+                image_file_count += 1
+                image_total_bytes += fsize
+            if f_ext in _VIDEO_MEDIA_EXTS:
+                has_any_video = True
+                if fsize >= 100_000_000:
+                    has_large_real_video = True
+        has_real_image_set = image_file_count >= 5 and image_total_bytes >= 5_000_000
+
+        # Multi-lesson courses (>= 5 files and >= 3 benign video/doc/audio files) legitimately include
+        # .js, .ps1, .bat, or interactive player .exe files; small fake-course droppers are still checked.
+        check_media_executables = is_strict_media_category or (
+            is_course_category and (len(parsed_files) < 5 or benign_course_files < 3)
+        )
+        title_claims_video = bool(_ANIME_OR_EP_ZIP_CG_RE.search(title_clean) or _VIDEO_RIP_CLAIM_CG_RE.search(title_clean))
+
+        # Contextual codec-pack lure check: blocks codec-pack installers disguised as or bundled with media
+        # while sparing legitimate standalone codec-pack software utilities.
+        if check_media_executables or has_any_video or title_claims_video:
+            m_clure = _MEDIA_CODEC_LURE_RE.search(title_clean)
+            if m_clure and (has_any_video or title_claims_video):
+                return ContentFilterResult(
+                    is_safe=False,
+                    violation_type=CSAMViolationType.MALWARE_PAYLOAD,
+                    reason=f"Blocked media codec-pack lure in title: '{title}'",
+                    matched_pattern=m_clure.group(0),
+                    risk_score=0.99,
+                    sanitized_title=res.sanitized_title,
+                )
+            for fname, f_lower, _ in parsed_files:
+                m_fclure = _MEDIA_CODEC_LURE_RE.search(f_lower)
+                if m_fclure:
                     return ContentFilterResult(
                         is_safe=False,
                         violation_type=CSAMViolationType.MALWARE_PAYLOAD,
-                        reason=f"Single-archive episode malware trap in media torrent: '{f0_name}'",
-                        matched_pattern=".zip",
+                        reason=f"Blocked explicit malware/honeypot lure in file: '{fname}'",
+                        matched_pattern=m_fclure.group(0),
                         risk_score=0.99,
                         sanitized_title=res.sanitized_title,
                     )
+
+        # 8. Cold / bare-title checks when file_list is empty
+        if not parsed_files and (check_media_executables or cat_lower in ("unknown", "")):
+            if t_ext is not None and not _BENIGN_ZIP_CG_RE.search(title_clean):
+                return ContentFilterResult(
+                    is_safe=False,
+                    violation_type=CSAMViolationType.MALWARE_PAYLOAD,
+                    reason=f"Disguised executable or script extension in media title: '{title}'",
+                    matched_pattern=t_ext,
+                    risk_score=0.99,
+                    sanitized_title=res.sanitized_title,
+                )
+            dot_t = title_clean.rfind(".")
+            bare_ext = title_clean[dot_t:] if dot_t != -1 else ""
+            if bare_ext in _SINGLE_ARCHIVE_TRAP_EXTS and not _BENIGN_ZIP_CG_RE.search(title_clean):
+                if title_claims_video:
+                    return ContentFilterResult(
+                        is_safe=False,
+                        violation_type=CSAMViolationType.MALWARE_PAYLOAD,
+                        reason=f"Single-archive media malware trap in title: '{title}'",
+                        matched_pattern=bare_ext,
+                        risk_score=0.99,
+                        sanitized_title=res.sanitized_title,
+                    )
+            if bare_ext in _DISK_IMAGE_TRAP_EXTS and (
+                any(stem in title_clean for stem in _DISGUISED_MEDIA_STEMS) or _is_disk_image_mount_trap_cg(title_clean)
+            ):
+                return ContentFilterResult(
+                    is_safe=False,
+                    violation_type=CSAMViolationType.MALWARE_PAYLOAD,
+                    reason=f"Disk image mount malware trap ({bare_ext}) in media title: '{title}'",
+                    matched_pattern=bare_ext,
+                    risk_score=0.99,
+                    sanitized_title=res.sanitized_title,
+                )
+
+        # 9. File-list malware, mount trap, and archive trap inspection
+        if parsed_files:
+            for fname, f_lower, fsize in parsed_files:
+                f_posix = f_lower.replace("\\", "/")
+                base_lower = f_posix.rsplit("/", 1)[-1]
+                if (
+                    base_lower in ("do_not_mirror.exe", "rarbg_do_not_mirror.exe", "rarbg.com_do_not_mirror.exe")
+                    and (0 < fsize <= 512)
+                    and (has_large_real_video or has_real_image_set)
+                ):
+                    continue
+                if _RENPY_SAY_VBS_CG_RE.search(f_posix) and not title_claims_video and (has_renpy_structure or not check_media_executables):
+                    continue
+                is_disguised = any(stem in f_lower for stem in _DISGUISED_MEDIA_STEMS)
+                dot_f = f_lower.rfind(".")
+                raw_ext = f_lower[dot_f:] if dot_f != -1 else ""
+                if is_disguised and raw_ext in _DISK_IMAGE_TRAP_EXTS:
+                    return ContentFilterResult(
+                        is_safe=False,
+                        violation_type=CSAMViolationType.MALWARE_PAYLOAD,
+                        reason=f"Disguised disk-image payload found in torrent: '{fname}'",
+                        matched_pattern=raw_ext,
+                        risk_score=0.99,
+                        sanitized_title=res.sanitized_title,
+                    )
+                ext = _match_malware_ext(f_lower)
+                if ext is not None:
+                    # Exempt legitimate Blu-ray BD-J Java menu JARs (BDMV/JAR/00000.jar)
+                    if ext == ".jar" and has_bdmv_structure and _BDMV_JAR_PATH_RE.search(f_posix):
+                        continue
+                    # Exempt companion tracker bookmark (.url) when real video/audio media is present
+                    if ext == ".url" and (has_any_video or benign_course_files > 0):
+                        continue
+                    if check_media_executables or is_disguised or ext in _ALWAYS_MALWARE_EXTENSIONS:
+                        return ContentFilterResult(
+                            is_safe=False,
+                            violation_type=CSAMViolationType.MALWARE_PAYLOAD,
+                            reason=f"Disguised executable or dropper found in media torrent: '{fname}'",
+                            matched_pattern=ext,
+                            risk_score=0.99,
+                            sanitized_title=res.sanitized_title,
+                        )
+
+            if check_media_executables and not has_any_video and len(parsed_files) <= 3:
+                # Optical / Disk Image Mount Trap (.iso, .img, .vhd, .vhdx, .udf, .dmg)
+                for fname, f_lower, _ in parsed_files:
+                    dot = f_lower.rfind(".")
+                    f_ext = f_lower[dot:] if dot != -1 else ""
+                    if f_ext in _DISK_IMAGE_TRAP_EXTS and _is_disk_image_mount_trap_cg(title_clean):
+                        return ContentFilterResult(
+                            is_safe=False,
+                            violation_type=CSAMViolationType.MALWARE_PAYLOAD,
+                            reason=f"Disk image mount malware trap ({f_ext}) in stream/rip-claiming media torrent: '{fname}'",
+                            matched_pattern=f_ext,
+                            risk_score=0.99,
+                            sanitized_title=res.sanitized_title,
+                        )
+
+                # Single-archive media trap (.zip, .zipx, .rar, .7z, .ace, .cab)
+                if not _BENIGN_ZIP_CG_RE.search(title_clean):
+                    arch_matches: list[tuple[str, str]] = []
+                    for fname, f_lower, _ in parsed_files:
+                        dot = f_lower.rfind(".")
+                        f_ext = f_lower[dot:] if dot != -1 else ""
+                        if f_ext in _SINGLE_ARCHIVE_TRAP_EXTS:
+                            arch_matches.append((fname, f_ext))
+                    if len(arch_matches) == 1:
+                        arch_fname, arch_ext = arch_matches[0]
+                        if has_password_companion or (
+                            len(parsed_files) <= 2
+                            and cat_lower in ("movie", "tv_show", "anime", "unknown", "")
+                            and (_ANIME_OR_EP_ZIP_CG_RE.search(title_clean) or _VIDEO_RIP_CLAIM_CG_RE.search(title_clean))
+                        ):
+                            return ContentFilterResult(
+                                is_safe=False,
+                                violation_type=CSAMViolationType.MALWARE_PAYLOAD,
+                                reason=f"Single-archive episode/movie malware trap in media torrent: '{arch_fname}'",
+                                matched_pattern=arch_ext,
+                                risk_score=0.99,
+                                sanitized_title=res.sanitized_title,
+                            )
 
         return ContentFilterResult(
             is_safe=True,
@@ -499,6 +811,8 @@ class ArmigerSafetyGate:
             pass
 
         return True, "passed", None
+
+
 
 
 # ---------------------------------------------------------------------------
@@ -1082,7 +1396,7 @@ def sign_tombstone_list(
     payload = dummy.canonical_payload()
     sk = Ed25519PrivateKey.from_private_bytes(private_key_bytes)
     sig = sk.sign(payload)
-    pq_priv, pq_pub = WOTSPlusSHAKE256.derive_keypair_from_ed25519_priv(private_key_bytes)
+    pq_priv, pq_pub = WOTSPlusSHAKE256.derive_keypair_from_ed25519_priv(private_key_bytes, seq=seq)
     pq_sig = WOTSPlusSHAKE256.sign(pq_priv, payload)
 
     return SignedTombstoneList(

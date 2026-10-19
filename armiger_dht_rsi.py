@@ -3226,7 +3226,9 @@ def generate_golden_canary_suite(seed: int = 20261018) -> List[CanaryItem]:
         "Big.Buck.Bunny.2024.CAM.1080p.download_tool.bat",
     ]
     for i in range(25):
-        name = malware_names[i % len(malware_names)] + f".sample{i}"
+        _base = malware_names[i % len(malware_names)]
+        _dot = _base.rfind(".")
+        name = f"{_base[:_dot]}_sample{i}{_base[_dot:]}" if _dot != -1 else f"{_base}_sample{i}"
         items.append(CanaryItem(
             item_id=f"canary_jnk_{i:03d}",
             title=name,
