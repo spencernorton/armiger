@@ -36,10 +36,10 @@
   ],
   "provenance_sha256": {
     "canonical_eval_vectors.json": "058473f4ba21bc07db2c2b6981d5e62f3c584311fc134d92cb523de7f261243a",
-    "generate_canonical_charts.py": "e6d73c7197057fbb7cea3dee7f11599e6ce50039f692eada2d0ebae61ec774c4",
+    "generate_canonical_charts.py": "409e9cd324b8e14acd8db58f46ebab9d0ea623e57cf0b7eabb2343f0a9237daa",
     "assets/armiger_vs_llms_overall_and_6dims.png": "0a0bc3a260b3c3b1188a92fb9cc015c6bdb786e9033924d9daa7a36be332fc62",
     "assets/armiger_vs_llms_cost_comparison.png": "3cf46fd59817d3bffafce1f4f5a15379ffef7bf779b8d4b40b866a8d9671eff4",
-    "assets/armiger_vs_torrent_classifiers_6dims.png": "e6be359c5cc980b4fe30810d4f2f5b8b202bd3fca6f2a4a33ae0727c5de2f010",
+    "assets/armiger_vs_torrent_classifiers_6dims.png": "3768e7ec5bef503027375f87f089362798ab2ec74f96a7ea450458de325154dd",
     "assets/armiger_categorical_breakdown.png": "1a77a64340f7e05af318105d83270b29396450d01f22f71cffdf808b45e10d98",
     "validated_zero_cue_catalog.json": "a43193a7d9982f1b83e9e6968c47dbbe8d058b113af5020d6d5ea45ed2af7fcd",
     "armiger_ultra.fp32.onnx": "24c65e1af1be68c923bfdf774afb862c54b66a30f40c4b65cf5961929f149d48",
@@ -556,7 +556,7 @@
       ]
     },
     "armiger_vs_torrent_classifiers_6dims.png": {
-      "sha256": "e6be359c5cc980b4fe30810d4f2f5b8b202bd3fca6f2a4a33ae0727c5de2f010",
+      "sha256": "3768e7ec5bef503027375f87f089362798ab2ec74f96a7ea450458de325154dd",
       "panel_1_category_11class_oct15": {
         "panel_name": "chart3_1_oct15_cat11",
         "n": 2835,
@@ -1475,7 +1475,7 @@
         }
       }
     },
-    "tc_truespec_2000": {
+    "zero_cue_2000": {
       "panel_name": "five_split_tc2000",
       "n": 2000,
       "metric_type": "mean",
@@ -1523,7 +1523,7 @@
         }
       }
     },
-    "tc_truespec_multilang_3000": {
+    "multilang_3000": {
       "panel_name": "five_split_tc3000",
       "n": 3000,
       "metric_type": "mean",

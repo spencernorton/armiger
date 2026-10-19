@@ -9,11 +9,11 @@ Every benchmark figure and headline accuracy table across the **Armiger** and **
 | Artifact | SHA-256 Digest | Description |
 | :--- | :--- | :--- |
 | `benchmarks/canonical_eval_vectors.json` | `058473f4ba21bc07db2c2b6981d5e62f3c584311fc134d92cb523de7f261243a` | Plain-text JSON containing `148` 1D numeric `int16`/`float32` prediction and ground-truth label arrays across all 5 evaluation splits (`N=10,262`). Contains **zero** strings, release titles, file paths, or infohashes. |
-| `benchmarks/generate_canonical_charts.py` | `e6d73c7197057fbb7cea3dee7f11599e6ce50039f692eada2d0ebae61ec774c4` | Deterministic chart generator and statistical test runner (`BOOTSTRAP_SEED = 20261018`, `BOOTSTRAP_RESAMPLES = 10000`). |
+| `benchmarks/generate_canonical_charts.py` | `409e9cd324b8e14acd8db58f46ebab9d0ea623e57cf0b7eabb2343f0a9237daa` | Deterministic chart generator and statistical test runner (`BOOTSTRAP_SEED = 20261018`, `BOOTSTRAP_RESAMPLES = 10000`). |
 | `benchmarks/CHARTS_MANIFEST.json` | *(Tracked by `test_chart_integrity.py`)* | Complete machine-readable statistical ledger recording point estimates, 95% paired bootstrap CIs, exact McNemar $p$-values, LOTO anti-circularity audits, and SHA-256 provenance hashes. |
 | `assets/armiger_vs_llms_overall_and_6dims.png` | `0a0bc3a260b3c3b1188a92fb9cc015c6bdb786e9033924d9daa7a36be332fc62` | 6-dimension accuracy & composite mean comparison against frontier cloud LLMs and local GPU LLMs on identical evaluation cohorts. |
 | `assets/armiger_vs_llms_cost_comparison.png` | `3cf46fd59817d3bffafce1f4f5a15379ffef7bf779b8d4b40b866a8d9671eff4` | Operational cost per 1M torrents and token/hardware rate comparison. |
-| `assets/armiger_vs_torrent_classifiers_6dims.png` | `e6be359c5cc980b4fe30810d4f2f5b8b202bd3fca6f2a4a33ae0727c5de2f010` | 7-dimension comparison against open-source torrent classifiers and regex parsers (`MIMMO BERT`, `RTN`, `Parsett`, `GuessIt`, `PTN`, `Anitomy`, `Bitmagnet`). |
+| `assets/armiger_vs_torrent_classifiers_6dims.png` | `3768e7ec5bef503027375f87f089362798ab2ec74f96a7ea450458de325154dd` | 7-dimension comparison against open-source torrent classifiers and regex parsers (`MIMMO BERT`, `RTN`, `Parsett`, `GuessIt`, `PTN`, `Anitomy`, `Bitmagnet`). |
 | `assets/armiger_categorical_breakdown.png` | `1a77a64340f7e05af318105d83270b29396450d01f22f71cffdf808b45e10d98` | Per-category recall breakdown across all 10 media & software categories on `oct15_confirmation` (`N=2,835`) and `beyond_confirmation` (`N=1,025`). |
 
 ---

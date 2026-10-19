@@ -188,5 +188,5 @@ def test_readme_tables_match_charts_manifest():
         assert required_token in text, f"Missing canonical metric {required_token} in {readme_path}"
 
     # Stale pre-audit numbers that must never reappear in README
-    for stale_token in ("97.13%", "96.35%", "72.35%", "35.29%", "97.55%"):
+    for stale_token in ("97.13%", "96.35%", "72.35%", "35.29%", "97.55%", "true" + "spec", "tru" + "spec"):
         assert stale_token not in text, f"Stale metric {stale_token} found in {readme_path}"
