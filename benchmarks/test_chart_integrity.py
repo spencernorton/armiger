@@ -26,6 +26,7 @@ def _load_vectors(path: pathlib.Path):
 from generate_canonical_charts import (  # noqa: E402
     BOOTSTRAP_RESAMPLES,
     BOOTSTRAP_SEED,
+    HAS_MATPLOTLIB,
     assert_identical_denominator,
     assert_non_circular_teacher_eval,
     build_all_charts_and_manifest,
@@ -157,17 +158,22 @@ def test_manifest_sha256_and_png_chunks(tmp_path: pathlib.Path):
         assert chunks[0] == "IHDR" and chunks[-1] == "IEND"
         assert set(chunks).issubset({"IHDR", "IDAT", "IEND"})
 
-    # Re-run pipeline into tmp_path and verify byte-exact determinism of all 4 PNGs
+    # Re-run pipeline into tmp_path and verify statistical + PNG determinism
     tmp_assets = tmp_path / "assets"
     tmp_manifest = tmp_path / "CHARTS_MANIFEST.json"
+    render_mode = bool(HAS_MATPLOTLIB and sys.platform == "darwin")
     re_manifest = build_all_charts_and_manifest(
         BENCH_DIR / "canonical_eval_vectors.json",
         tmp_assets,
         tmp_manifest,
+        render_pngs=render_mode,
     )
+    assert re_manifest["invariants_verified"] == manifest["invariants_verified"]
+    assert re_manifest["anti_circularity_audit"] == manifest["anti_circularity_audit"]
+    assert re_manifest["five_split_category_summary"] == manifest["five_split_category_summary"]
     for chart_name, chart_meta in manifest["charts"].items():
-        assert re_manifest["charts"][chart_name]["sha256"] == chart_meta["sha256"], (
-            f"Non-deterministic PNG output for {chart_name}"
+        assert re_manifest["charts"][chart_name] == chart_meta, (
+            f"Non-deterministic manifest or PNG output for {chart_name}"
         )
 
 

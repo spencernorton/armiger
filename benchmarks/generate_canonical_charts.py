@@ -22,14 +22,24 @@ import struct
 import zlib
 from typing import Any, Dict, List, Optional, Tuple
 
-import matplotlib
-matplotlib.use("Agg")
-import matplotlib.pyplot as plt
-from matplotlib.gridspec import GridSpec
-from matplotlib.patches import Patch
+import math
 import numpy as np
-from PIL import Image
-from scipy.stats import binomtest
+
+try:
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+    from matplotlib.gridspec import GridSpec
+    from matplotlib.patches import Patch
+    from PIL import Image
+    HAS_MATPLOTLIB = True
+except ImportError:
+    matplotlib = None  # type: ignore[assignment]
+    plt = None  # type: ignore[assignment]
+    GridSpec = None  # type: ignore[assignment]
+    Patch = None  # type: ignore[assignment]
+    Image = None  # type: ignore[assignment]
+    HAS_MATPLOTLIB = False
 
 BOOTSTRAP_SEED = 20261018
 BOOTSTRAP_RESAMPLES = 10000
@@ -143,7 +153,11 @@ def exact_mcnemar_or_paired_p(vec_ref: np.ndarray, vec_mod: np.ndarray) -> float
     n_disc = n_pos + n_neg
     if n_disc == 0:
         return 1.0
-    return float(binomtest(n_pos, n_disc, 0.5, alternative="two-sided").pvalue)
+    m_min = min(n_pos, n_neg)
+    if 2 * m_min == n_disc:
+        return 1.0
+    tail_sum = sum(math.comb(n_disc, i) for i in range(m_min + 1))
+    return float(min(1.0, (2 * tail_sum) / (1 << n_disc)))
 
 
 def compute_auroc_pct(y_true: np.ndarray, scores: np.ndarray) -> float:
@@ -361,21 +375,27 @@ def build_all_charts_and_manifest(
     npz_path: pathlib.Path,
     assets_dir: pathlib.Path,
     manifest_path: pathlib.Path,
+    render_pngs: Optional[bool] = None,
 ) -> Dict[str, Any]:
-    plt.rcParams.update({
-        "figure.facecolor": BG_CANVAS,
-        "axes.facecolor": BG_PANEL,
-        "axes.edgecolor": BORDER_COLOR,
-        "axes.labelcolor": TEXT_SUB,
-        "xtick.color": TEXT_SUB,
-        "ytick.color": TEXT_MAIN,
-        "text.color": TEXT_MAIN,
-        "font.sans-serif": ["DejaVu Sans", "Arial", "Helvetica"],
-        "axes.grid": True,
-        "grid.color": GRID_COLOR,
-        "grid.linestyle": "--",
-        "grid.alpha": 0.85,
-    })
+    if render_pngs is None:
+        render_pngs = HAS_MATPLOTLIB
+    if render_pngs:
+        if not HAS_MATPLOTLIB:
+            raise RuntimeError("matplotlib and Pillow are required when render_pngs=True")
+        plt.rcParams.update({
+            "figure.facecolor": BG_CANVAS,
+            "axes.facecolor": BG_PANEL,
+            "axes.edgecolor": BORDER_COLOR,
+            "axes.labelcolor": TEXT_SUB,
+            "xtick.color": TEXT_SUB,
+            "ytick.color": TEXT_MAIN,
+            "text.color": TEXT_MAIN,
+            "font.sans-serif": ["DejaVu Sans", "Arial", "Helvetica"],
+            "axes.grid": True,
+            "grid.color": GRID_COLOR,
+            "grid.linestyle": "--",
+            "grid.alpha": 0.85,
+        })
 
     if str(npz_path).endswith(".json"):
         raw_json = json.loads(npz_path.read_text(encoding="utf-8"))
@@ -553,195 +573,6 @@ def build_all_charts_and_manifest(
             "ci95_hi": round(pt_mean + half_w, 2),
         }
 
-    # ==========================================================================
-    # RENDER CHART 1: armiger_vs_llms_overall_and_6dims.png
-    # ==========================================================================
-    fig1 = plt.figure(figsize=(24, 11.4))
-    fig1.suptitle(
-        "Armiger & Armiger Ultra vs. Frontier Cloud LLMs & Local GPU LLM Across 6 Core Dimensions",
-        fontsize=17.5, fontweight="bold", color=TEXT_MAIN, y=0.972,
-    )
-    fig1.text(
-        0.5, 0.934,
-        "Non-Circular Leave-One-Teacher-Out (LOTO) & Identical-Denominator Evaluation with 95% Paired Bootstrap CIs (10,000 Resamples)",
-        ha="center", fontsize=11.3, style="italic", color=TEXT_SUB, parse_math=False,
-    )
-
-    gs1 = GridSpec(
-        2, 5, figure=fig1,
-        width_ratios=[1.72, 0.12, 1.0, 1.0, 1.0],
-        wspace=0.16, hspace=0.42,
-        top=0.86, bottom=0.13, left=0.14, right=0.98,
-    )
-
-    ax_left = fig1.add_subplot(gs1[:, 0])
-    style_ax(ax_left)
-    colors_llm = [C_ULTRA, C_INT8, C_GEMINI, C_CLAUDE, C_GPT, C_VINCI]
-    edges_llm = [C_ULTRA_EDGE, C_INT8_EDGE, "none", "none", "none", "none"]
-    vals_left = [composite_stats[m]["point_pct"] for m in llm_order]
-    labels_left = [
-        f"{vals_left[0]:.2f}% (0.21 ms RTX / 0.29 ms MPS | $0.00 API)",
-        f"{vals_left[1]:.2f}% (2.44 ms M4 Pro CPU INT8 | $0.00 API)",
-        f"{vals_left[2]:.2f}% (~450 ms | Non-Circular LOTO N=1,025)",
-        f"{vals_left[3]:.2f}% (~310 ms | $712.00-$1,220.00 / 1M)",
-        f"{vals_left[4]:.2f}% (~365 ms | Non-Circular LOTO N=1,025)",
-        f"{vals_left[5]:.2f}% (~185 ms RTX 4070 TiS | $1.85 Pwr / 1M)",
-    ]
-    y_llm = np.arange(len(llm_order))
-    ax_left.axhspan(-0.5, 1.5, color=BG_HIGHLIGHT, alpha=0.75, zorder=1)
-    ax_left.barh(y_llm, vals_left, height=0.55, color=colors_llm, edgecolor=edges_llm, linewidth=1.3, zorder=3)
-    draw_ci_whiskers(ax_left, y_llm, [composite_stats[m] for m in llm_order])
-    ax_left.set_yticks(y_llm)
-    ax_left.set_yticklabels(llm_order, fontsize=10.5, fontweight="bold", color=TEXT_MAIN)
-    ax_left.invert_yaxis()
-    ax_left.set_xlim(78, 136)
-    ax_left.set_xticks([80, 85, 90, 95, 100])
-    ax_left.set_xlabel("6-Dimension Composite Mean (%) ± 95% Bootstrap CI", fontsize=10, color=TEXT_SUB, labelpad=8)
-    ax_left.set_title(
-        "1. Overall 6-Dimension Composite Mean (%)\n(Category, Catalog, Audio, Anime, Junk, Swarm)",
-        fontsize=11.5, fontweight="bold", color=TEXT_MAIN, pad=10,
-    )
-    for idx, (m, lbl) in enumerate(zip(llm_order, labels_left)):
-        fw = "bold" if idx < 2 else "normal"
-        tc = TEXT_MAIN if idx < 2 else "#CBD5E1"
-        hi_x = max(vals_left[idx], composite_stats[m]["ci95_hi"])
-        ax_left.text(hi_x + 0.55, idx, lbl, va="center", ha="left", fontsize=8.5, fontweight=fw, color=tc, zorder=6, parse_math=False)
-
-    sub_specs = [
-        (
-            0, 2, "2A. 11-Class Category (N=1,025 LOTO)",
-            p2a_stats,
-            [
-                f"{p2a_stats['models'][llm_order[0]]['point_pct']:.2f}% (95.49% oct15)",
-                f"{p2a_stats['models'][llm_order[1]]['point_pct']:.2f}% (95.49% oct15)",
-                f"{p2a_stats['models'][llm_order[2]]['point_pct']:.2f}% (95.6% Circ)",
-                f"{p2a_stats['models'][llm_order[3]]['point_pct']:.2f}%",
-                f"{p2a_stats['models'][llm_order[4]]['point_pct']:.2f}% (96.6% Circ)",
-                f"{p2a_stats['models'][llm_order[5]]['point_pct']:.2f}%",
-            ],
-            (72, 134), [75, 80, 85, 90, 95, 100],
-        ),
-        (
-            0, 3, "2B. Catalog Matching (N=1,025 LOTO)",
-            p2b_stats,
-            [
-                f"{p2b_stats['models'][llm_order[0]]['point_pct']:.2f}% (96.53% oct15)",
-                f"{p2b_stats['models'][llm_order[1]]['point_pct']:.2f}% (96.53% oct15)",
-                f"{p2b_stats['models'][llm_order[2]]['point_pct']:.2f}%",
-                f"{p2b_stats['models'][llm_order[3]]['point_pct']:.2f}%",
-                f"{p2b_stats['models'][llm_order[4]]['point_pct']:.2f}%",
-                f"{p2b_stats['models'][llm_order[5]]['point_pct']:.2f}%",
-            ],
-            (70, 126), [75, 80, 85, 90, 95, 100],
-        ),
-        (
-            0, 4, "2C. Audio Language (Strict E-vs-F N=229)",
-            p2c_stats,
-            [
-                f"{p2c_stats['models'][llm_order[0]]['point_pct']:.2f}% (97.80% oct15)",
-                f"{p2c_stats['models'][llm_order[1]]['point_pct']:.2f}% (97.80% oct15)",
-                f"{p2c_stats['models'][llm_order[2]]['point_pct']:.2f}%",
-                f"{p2c_stats['models'][llm_order[3]]['point_pct']:.2f}%",
-                f"{p2c_stats['models'][llm_order[4]]['point_pct']:.2f}% (94.68% oct15)",
-                f"{p2c_stats['models'][llm_order[5]]['point_pct']:.2f}%",
-            ],
-            (88, 122), [90, 92, 94, 96, 98, 100],
-        ),
-        (
-            1, 2, "2D. Anime & Dub (Valid Media N=636)",
-            p2d_stats,
-            [
-                f"{p2d_stats['models'][llm_order[0]]['point_pct']:.2f}% (99.61% oct15)",
-                f"{p2d_stats['models'][llm_order[1]]['point_pct']:.2f}% (99.61% oct15)",
-                f"{p2d_stats['models'][llm_order[2]]['point_pct']:.2f}% (608/636)",
-                f"{p2d_stats['models'][llm_order[3]]['point_pct']:.2f}% (Valid Media)",
-                f"{p2d_stats['models'][llm_order[4]]['point_pct']:.2f}% (608/636)",
-                f"{p2d_stats['models'][llm_order[5]]['point_pct']:.2f}%",
-            ],
-            (88, 124), [90, 92, 94, 96, 98, 100],
-        ),
-        (
-            1, 3, "2E. Junk / Malware (Balanced N=977)",
-            p2e_stats,
-            [
-                f"{p2e_stats['models'][llm_order[0]]['point_pct']:.2f}% (99.90% Acc / 100% oct15)",
-                f"{p2e_stats['models'][llm_order[1]]['point_pct']:.2f}% (99.90% Acc / 100% oct15)",
-                f"{p2e_stats['models'][llm_order[2]]['point_pct']:.2f}% (Non-Circ)",
-                f"{p2e_stats['models'][llm_order[3]]['point_pct']:.2f}%",
-                f"{p2e_stats['models'][llm_order[4]]['point_pct']:.2f}% (0% Rec.)",
-                f"{p2e_stats['models'][llm_order[5]]['point_pct']:.2f}%",
-            ],
-            (40, 162), [40, 60, 80, 100],
-        ),
-        (
-            1, 4, "2F. Swarm Liveliness AUROC %",
-            None,
-            [
-                "96.83% Whse (92.42% Pub)",
-                "92.42% Pub (86.64% Priors)",
-                "89.20% Pub (N=757)",
-                "89.76% Pub (N=757)",
-                "89.82% Pub (N=757)",
-                "66.32% Pub (N=757)",
-            ],
-            (55, 152), [60, 70, 80, 90, 100],
-        ),
-    ]
-
-    for row, col, title, p_stat, lbls, xlim, xticks in sub_specs:
-        ax = fig1.add_subplot(gs1[row, col])
-        style_ax(ax)
-        ax.axhspan(-0.5, 1.5, color=BG_HIGHLIGHT, alpha=0.75, zorder=1)
-        if p_stat is not None:
-            s_list = [p_stat["models"][m] for m in llm_order]
-        else:
-            s_list = [p2f_whse_stats["models"][ref_llm]] + [p2f_pub_stats["models"][m] for m in llm_order[1:]]
-        vals = [s["point_pct"] for s in s_list]
-        ax.barh(y_llm, vals, height=0.58, color=colors_llm, edgecolor=edges_llm, linewidth=1.2, zorder=3)
-        draw_ci_whiskers(ax, y_llm, s_list)
-        ax.set_yticks(y_llm)
-        ax.set_yticklabels([""] * len(llm_order))
-        ax.invert_yaxis()
-        ax.set_xlim(*xlim)
-        ax.set_xticks(xticks)
-        ax.set_title(title, fontsize=10.5, fontweight="bold", color=TEXT_MAIN, pad=8)
-        span = xlim[1] - xlim[0]
-        for idx, (s_item, lbl) in enumerate(zip(s_list, lbls)):
-            fw = "bold" if idx < 2 else "normal"
-            tc = TEXT_MAIN if idx < 2 else "#CBD5E1"
-            hi_x = max(s_item["point_pct"], s_item["ci95_hi"])
-            ax.text(hi_x + span * 0.015, idx, lbl, va="center", ha="left", fontsize=7.9, fontweight=fw, color=tc, zorder=6, parse_math=False)
-
-    legend_handles = [
-        Patch(facecolor=C_ULTRA, edgecolor=C_ULTRA_EDGE, label="Armiger Ultra (Fair Hybrid)"),
-        Patch(facecolor=C_INT8, edgecolor=C_INT8_EDGE, label="Armiger (8.3 MB INT8 + Plugins)"),
-        Patch(facecolor=C_GEMINI, label="Google Gemini (gemini-3.8-flash-low, LOTO Non-Circular)"),
-        Patch(facecolor=C_CLAUDE, label="Anthropic Claude (claude-haiku-4-5)"),
-        Patch(facecolor=C_GPT, label="OpenAI GPT (gpt-6-luna, LOTO Non-Circular)"),
-        Patch(facecolor=C_VINCI, label="Local GPU LLM (Vinci-MLE-8B-1.0)"),
-    ]
-    fig1.legend(
-        handles=legend_handles, loc="lower center", bbox_to_anchor=(0.5, 0.015),
-        ncol=6, facecolor=BG_PANEL, edgecolor=BORDER_COLOR, fontsize=9.0, labelcolor=TEXT_MAIN,
-        borderpad=0.6, columnspacing=1.35,
-    )
-    sha_chart1 = save_clean_rgb_png(fig1, assets_dir / "armiger_vs_llms_overall_and_6dims.png")
-
-    # ==========================================================================
-    # RENDER CHART 2: armiger_vs_llms_cost_comparison.png
-    # ==========================================================================
-    fig2, (ax2_l, ax2_r) = plt.subplots(1, 2, figsize=(23.5, 9.2), gridspec_kw={"wspace": 0.14})
-    fig2.subplots_adjust(top=0.80, bottom=0.16, left=0.16, right=0.98)
-    fig2.suptitle(
-        "Cost & Hardware-Attributed Throughput: Armiger & Armiger Ultra vs. Local & Cloud LLMs",
-        fontsize=17.5, fontweight="bold", color=TEXT_MAIN, y=0.96,
-    )
-    fig2.text(
-        0.5, 0.915,
-        "Left: Operational Cost per 1,000,000 Classified Torrents ($ USD)  |  Right: API Token Rates ($ USD / 1M Tokens) & Measured Hardware Throughput",
-        ha="center", fontsize=11.3, style="italic", color=TEXT_SUB, parse_math=False,
-    )
-
     models_cost = [
         "Armiger (8.3 MB M4 Pro CPU INT8)",
         "Armiger Ultra (M4 Pro / RTX GPU FP32)",
@@ -753,79 +584,286 @@ def build_all_charts_and_manifest(
     colors_cost = [C_INT8, C_ULTRA, C_VINCI, C_GEMINI, C_GPT, C_CLAUDE]
     batched_cost = [0.002, 0.004, 1.85, 94.90, 127.30, 712.00]
     realtime_cost = [0.002, 0.004, 18.00, 147.00, 220.50, 1220.00]
-    cost_labels = [
-        "$0.00 API (~$0.0020 Compute Electricity / 1M Tasks)",
-        "$0.00 API (~$0.0040 Compute Electricity / 1M Tasks)",
-        "$0.00 API ($1.85 Local GPU Power | ~$18.00 Cloud GPU / 1M)",
-        "$94.90 Batched ($147.00 Real-Time 1-by-1)",
-        "$127.30 Batched ($220.50 Real-Time 1-by-1)",
-        "$712.00 Batched ($1,220.00 Real-Time 1-by-1)",
-    ]
+    fallback_assets = assets_dir if (assets_dir / "armiger_vs_llms_overall_and_6dims.png").is_file() else (npz_path.parent.parent / "assets")
+    if render_pngs:
+        # ==========================================================================
+        # RENDER CHART 1: armiger_vs_llms_overall_and_6dims.png
+        # ==========================================================================
+        fig1 = plt.figure(figsize=(24, 11.4))
+        fig1.suptitle(
+            "Armiger & Armiger Ultra vs. Frontier Cloud LLMs & Local GPU LLM Across 6 Core Dimensions",
+            fontsize=17.5, fontweight="bold", color=TEXT_MAIN, y=0.972,
+        )
+        fig1.text(
+            0.5, 0.934,
+            "Non-Circular Leave-One-Teacher-Out (LOTO) & Identical-Denominator Evaluation with 95% Paired Bootstrap CIs (10,000 Resamples)",
+            ha="center", fontsize=11.3, style="italic", color=TEXT_SUB, parse_math=False,
+        )
 
-    style_ax(ax2_l)
-    yc = np.arange(len(models_cost))
-    ax2_l.axhspan(-0.5, 1.5, color=BG_HIGHLIGHT, alpha=0.75, zorder=1)
-    for idx in range(len(models_cost)):
-        ax2_l.barh(idx, realtime_cost[idx], height=0.56, color=colors_cost[idx], alpha=0.28, edgecolor=colors_cost[idx], linestyle="--", linewidth=1.2, zorder=2)
-        ax2_l.barh(idx, batched_cost[idx], height=0.56, color=colors_cost[idx], zorder=3)
-        x_pos = max(realtime_cost[idx], batched_cost[idx]) + 18.0
-        ax2_l.text(x_pos, idx, cost_labels[idx], va="center", ha="left", fontsize=9.0, fontweight="bold" if idx < 2 else "normal", color=TEXT_MAIN if idx < 2 else "#CBD5E1", parse_math=False)
+        gs1 = GridSpec(
+            2, 5, figure=fig1,
+            width_ratios=[1.72, 0.12, 1.0, 1.0, 1.0],
+            wspace=0.16, hspace=0.42,
+            top=0.86, bottom=0.13, left=0.14, right=0.98,
+        )
 
-    ax2_l.set_yticks(yc)
-    ax2_l.set_yticklabels(models_cost, fontsize=10.2, fontweight="bold", color=TEXT_MAIN)
-    ax2_l.invert_yaxis()
-    ax2_l.set_xlim(0, 1980)
-    ax2_l.set_xticks([0, 200, 400, 600, 800, 1000, 1200])
-    ax2_l.set_xticklabels(["$0", "$200", "$400", "$600", "$800", "$1,000", "$1,200"])
-    ax2_l.set_xlabel("Derived from measured prompt + completion token receipts (Lower is Better)", fontsize=9.5, color=TEXT_SUB, labelpad=8)
-    ax2_l.set_title(
-        "1. Cost per 1,000,000 Classified Torrents ($ USD / 1M Tasks)\n(Solid = 32-Item Batched Mode; Dashed = Real-Time 1-by-1 Webhook Mode)",
-        fontsize=11.2, fontweight="bold", color=TEXT_MAIN, pad=10,
-    )
-    ax2_l.legend(
-        handles=[
-            Patch(facecolor=C_GEMINI, label="32-Item Batched API Cost"),
-            Patch(facecolor=C_GEMINI, alpha=0.3, edgecolor=C_GEMINI, linestyle="--", label="Real-Time Single-Torrent API Cost (1-by-1)"),
-        ],
-        loc="upper center", bbox_to_anchor=(0.5, -0.11), ncol=2, facecolor=BG_PANEL, edgecolor=BORDER_COLOR, fontsize=8.8, labelcolor=TEXT_MAIN,
-    )
+        ax_left = fig1.add_subplot(gs1[:, 0])
+        style_ax(ax_left)
+        colors_llm = [C_ULTRA, C_INT8, C_GEMINI, C_CLAUDE, C_GPT, C_VINCI]
+        edges_llm = [C_ULTRA_EDGE, C_INT8_EDGE, "none", "none", "none", "none"]
+        vals_left = [composite_stats[m]["point_pct"] for m in llm_order]
+        labels_left = [
+            f"{vals_left[0]:.2f}% (0.21 ms RTX / 0.29 ms MPS | $0.00 API)",
+            f"{vals_left[1]:.2f}% (2.44 ms M4 Pro CPU INT8 | $0.00 API)",
+            f"{vals_left[2]:.2f}% (~450 ms | Non-Circular LOTO N=1,025)",
+            f"{vals_left[3]:.2f}% (~310 ms | $712.00-$1,220.00 / 1M)",
+            f"{vals_left[4]:.2f}% (~365 ms | Non-Circular LOTO N=1,025)",
+            f"{vals_left[5]:.2f}% (~185 ms RTX 4070 TiS | $1.85 Pwr / 1M)",
+        ]
+        y_llm = np.arange(len(llm_order))
+        ax_left.axhspan(-0.5, 1.5, color=BG_HIGHLIGHT, alpha=0.75, zorder=1)
+        ax_left.barh(y_llm, vals_left, height=0.55, color=colors_llm, edgecolor=edges_llm, linewidth=1.3, zorder=3)
+        draw_ci_whiskers(ax_left, y_llm, [composite_stats[m] for m in llm_order])
+        ax_left.set_yticks(y_llm)
+        ax_left.set_yticklabels(llm_order, fontsize=10.5, fontweight="bold", color=TEXT_MAIN)
+        ax_left.invert_yaxis()
+        ax_left.set_xlim(78, 136)
+        ax_left.set_xticks([80, 85, 90, 95, 100])
+        ax_left.set_xlabel("6-Dimension Composite Mean (%) ± 95% Bootstrap CI", fontsize=10, color=TEXT_SUB, labelpad=8)
+        ax_left.set_title(
+            "1. Overall 6-Dimension Composite Mean (%)\n(Category, Catalog, Audio, Anime, Junk, Swarm)",
+            fontsize=11.5, fontweight="bold", color=TEXT_MAIN, pad=10,
+        )
+        for idx, (m, lbl) in enumerate(zip(llm_order, labels_left)):
+            fw = "bold" if idx < 2 else "normal"
+            tc = TEXT_MAIN if idx < 2 else "#CBD5E1"
+            hi_x = max(vals_left[idx], composite_stats[m]["ci95_hi"])
+            ax_left.text(hi_x + 0.55, idx, lbl, va="center", ha="left", fontsize=8.5, fontweight=fw, color=tc, zorder=6, parse_math=False)
 
-    style_ax(ax2_r)
-    ax2_r.axhspan(-0.5, 1.5, color=BG_HIGHLIGHT, alpha=0.75, zorder=1)
-    in_rates = [0.0, 0.0, 0.012, 0.10, 0.15, 0.80]
-    out_rates = [0.0, 0.0, 0.12, 0.40, 0.60, 4.00]
-    rate_labels = [
-        "$0.00 API (2.44 ms single / 326 items/s batch-64 M4 Pro CPU)",
-        "$0.00 API (3,416 items/s M4 Pro MPS / 4,795 items/s RTX GPU)",
-        "$0.00 API (~$0.012/1M Pwr Equiv. | 5.4 items/s RTX 4070 TiS)",
-        "$0.10 In | $0.40 Out ($0.13 Blended / 1M Tokens)",
-        "$0.15 In | $0.60 Out ($0.18 Blended / 1M Tokens)",
-        "$0.80 In | $4.00 Out ($1.05 Blended / 1M Tokens)",
-    ]
-    for idx in range(len(models_cost)):
-        ax2_r.barh(idx - 0.14, in_rates[idx], height=0.28, color=colors_cost[idx], alpha=0.55, hatch="//", edgecolor=colors_cost[idx], zorder=3)
-        ax2_r.barh(idx + 0.14, out_rates[idx], height=0.28, color=colors_cost[idx], zorder=3)
-        ax2_r.text(max(in_rates[idx], out_rates[idx]) + 0.08, idx + 0.05, rate_labels[idx], va="center", ha="left", fontsize=9.0, fontweight="bold" if idx < 2 else "normal", color=TEXT_MAIN if idx < 2 else "#CBD5E1", parse_math=False)
+        sub_specs = [
+            (
+                0, 2, "2A. 11-Class Category (N=1,025 LOTO)",
+                p2a_stats,
+                [
+                    f"{p2a_stats['models'][llm_order[0]]['point_pct']:.2f}% (95.49% oct15)",
+                    f"{p2a_stats['models'][llm_order[1]]['point_pct']:.2f}% (95.49% oct15)",
+                    f"{p2a_stats['models'][llm_order[2]]['point_pct']:.2f}% (95.6% Circ)",
+                    f"{p2a_stats['models'][llm_order[3]]['point_pct']:.2f}%",
+                    f"{p2a_stats['models'][llm_order[4]]['point_pct']:.2f}% (96.6% Circ)",
+                    f"{p2a_stats['models'][llm_order[5]]['point_pct']:.2f}%",
+                ],
+                (72, 134), [75, 80, 85, 90, 95, 100],
+            ),
+            (
+                0, 3, "2B. Catalog Matching (N=1,025 LOTO)",
+                p2b_stats,
+                [
+                    f"{p2b_stats['models'][llm_order[0]]['point_pct']:.2f}% (96.53% oct15)",
+                    f"{p2b_stats['models'][llm_order[1]]['point_pct']:.2f}% (96.53% oct15)",
+                    f"{p2b_stats['models'][llm_order[2]]['point_pct']:.2f}%",
+                    f"{p2b_stats['models'][llm_order[3]]['point_pct']:.2f}%",
+                    f"{p2b_stats['models'][llm_order[4]]['point_pct']:.2f}%",
+                    f"{p2b_stats['models'][llm_order[5]]['point_pct']:.2f}%",
+                ],
+                (70, 126), [75, 80, 85, 90, 95, 100],
+            ),
+            (
+                0, 4, "2C. Audio Language (Strict E-vs-F N=229)",
+                p2c_stats,
+                [
+                    f"{p2c_stats['models'][llm_order[0]]['point_pct']:.2f}% (97.80% oct15)",
+                    f"{p2c_stats['models'][llm_order[1]]['point_pct']:.2f}% (97.80% oct15)",
+                    f"{p2c_stats['models'][llm_order[2]]['point_pct']:.2f}%",
+                    f"{p2c_stats['models'][llm_order[3]]['point_pct']:.2f}%",
+                    f"{p2c_stats['models'][llm_order[4]]['point_pct']:.2f}% (94.68% oct15)",
+                    f"{p2c_stats['models'][llm_order[5]]['point_pct']:.2f}%",
+                ],
+                (88, 122), [90, 92, 94, 96, 98, 100],
+            ),
+            (
+                1, 2, "2D. Anime & Dub (Valid Media N=636)",
+                p2d_stats,
+                [
+                    f"{p2d_stats['models'][llm_order[0]]['point_pct']:.2f}% (99.61% oct15)",
+                    f"{p2d_stats['models'][llm_order[1]]['point_pct']:.2f}% (99.61% oct15)",
+                    f"{p2d_stats['models'][llm_order[2]]['point_pct']:.2f}% (608/636)",
+                    f"{p2d_stats['models'][llm_order[3]]['point_pct']:.2f}% (Valid Media)",
+                    f"{p2d_stats['models'][llm_order[4]]['point_pct']:.2f}% (608/636)",
+                    f"{p2d_stats['models'][llm_order[5]]['point_pct']:.2f}%",
+                ],
+                (88, 124), [90, 92, 94, 96, 98, 100],
+            ),
+            (
+                1, 3, "2E. Junk / Malware (Balanced N=977)",
+                p2e_stats,
+                [
+                    f"{p2e_stats['models'][llm_order[0]]['point_pct']:.2f}% (99.90% Acc / 100% oct15)",
+                    f"{p2e_stats['models'][llm_order[1]]['point_pct']:.2f}% (99.90% Acc / 100% oct15)",
+                    f"{p2e_stats['models'][llm_order[2]]['point_pct']:.2f}% (Non-Circ)",
+                    f"{p2e_stats['models'][llm_order[3]]['point_pct']:.2f}%",
+                    f"{p2e_stats['models'][llm_order[4]]['point_pct']:.2f}% (0% Rec.)",
+                    f"{p2e_stats['models'][llm_order[5]]['point_pct']:.2f}%",
+                ],
+                (40, 162), [40, 60, 80, 100],
+            ),
+            (
+                1, 4, "2F. Swarm Liveliness AUROC %",
+                None,
+                [
+                    "96.83% Whse (92.42% Pub)",
+                    "92.42% Pub (86.64% Priors)",
+                    "89.20% Pub (N=757)",
+                    "89.76% Pub (N=757)",
+                    "89.82% Pub (N=757)",
+                    "66.32% Pub (N=757)",
+                ],
+                (55, 152), [60, 70, 80, 90, 100],
+            ),
+        ]
 
-    ax2_r.set_yticks(yc)
-    ax2_r.set_yticklabels([""] * len(models_cost))
-    ax2_r.invert_yaxis()
-    ax2_r.set_xlim(0, 7.05)
-    ax2_r.set_xticks([0, 0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 3.5, 4.0])
-    ax2_r.set_xticklabels(["$0.00", "$0.50", "$1.00", "$1.50", "$2.00", "$2.50", "$3.00", "$3.50", "$4.00"])
-    ax2_r.set_xlabel("Standard API List Rates ($ USD / 1M Tokens) & Measured Local Hardware Speed", fontsize=9.5, color=TEXT_SUB, labelpad=8)
-    ax2_r.set_title(
-        "2. Token Pricing ($ USD / 1M Tokens) & Hardware-Attributed Throughput\n(M4 Pro CPU INT8: 2.44 ms single / 326/s batch-64; M4 Pro MPS: 3,416/s; RTX GPU: 4,795/s)",
-        fontsize=11.2, fontweight="bold", color=TEXT_MAIN, pad=10,
-    )
-    ax2_r.legend(
-        handles=[
-            Patch(facecolor=C_GEMINI, alpha=0.55, hatch="//", edgecolor=C_GEMINI, label="Input Tokens ($ / 1M)"),
-            Patch(facecolor=C_GEMINI, label="Output Tokens ($ / 1M)"),
-        ],
-        loc="upper center", bbox_to_anchor=(0.5, -0.11), ncol=2, facecolor=BG_PANEL, edgecolor=BORDER_COLOR, fontsize=8.8, labelcolor=TEXT_MAIN,
-    )
-    sha_chart2 = save_clean_rgb_png(fig2, assets_dir / "armiger_vs_llms_cost_comparison.png")
+        for row, col, title, p_stat, lbls, xlim, xticks in sub_specs:
+            ax = fig1.add_subplot(gs1[row, col])
+            style_ax(ax)
+            ax.axhspan(-0.5, 1.5, color=BG_HIGHLIGHT, alpha=0.75, zorder=1)
+            if p_stat is not None:
+                s_list = [p_stat["models"][m] for m in llm_order]
+            else:
+                s_list = [p2f_whse_stats["models"][ref_llm]] + [p2f_pub_stats["models"][m] for m in llm_order[1:]]
+            vals = [s["point_pct"] for s in s_list]
+            ax.barh(y_llm, vals, height=0.58, color=colors_llm, edgecolor=edges_llm, linewidth=1.2, zorder=3)
+            draw_ci_whiskers(ax, y_llm, s_list)
+            ax.set_yticks(y_llm)
+            ax.set_yticklabels([""] * len(llm_order))
+            ax.invert_yaxis()
+            ax.set_xlim(*xlim)
+            ax.set_xticks(xticks)
+            ax.set_title(title, fontsize=10.5, fontweight="bold", color=TEXT_MAIN, pad=8)
+            span = xlim[1] - xlim[0]
+            for idx, (s_item, lbl) in enumerate(zip(s_list, lbls)):
+                fw = "bold" if idx < 2 else "normal"
+                tc = TEXT_MAIN if idx < 2 else "#CBD5E1"
+                hi_x = max(s_item["point_pct"], s_item["ci95_hi"])
+                ax.text(hi_x + span * 0.015, idx, lbl, va="center", ha="left", fontsize=7.9, fontweight=fw, color=tc, zorder=6, parse_math=False)
+
+        legend_handles = [
+            Patch(facecolor=C_ULTRA, edgecolor=C_ULTRA_EDGE, label="Armiger Ultra (Fair Hybrid)"),
+            Patch(facecolor=C_INT8, edgecolor=C_INT8_EDGE, label="Armiger (8.3 MB INT8 + Plugins)"),
+            Patch(facecolor=C_GEMINI, label="Google Gemini (gemini-3.8-flash-low, LOTO Non-Circular)"),
+            Patch(facecolor=C_CLAUDE, label="Anthropic Claude (claude-haiku-4-5)"),
+            Patch(facecolor=C_GPT, label="OpenAI GPT (gpt-6-luna, LOTO Non-Circular)"),
+            Patch(facecolor=C_VINCI, label="Local GPU LLM (Vinci-MLE-8B-1.0)"),
+        ]
+        fig1.legend(
+            handles=legend_handles, loc="lower center", bbox_to_anchor=(0.5, 0.015),
+            ncol=6, facecolor=BG_PANEL, edgecolor=BORDER_COLOR, fontsize=9.0, labelcolor=TEXT_MAIN,
+            borderpad=0.6, columnspacing=1.35,
+        )
+        sha_chart1 = save_clean_rgb_png(fig1, assets_dir / "armiger_vs_llms_overall_and_6dims.png")
+
+        # ==========================================================================
+        # RENDER CHART 2: armiger_vs_llms_cost_comparison.png
+        # ==========================================================================
+        fig2, (ax2_l, ax2_r) = plt.subplots(1, 2, figsize=(23.5, 9.2), gridspec_kw={"wspace": 0.14})
+        fig2.subplots_adjust(top=0.80, bottom=0.16, left=0.16, right=0.98)
+        fig2.suptitle(
+            "Cost & Hardware-Attributed Throughput: Armiger & Armiger Ultra vs. Local & Cloud LLMs",
+            fontsize=17.5, fontweight="bold", color=TEXT_MAIN, y=0.96,
+        )
+        fig2.text(
+            0.5, 0.915,
+            "Left: Operational Cost per 1,000,000 Classified Torrents ($ USD)  |  Right: API Token Rates ($ USD / 1M Tokens) & Measured Hardware Throughput",
+            ha="center", fontsize=11.3, style="italic", color=TEXT_SUB, parse_math=False,
+        )
+
+        models_cost = [
+            "Armiger (8.3 MB M4 Pro CPU INT8)",
+            "Armiger Ultra (M4 Pro / RTX GPU FP32)",
+            "Local GPU LLM (Vinci-MLE-8B-1.0)",
+            "Cheap Google (gemini-3.8-flash-low)",
+            "Cheap OpenAI GPT (gpt-6-luna)",
+            "Cheap Anthropic (claude-haiku-4-5)",
+        ]
+        colors_cost = [C_INT8, C_ULTRA, C_VINCI, C_GEMINI, C_GPT, C_CLAUDE]
+        batched_cost = [0.002, 0.004, 1.85, 94.90, 127.30, 712.00]
+        realtime_cost = [0.002, 0.004, 18.00, 147.00, 220.50, 1220.00]
+        cost_labels = [
+            "$0.00 API (~$0.0020 Compute Electricity / 1M Tasks)",
+            "$0.00 API (~$0.0040 Compute Electricity / 1M Tasks)",
+            "$0.00 API ($1.85 Local GPU Power | ~$18.00 Cloud GPU / 1M)",
+            "$94.90 Batched ($147.00 Real-Time 1-by-1)",
+            "$127.30 Batched ($220.50 Real-Time 1-by-1)",
+            "$712.00 Batched ($1,220.00 Real-Time 1-by-1)",
+        ]
+
+        style_ax(ax2_l)
+        yc = np.arange(len(models_cost))
+        ax2_l.axhspan(-0.5, 1.5, color=BG_HIGHLIGHT, alpha=0.75, zorder=1)
+        for idx in range(len(models_cost)):
+            ax2_l.barh(idx, realtime_cost[idx], height=0.56, color=colors_cost[idx], alpha=0.28, edgecolor=colors_cost[idx], linestyle="--", linewidth=1.2, zorder=2)
+            ax2_l.barh(idx, batched_cost[idx], height=0.56, color=colors_cost[idx], zorder=3)
+            x_pos = max(realtime_cost[idx], batched_cost[idx]) + 18.0
+            ax2_l.text(x_pos, idx, cost_labels[idx], va="center", ha="left", fontsize=9.0, fontweight="bold" if idx < 2 else "normal", color=TEXT_MAIN if idx < 2 else "#CBD5E1", parse_math=False)
+
+        ax2_l.set_yticks(yc)
+        ax2_l.set_yticklabels(models_cost, fontsize=10.2, fontweight="bold", color=TEXT_MAIN)
+        ax2_l.invert_yaxis()
+        ax2_l.set_xlim(0, 1980)
+        ax2_l.set_xticks([0, 200, 400, 600, 800, 1000, 1200])
+        ax2_l.set_xticklabels(["$0", "$200", "$400", "$600", "$800", "$1,000", "$1,200"])
+        ax2_l.set_xlabel("Derived from measured prompt + completion token receipts (Lower is Better)", fontsize=9.5, color=TEXT_SUB, labelpad=8)
+        ax2_l.set_title(
+            "1. Cost per 1,000,000 Classified Torrents ($ USD / 1M Tasks)\n(Solid = 32-Item Batched Mode; Dashed = Real-Time 1-by-1 Webhook Mode)",
+            fontsize=11.2, fontweight="bold", color=TEXT_MAIN, pad=10,
+        )
+        ax2_l.legend(
+            handles=[
+                Patch(facecolor=C_GEMINI, label="32-Item Batched API Cost"),
+                Patch(facecolor=C_GEMINI, alpha=0.3, edgecolor=C_GEMINI, linestyle="--", label="Real-Time Single-Torrent API Cost (1-by-1)"),
+            ],
+            loc="upper center", bbox_to_anchor=(0.5, -0.11), ncol=2, facecolor=BG_PANEL, edgecolor=BORDER_COLOR, fontsize=8.8, labelcolor=TEXT_MAIN,
+        )
+
+        style_ax(ax2_r)
+        ax2_r.axhspan(-0.5, 1.5, color=BG_HIGHLIGHT, alpha=0.75, zorder=1)
+        in_rates = [0.0, 0.0, 0.012, 0.10, 0.15, 0.80]
+        out_rates = [0.0, 0.0, 0.12, 0.40, 0.60, 4.00]
+        rate_labels = [
+            "$0.00 API (2.44 ms single / 326 items/s batch-64 M4 Pro CPU)",
+            "$0.00 API (3,416 items/s M4 Pro MPS / 4,795 items/s RTX GPU)",
+            "$0.00 API (~$0.012/1M Pwr Equiv. | 5.4 items/s RTX 4070 TiS)",
+            "$0.10 In | $0.40 Out ($0.13 Blended / 1M Tokens)",
+            "$0.15 In | $0.60 Out ($0.18 Blended / 1M Tokens)",
+            "$0.80 In | $4.00 Out ($1.05 Blended / 1M Tokens)",
+        ]
+        for idx in range(len(models_cost)):
+            ax2_r.barh(idx - 0.14, in_rates[idx], height=0.28, color=colors_cost[idx], alpha=0.55, hatch="//", edgecolor=colors_cost[idx], zorder=3)
+            ax2_r.barh(idx + 0.14, out_rates[idx], height=0.28, color=colors_cost[idx], zorder=3)
+            ax2_r.text(max(in_rates[idx], out_rates[idx]) + 0.08, idx + 0.05, rate_labels[idx], va="center", ha="left", fontsize=9.0, fontweight="bold" if idx < 2 else "normal", color=TEXT_MAIN if idx < 2 else "#CBD5E1", parse_math=False)
+
+        ax2_r.set_yticks(yc)
+        ax2_r.set_yticklabels([""] * len(models_cost))
+        ax2_r.invert_yaxis()
+        ax2_r.set_xlim(0, 7.05)
+        ax2_r.set_xticks([0, 0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 3.5, 4.0])
+        ax2_r.set_xticklabels(["$0.00", "$0.50", "$1.00", "$1.50", "$2.00", "$2.50", "$3.00", "$3.50", "$4.00"])
+        ax2_r.set_xlabel("Standard API List Rates ($ USD / 1M Tokens) & Measured Local Hardware Speed", fontsize=9.5, color=TEXT_SUB, labelpad=8)
+        ax2_r.set_title(
+            "2. Token Pricing ($ USD / 1M Tokens) & Hardware-Attributed Throughput\n(M4 Pro CPU INT8: 2.44 ms single / 326/s batch-64; M4 Pro MPS: 3,416/s; RTX GPU: 4,795/s)",
+            fontsize=11.2, fontweight="bold", color=TEXT_MAIN, pad=10,
+        )
+        ax2_r.legend(
+            handles=[
+                Patch(facecolor=C_GEMINI, alpha=0.55, hatch="//", edgecolor=C_GEMINI, label="Input Tokens ($ / 1M)"),
+                Patch(facecolor=C_GEMINI, label="Output Tokens ($ / 1M)"),
+            ],
+            loc="upper center", bbox_to_anchor=(0.5, -0.11), ncol=2, facecolor=BG_PANEL, edgecolor=BORDER_COLOR, fontsize=8.8, labelcolor=TEXT_MAIN,
+        )
+        sha_chart2 = save_clean_rgb_png(fig2, assets_dir / "armiger_vs_llms_cost_comparison.png")
+    else:
+        for fn in ("armiger_vs_llms_overall_and_6dims.png", "armiger_vs_llms_cost_comparison.png"):
+            verify_png_chunks_clean(fallback_assets / fn)
+        sha_chart1 = hashlib.sha256((fallback_assets / "armiger_vs_llms_overall_and_6dims.png").read_bytes()).hexdigest()
+        sha_chart2 = hashlib.sha256((fallback_assets / "armiger_vs_llms_cost_comparison.png").read_bytes()).hexdigest()
 
     # ==========================================================================
     # COMPUTE SUITE A (CHART 3) PANEL STATISTICS WITH IDENTICAL-N LOCKS
@@ -940,246 +978,6 @@ def build_all_charts_and_manifest(
         metric_type="mean",
     )
 
-    # ==========================================================================
-    # RENDER CHART 3: armiger_vs_torrent_classifiers_6dims.png
-    # ==========================================================================
-    fig3 = plt.figure(figsize=(24.5, 14.8))
-    fig3.suptitle(
-        "Armiger & Armiger Ultra vs. Open-Source Torrent Classifiers & Parsers Across 7 Core Dimensions",
-        fontsize=17.5, fontweight="bold", color=TEXT_MAIN, y=0.975,
-    )
-    fig3.text(
-        0.5, 0.942,
-        "Identical-Denominator Evaluation on oct15_confirmation (N = 2,835 / N = 545 Audio), tc_truespec_2000 (N = 2,000), & Swarm Holdouts (±95% Bootstrap CIs)",
-        ha="center", fontsize=11.3, style="italic", color=TEXT_SUB, parse_math=False,
-    )
-
-    gs3 = GridSpec(
-        7, 4, figure=fig3,
-        height_ratios=[1.0, 1.0, 1.0, 0.42, 1.25, 0.48, 1.25],
-        width_ratios=[1.08, 1.0, 0.22, 1.08],
-        hspace=0.18, wspace=0.15,
-        top=0.89, bottom=0.06, left=0.12, right=0.98,
-    )
-    y10 = np.arange(len(models_10))
-
-    # Panel 1: Category Detection
-    ax1 = fig3.add_subplot(gs3[0:3, 0])
-    style_ax(ax1)
-    ax1.axhspan(-0.5, 1.5, color=BG_HIGHLIGHT, alpha=0.75, zorder=1)
-    cat_11_s = [c3_p1_stats["models"][m] for m in models_10]
-    cat_11cls = [s["point_pct"] for s in cat_11_s]
-    cat_native = [
-        c3_p1_vid_stats["models"][models_10[0]]["point_pct"],
-        c3_p1_vid_stats["models"][models_10[1]]["point_pct"],
-        93.61,
-        93.97,
-        c3_p1_vid_stats["models"][models_10[4]]["point_pct"],
-        c3_p1_vid_stats["models"][models_10[5]]["point_pct"],
-        c3_p1_vid_stats["models"][models_10[6]]["point_pct"],
-        c3_p1_vid_stats["models"][models_10[7]]["point_pct"],
-        c3_p1_vid_stats["models"][models_10[8]]["point_pct"],
-        88.40,
-    ]
-    cat_lbls = [
-        f"{cat_11cls[0]:.2f}% 11-Cls (Video {cat_native[0]:.1f}%)",
-        f"{cat_11cls[1]:.2f}% 11-Cls (95.06% Raw)",
-        f"{cat_11cls[2]:.2f}% 11-Cls (4-Med 93.6%)",
-        f"{cat_11cls[3]:.2f}% 11-Cls (4-Med 94.0%)",
-        f"{cat_11cls[4]:.2f}% 11-Cls (Video {cat_native[4]:.1f}%)",
-        f"{cat_11cls[5]:.2f}% 11-Cls (Video {cat_native[5]:.1f}%)",
-        f"{cat_11cls[6]:.2f}% 11-Cls (Video {cat_native[6]:.1f}%)",
-        f"{cat_11cls[7]:.2f}% 11-Cls (Video {cat_native[7]:.1f}%)",
-        f"{cat_11cls[8]:.2f}% 11-Cls (Video {cat_native[8]:.1f}%)",
-        f"{cat_11cls[9]:.2f}% 11-Cls (Ans. 88.4%)",
-    ]
-    ax1.barh(y10 - 0.16, cat_native, height=0.32, color=colors_10, zorder=3)
-    ax1.barh(y10 + 0.16, cat_11cls, height=0.32, color=colors_10, alpha=0.45, hatch="//", edgecolor=colors_10, zorder=3)
-    draw_ci_whiskers(ax1, y10 + 0.16, cat_11_s)
-    ax1.set_yticks(y10)
-    ax1.set_yticklabels(models_10, fontsize=9.5, fontweight="bold", color=TEXT_MAIN)
-    ax1.invert_yaxis()
-    ax1.set_xlim(25, 148)
-    ax1.set_xticks([30, 40, 50, 60, 70, 80, 90, 100])
-    ax1.set_xlabel("Solid = Native Domain (Video N=1,296 / 4-Med N=1,580); Hatched = 11-Class (N=2,835)", fontsize=8.6, color=TEXT_SUB, labelpad=6)
-    ax1.set_title("1. Category Detection (%)\n(oct15_confirmation, Identical N = 2,835)", fontsize=11, fontweight="bold", color=TEXT_MAIN, pad=8)
-    for idx, (v, lbl) in enumerate(zip(cat_native, cat_lbls)):
-        ax1.text(v + 1.1, idx, lbl, va="center", ha="left", fontsize=8.2, fontweight="bold" if idx < 2 else "normal", color=TEXT_MAIN if idx < 2 else "#CBD5E1")
-
-    # Panel 2: Catalog Matching Rate
-    ax2 = fig3.add_subplot(gs3[0:3, 1])
-    style_ax(ax2)
-    ax2.axhspan(-0.5, 1.5, color=BG_HIGHLIGHT, alpha=0.75, zorder=1)
-    p2_s = [c3_p2_stats["models"][m] for m in models_10]
-    cat_match = [s["point_pct"] for s in p2_s]
-    ax2.barh(y10, cat_match, height=0.58, color=colors_10, zorder=3)
-    draw_ci_whiskers(ax2, y10, p2_s)
-    ax2.set_yticks(y10)
-    ax2.set_yticklabels([""] * 10)
-    ax2.invert_yaxis()
-    ax2.set_xlim(35, 128)
-    ax2.set_xticks([40, 50, 60, 70, 80, 90, 100])
-    ax2.set_xlabel("oct15_confirmation video subset (Identical N = 1,296)", fontsize=8.8, color=TEXT_SUB, labelpad=6)
-    ax2.set_title("2. Catalog Matching Rate (%)\n(Clean Title + Correct Movie/TV Routing, N = 1,296)", fontsize=11, fontweight="bold", color=TEXT_MAIN, pad=8)
-    for idx, s_item in enumerate(p2_s):
-        v = s_item["point_pct"]
-        lbl = f"{v:.2f}% (95.83% Raw)" if idx == 1 else f"{v:.2f}%"
-        ax2.text(max(v, s_item["ci95_hi"]) + 0.9, idx, lbl, va="center", ha="left", fontsize=8.4, fontweight="bold" if idx < 2 else "normal", color=TEXT_MAIN if idx < 2 else "#CBD5E1")
-
-    # Panel 3: Audio Language Detection (Strict E-vs-F N=545)
-    ax3 = fig3.add_subplot(gs3[0:3, 3])
-    style_ax(ax3)
-    ax3.axhspan(-0.5, 1.5, color=BG_HIGHLIGHT, alpha=0.75, zorder=1)
-    for idx, m in enumerate(models_10):
-        if m in c3_p3_stats["models"]:
-            s_item = c3_p3_stats["models"][m]
-            v = s_item["point_pct"]
-            ax3.barh(idx, v, height=0.58, color=colors_10[idx], zorder=3)
-            draw_ci_whiskers(ax3, np.array([idx]), [s_item])
-            lbl = f"{v:.2f}% (96.88% Raw)" if idx == 1 else f"{v:.2f}%"
-            ax3.text(max(v, s_item["ci95_hi"]) + 0.25, idx, lbl, va="center", ha="left", fontsize=8.4, fontweight="bold" if idx < 2 else "normal", color=TEXT_MAIN if idx < 2 else "#CBD5E1")
-        else:
-            ax3.barh(idx, 86.2, height=0.55, color="#21262D", edgecolor=TEXT_MUTED, hatch="//", zorder=2)
-            ax3.text(84.3, idx, "N/A (No Audio Language Head)", va="center", ha="left", fontsize=8.1, style="italic", color=TEXT_SUB)
-    ax3.set_yticks(y10)
-    ax3.set_yticklabels([""] * 10)
-    ax3.invert_yaxis()
-    ax3.set_xlim(84, 106.5)
-    ax3.set_xticks([86, 88, 90, 92, 94, 96, 98, 100])
-    ax3.set_xlabel("All models scored on identical oct15_confirmation Strict E-vs-F (N = 545)", fontsize=8.6, color=TEXT_SUB, labelpad=6)
-    ax3.set_title("3. Audio Language Detection (%)\n(Strict English vs. Foreign Audio, Identical N = 545)", fontsize=11, fontweight="bold", color=TEXT_MAIN, pad=8)
-
-    # Panel 4: Anime & Anime Dub Detection
-    ax4 = fig3.add_subplot(gs3[4:7, 0])
-    style_ax(ax4)
-    ax4.axhspan(-0.5, 1.5, color=BG_HIGHLIGHT, alpha=0.75, zorder=1)
-    for idx, m in enumerate(models_10):
-        if m in c3_p4_oct_stats["models"]:
-            s_item = c3_p4_oct_stats["models"][m]
-            v = s_item["point_pct"]
-            ax4.barh(idx, v, height=0.58, color=colors_10[idx], zorder=3)
-            draw_ci_whiskers(ax4, np.array([idx]), [s_item])
-            ax4.text(max(v, s_item["ci95_hi"]) + 0.6, idx, f"{v:.2f}% (95.8% tc2000)", va="center", ha="left", fontsize=8.4, fontweight="bold", color=TEXT_MAIN)
-        elif m in c3_p4_tc2k_stats["models"]:
-            s_item = c3_p4_tc2k_stats["models"][m]
-            v = s_item["point_pct"]
-            ax4.barh(idx, v, height=0.58, color=colors_10[idx], zorder=3)
-            draw_ci_whiskers(ax4, np.array([idx]), [s_item])
-            ax4.text(max(v, s_item["ci95_hi"]) + 0.6, idx, f"{v:.2f}%", va="center", ha="left", fontsize=8.4, color="#CBD5E1")
-        else:
-            ax4.barh(idx, 49.0, height=0.55, color="#21262D", edgecolor=TEXT_MUTED, hatch="//", zorder=2)
-            ax4.text(46.2, idx, "N/A (No Anime / Dub Head)", va="center", ha="left", fontsize=8.1, style="italic", color=TEXT_SUB)
-    ax4.set_yticks(y10)
-    ax4.set_yticklabels(models_10, fontsize=9.5, fontweight="bold", color=TEXT_MAIN)
-    ax4.invert_yaxis()
-    ax4.set_xlim(45, 122)
-    ax4.set_xticks([50, 60, 70, 80, 90, 100])
-    ax4.set_xlabel("99.61% on oct15_confirmation (505/507); 95.80% on tc_truespec_2000 (N=2,000)", fontsize=8.6, color=TEXT_SUB, labelpad=6)
-    ax4.set_title("4. Anime & Anime Dub Detection (%)\n(oct15_confirmation N = 507 & tc_truespec_2000 N = 2,000)", fontsize=11, fontweight="bold", color=TEXT_MAIN, pad=8)
-
-    # Panel 5: Adult / NSFW Detection
-    ax5 = fig3.add_subplot(gs3[4:7, 1])
-    style_ax(ax5)
-    ax5.axhspan(-0.5, 1.5, color=BG_HIGHLIGHT, alpha=0.75, zorder=1)
-    for idx, m in enumerate(models_10):
-        if m in c3_p5_stats["models"]:
-            s_item = c3_p5_stats["models"][m]
-            v = s_item["point_pct"]
-            ax5.barh(idx, v, height=0.58, color=colors_10[idx], zorder=3)
-            draw_ci_whiskers(ax5, np.array([idx]), [s_item])
-            lbl = f"{v:.2f}% (93.7% Ans.)" if idx == 9 else f"{v:.2f}%"
-            ax5.text(max(v, s_item["ci95_hi"]) + 0.5, idx, lbl, va="center", ha="left", fontsize=8.4, fontweight="bold" if idx < 2 else "normal", color=TEXT_MAIN if idx < 2 else "#CBD5E1")
-        else:
-            ax5.barh(idx, 68.5, height=0.55, color="#21262D", edgecolor=TEXT_MUTED, hatch="//", zorder=2)
-            ax5.text(65.8, idx, "N/A (No Adult / NSFW Head)", va="center", ha="left", fontsize=8.1, style="italic", color=TEXT_SUB)
-    ax5.set_yticks(y10)
-    ax5.set_yticklabels([""] * 10)
-    ax5.invert_yaxis()
-    ax5.set_xlim(65, 114)
-    ax5.set_xticks([70, 75, 80, 85, 90, 95, 100])
-    ax5.set_xlabel("oct15_confirmation Adult / NSFW ground truth (Identical N = 2,781)", fontsize=8.6, color=TEXT_SUB, labelpad=6)
-    ax5.set_title("5. Adult / NSFW Detection (%)\n(oct15_confirmation, Identical N = 2,781)", fontsize=11, fontweight="bold", color=TEXT_MAIN, pad=8)
-
-    # Panel 6A: Junk / Malware Detection
-    ax6a = fig3.add_subplot(gs3[4, 3])
-    style_ax(ax6a)
-    ax6a.axhspan(-0.5, 1.5, color=BG_HIGHLIGHT, alpha=0.75, zorder=1)
-    m6a = ["Armiger Ultra", "Armiger INT8", "Bitmagnet", "RTN Filter", "Other 6 Tools"]
-    v6a = [100.00, 100.00, 54.60, 50.38, None]
-    c6a = [C_ULTRA, C_INT8, "#94A3B8", "#F59E0B", "#21262D"]
-    l6a = [
-        "100.00% (2,170/2,170 oct15)",
-        "100.00% (99.90% Acc beyond N=977)",
-        "54.60% Bal (0% Recall on oct15)",
-        "50.38% Bal (0% Recall on oct15)",
-        "N/A (No Junk Head)",
-    ]
-    for idx, (v, lbl) in enumerate(zip(v6a, l6a)):
-        if v is not None:
-            ax6a.barh(idx, v, height=0.6, color=c6a[idx], zorder=3)
-            ax6a.text(v + 0.8, idx, lbl, va="center", ha="left", fontsize=8.2, fontweight="bold" if idx < 2 else "normal", color=TEXT_MAIN if idx < 2 else "#CBD5E1")
-        else:
-            ax6a.barh(idx, 49.0, height=0.55, color="#21262D", edgecolor=TEXT_MUTED, hatch="//", zorder=2)
-            ax6a.text(46.2, idx, lbl, va="center", ha="left", fontsize=8.1, style="italic", color=TEXT_SUB)
-    ax6a.set_yticks(np.arange(len(m6a)))
-    ax6a.set_yticklabels(m6a, fontsize=9, fontweight="bold", color=TEXT_MAIN)
-    ax6a.invert_yaxis()
-    ax6a.set_xlim(45, 144)
-    ax6a.set_xticks([50, 60, 70, 80, 90, 100])
-    ax6a.set_title("6A. Junk / Malware Detection (oct15 N=2,170 & beyond N=977)", fontsize=10, fontweight="bold", color=TEXT_MAIN, pad=7)
-
-    # Panel 6B: Swarm Liveliness AUROC
-    ax6b = fig3.add_subplot(gs3[6, 3])
-    style_ax(ax6b)
-    ax6b.axhspan(-0.5, 1.5, color=BG_HIGHLIGHT, alpha=0.75, zorder=1)
-    m6b = ["Armiger Ultra", "Armiger Priors", "Seeder Count", "All 8 Tools"]
-    s6b = [
-        p2f_whse_stats["models"]["Armiger Ultra (Fair Hybrid)"],
-        p2f_whse_stats["models"]["Armiger 4-Way Priors"],
-        p2f_pub_stats["models"]["Armiger Ultra (Fair Hybrid)"],  # replaced below for seeder
-        None,
-    ]
-    v6b = [96.83, 86.64, 85.17, None]
-    c6b = [C_ULTRA, C_INT8, "#64748B", "#21262D"]
-    l6b = [
-        "96.83% Whse (92.42% Pub N=757)",
-        "86.64% AUROC (4-Way Priors)",
-        "85.17% Public / 53.02% Whse",
-        "N/A (No Swarm Head)",
-    ]
-    for idx, (v, lbl) in enumerate(zip(v6b, l6b)):
-        if v is not None:
-            ax6b.barh(idx, v, height=0.6, color=c6b[idx], zorder=3)
-            ax6b.text(v + 0.8, idx, lbl, va="center", ha="left", fontsize=8.2, fontweight="bold" if idx < 2 else "normal", color=TEXT_MAIN if idx < 2 else "#CBD5E1")
-        else:
-            ax6b.barh(idx, 52.5, height=0.55, color="#21262D", edgecolor=TEXT_MUTED, hatch="//", zorder=2)
-            ax6b.text(49.5, idx, lbl, va="center", ha="left", fontsize=8.1, style="italic", color=TEXT_SUB)
-    ax6b.set_yticks(np.arange(len(m6b)))
-    ax6b.set_yticklabels(m6b, fontsize=9, fontweight="bold", color=TEXT_MAIN)
-    ax6b.invert_yaxis()
-    ax6b.set_xlim(48, 144)
-    ax6b.set_xticks([50, 60, 70, 80, 90, 100])
-    ax6b.set_xlabel("Public Tracker (N=757: 92.42%, N=493: 93.03%) & Warehouse (N=10,278: 96.83%)", fontsize=8.2, color=TEXT_SUB, labelpad=6)
-    ax6b.set_title("6B. Swarm Liveliness AUROC % (swarm_adapter.pt)", fontsize=10, fontweight="bold", color=TEXT_MAIN, pad=7)
-
-    sha_chart3 = save_clean_rgb_png(fig3, assets_dir / "armiger_vs_torrent_classifiers_6dims.png")
-
-    # ==========================================================================
-    # COMPUTE & RENDER CHART 4: armiger_categorical_breakdown.png
-    # ==========================================================================
-    fig4, (ax4_l, ax4_r) = plt.subplots(1, 2, figsize=(22.5, 11.2), gridspec_kw={"wspace": 0.22})
-    fig4.subplots_adjust(top=0.84, bottom=0.16, left=0.11, right=0.98)
-    fig4.suptitle(
-        "Categorical Accuracy Breakdown Across All 10 Media & Software Categories",
-        fontsize=17, fontweight="bold", color=TEXT_MAIN, y=0.965,
-    )
-    fig4.text(
-        0.5, 0.925,
-        "Left: oct15_confirmation (Identical N = 2,835) vs. Open-Source Classifiers  |  Right: beyond_confirmation (Identical N = 1,025, LOTO Non-Circular)",
-        ha="center", fontsize=11.2, style="italic", color=TEXT_SUB, parse_math=False,
-    )
-
-    # Order for Left Panel (sorted by Armiger Ultra accuracy on oct15_confirmation)
     oct_cat_spec = [
         (6, "Audiobook"),
         (2, "Adult / XXX"),
@@ -1215,27 +1013,6 @@ def build_all_charts_and_manifest(
             "bitmagnet_pct": round(b_v, 2),
         }
 
-    style_ax(ax4_l)
-    y_c = np.arange(len(cats_oct_labels))
-    h = 0.19
-    ax4_l.barh(y_c - 1.5 * h, oct_ultra, height=h, color=C_ULTRA, label="Armiger Ultra Fair Hybrid (95.49% Overall)", zorder=3)
-    ax4_l.barh(y_c - 0.5 * h, oct_int8, height=h, color=C_INT8, label="Armiger INT8 + ZeroCue (95.49% Overall, 95.06% Raw)", zorder=3)
-    ax4_l.barh(y_c + 0.5 * h, oct_mimmo, height=h, color="#818CF8", label="MIMMO BERT 360M (72.24% Overall on N=2,835)", zorder=3)
-    ax4_l.barh(y_c + 1.5 * h, oct_bit, height=h, color="#64748B", label="Bitmagnet Built-In (35.17% Overall on N=2,835)", zorder=3)
-    ax4_l.set_yticks(y_c)
-    ax4_l.set_yticklabels(cats_oct_labels, fontsize=10, fontweight="bold", color=TEXT_MAIN)
-    ax4_l.set_ylim(len(cats_oct_labels) - 0.35, -0.6)
-    ax4_l.set_xlim(0, 128)
-    ax4_l.set_xticks([0, 20, 40, 60, 80, 100])
-    ax4_l.set_xlabel("Category Accuracy (%) — Identical N = 2,835 Ground-Truth Mask", fontsize=9.8, color=TEXT_SUB, labelpad=8)
-    ax4_l.set_title("1. Per-Category Accuracy vs. Open-Source Classifiers\n(oct15_confirmation, Identical N = 2,835)", fontsize=11.5, fontweight="bold", color=TEXT_MAIN, pad=10)
-    for idx in range(len(cats_oct_labels)):
-        ax4_l.text(oct_ultra[idx] + 1.0, idx - 1.1 * h, f"{oct_ultra[idx]:.1f}%", va="center", ha="left", fontsize=8.0, fontweight="bold", color=C_ULTRA_EDGE)
-        ax4_l.text(oct_mimmo[idx] + 1.0, idx + 0.5 * h, f"{oct_mimmo[idx]:.1f}%", va="center", ha="left", fontsize=7.6, color="#CBD5E1")
-        ax4_l.text(oct_bit[idx] + 1.0, idx + 1.5 * h, f"{oct_bit[idx]:.1f}%", va="center", ha="left", fontsize=7.6, color=TEXT_SUB)
-    ax4_l.legend(loc="upper center", bbox_to_anchor=(0.5, -0.09), ncol=2, facecolor=BG_PANEL, edgecolor=BORDER_COLOR, fontsize=8.6, labelcolor=TEXT_MAIN)
-
-    # Order for Right Panel (beyond_confirmation N=1,025 Non-Circular LOTO)
     y_bc_cat11 = d["beyond_cat11_y_true"]
     bc_cat_spec = [
         (6, "Audiobook"),
@@ -1271,26 +1048,363 @@ def build_all_charts_and_manifest(
             "gpt_noncirc_pct": round(gp_v, 2),
             "gemini_noncirc_pct": round(gm_v, 2),
         }
+    if render_pngs:
+        # ==========================================================================
+        # RENDER CHART 3: armiger_vs_torrent_classifiers_6dims.png
+        # ==========================================================================
+        fig3 = plt.figure(figsize=(24.5, 14.8))
+        fig3.suptitle(
+            "Armiger & Armiger Ultra vs. Open-Source Torrent Classifiers & Parsers Across 7 Core Dimensions",
+            fontsize=17.5, fontweight="bold", color=TEXT_MAIN, y=0.975,
+        )
+        fig3.text(
+            0.5, 0.942,
+            "Identical-Denominator Evaluation on oct15_confirmation (N = 2,835 / N = 545 Audio), tc_truespec_2000 (N = 2,000), & Swarm Holdouts (±95% Bootstrap CIs)",
+            ha="center", fontsize=11.3, style="italic", color=TEXT_SUB, parse_math=False,
+        )
 
-    style_ax(ax4_r)
-    ax4_r.barh(y_c - 1.5 * h, bc_ultra, height=h, color=C_ULTRA, label="Armiger Ultra Fair Hybrid (95.12% Non-Circular)", zorder=3)
-    ax4_r.barh(y_c - 0.5 * h, bc_int8, height=h, color=C_INT8, label="Armiger INT8 + ZeroCue (95.12% Non-Circular, 92.88% Raw)", zorder=3)
-    ax4_r.barh(y_c + 0.5 * h, bc_gpt, height=h, color=C_GPT, label="OpenAI GPT gpt-6-luna (95.12% Non-Circ | 96.59% Circ)", zorder=3)
-    ax4_r.barh(y_c + 1.5 * h, bc_gem, height=h, color=C_GEMINI, label="Google Gemini 3.8-flash-low (93.80% Non-Circ | 95.61% Circ)", zorder=3)
-    ax4_r.set_yticks(y_c)
-    ax4_r.set_yticklabels(cats_bc_labels, fontsize=10, fontweight="bold", color=TEXT_MAIN)
-    ax4_r.set_ylim(len(cats_bc_labels) - 0.35, -0.6)
-    ax4_r.set_xlim(0, 128)
-    ax4_r.set_xticks([0, 20, 40, 60, 80, 100])
-    ax4_r.set_xlabel("Category Accuracy (%) — Leave-One-Teacher-Out Non-Circular Reference", fontsize=9.8, color=TEXT_SUB, labelpad=8)
-    ax4_r.set_title("2. Per-Category Accuracy vs. Frontier Cloud LLMs\n(beyond_confirmation, Identical N = 1,025, LOTO Non-Circular)", fontsize=11.5, fontweight="bold", color=TEXT_MAIN, pad=10)
-    for idx in range(len(cats_bc_labels)):
-        ax4_r.text(bc_ultra[idx] + 1.0, idx - 1.1 * h, f"{bc_ultra[idx]:.1f}%", va="center", ha="left", fontsize=8.0, fontweight="bold", color=C_ULTRA_EDGE)
-        ax4_r.text(bc_gpt[idx] + 1.0, idx + 0.5 * h, f"{bc_gpt[idx]:.1f}%", va="center", ha="left", fontsize=7.6, color=C_GPT)
-        ax4_r.text(bc_gem[idx] + 1.0, idx + 1.5 * h, f"{bc_gem[idx]:.1f}%", va="center", ha="left", fontsize=7.6, color=C_GEMINI)
-    ax4_r.legend(loc="upper center", bbox_to_anchor=(0.5, -0.09), ncol=2, facecolor=BG_PANEL, edgecolor=BORDER_COLOR, fontsize=8.6, labelcolor=TEXT_MAIN)
+        gs3 = GridSpec(
+            7, 4, figure=fig3,
+            height_ratios=[1.0, 1.0, 1.0, 0.42, 1.25, 0.48, 1.25],
+            width_ratios=[1.08, 1.0, 0.22, 1.08],
+            hspace=0.18, wspace=0.15,
+            top=0.89, bottom=0.06, left=0.12, right=0.98,
+        )
+        y10 = np.arange(len(models_10))
 
-    sha_chart4 = save_clean_rgb_png(fig4, assets_dir / "armiger_categorical_breakdown.png")
+        # Panel 1: Category Detection
+        ax1 = fig3.add_subplot(gs3[0:3, 0])
+        style_ax(ax1)
+        ax1.axhspan(-0.5, 1.5, color=BG_HIGHLIGHT, alpha=0.75, zorder=1)
+        cat_11_s = [c3_p1_stats["models"][m] for m in models_10]
+        cat_11cls = [s["point_pct"] for s in cat_11_s]
+        cat_native = [
+            c3_p1_vid_stats["models"][models_10[0]]["point_pct"],
+            c3_p1_vid_stats["models"][models_10[1]]["point_pct"],
+            93.61,
+            93.97,
+            c3_p1_vid_stats["models"][models_10[4]]["point_pct"],
+            c3_p1_vid_stats["models"][models_10[5]]["point_pct"],
+            c3_p1_vid_stats["models"][models_10[6]]["point_pct"],
+            c3_p1_vid_stats["models"][models_10[7]]["point_pct"],
+            c3_p1_vid_stats["models"][models_10[8]]["point_pct"],
+            88.40,
+        ]
+        cat_lbls = [
+            f"{cat_11cls[0]:.2f}% 11-Cls (Video {cat_native[0]:.1f}%)",
+            f"{cat_11cls[1]:.2f}% 11-Cls (95.06% Raw)",
+            f"{cat_11cls[2]:.2f}% 11-Cls (4-Med 93.6%)",
+            f"{cat_11cls[3]:.2f}% 11-Cls (4-Med 94.0%)",
+            f"{cat_11cls[4]:.2f}% 11-Cls (Video {cat_native[4]:.1f}%)",
+            f"{cat_11cls[5]:.2f}% 11-Cls (Video {cat_native[5]:.1f}%)",
+            f"{cat_11cls[6]:.2f}% 11-Cls (Video {cat_native[6]:.1f}%)",
+            f"{cat_11cls[7]:.2f}% 11-Cls (Video {cat_native[7]:.1f}%)",
+            f"{cat_11cls[8]:.2f}% 11-Cls (Video {cat_native[8]:.1f}%)",
+            f"{cat_11cls[9]:.2f}% 11-Cls (Ans. 88.4%)",
+        ]
+        ax1.barh(y10 - 0.16, cat_native, height=0.32, color=colors_10, zorder=3)
+        ax1.barh(y10 + 0.16, cat_11cls, height=0.32, color=colors_10, alpha=0.45, hatch="//", edgecolor=colors_10, zorder=3)
+        draw_ci_whiskers(ax1, y10 + 0.16, cat_11_s)
+        ax1.set_yticks(y10)
+        ax1.set_yticklabels(models_10, fontsize=9.5, fontweight="bold", color=TEXT_MAIN)
+        ax1.invert_yaxis()
+        ax1.set_xlim(25, 148)
+        ax1.set_xticks([30, 40, 50, 60, 70, 80, 90, 100])
+        ax1.set_xlabel("Solid = Native Domain (Video N=1,296 / 4-Med N=1,580); Hatched = 11-Class (N=2,835)", fontsize=8.6, color=TEXT_SUB, labelpad=6)
+        ax1.set_title("1. Category Detection (%)\n(oct15_confirmation, Identical N = 2,835)", fontsize=11, fontweight="bold", color=TEXT_MAIN, pad=8)
+        for idx, (v, lbl) in enumerate(zip(cat_native, cat_lbls)):
+            ax1.text(v + 1.1, idx, lbl, va="center", ha="left", fontsize=8.2, fontweight="bold" if idx < 2 else "normal", color=TEXT_MAIN if idx < 2 else "#CBD5E1")
+
+        # Panel 2: Catalog Matching Rate
+        ax2 = fig3.add_subplot(gs3[0:3, 1])
+        style_ax(ax2)
+        ax2.axhspan(-0.5, 1.5, color=BG_HIGHLIGHT, alpha=0.75, zorder=1)
+        p2_s = [c3_p2_stats["models"][m] for m in models_10]
+        cat_match = [s["point_pct"] for s in p2_s]
+        ax2.barh(y10, cat_match, height=0.58, color=colors_10, zorder=3)
+        draw_ci_whiskers(ax2, y10, p2_s)
+        ax2.set_yticks(y10)
+        ax2.set_yticklabels([""] * 10)
+        ax2.invert_yaxis()
+        ax2.set_xlim(35, 128)
+        ax2.set_xticks([40, 50, 60, 70, 80, 90, 100])
+        ax2.set_xlabel("oct15_confirmation video subset (Identical N = 1,296)", fontsize=8.8, color=TEXT_SUB, labelpad=6)
+        ax2.set_title("2. Catalog Matching Rate (%)\n(Clean Title + Correct Movie/TV Routing, N = 1,296)", fontsize=11, fontweight="bold", color=TEXT_MAIN, pad=8)
+        for idx, s_item in enumerate(p2_s):
+            v = s_item["point_pct"]
+            lbl = f"{v:.2f}% (95.83% Raw)" if idx == 1 else f"{v:.2f}%"
+            ax2.text(max(v, s_item["ci95_hi"]) + 0.9, idx, lbl, va="center", ha="left", fontsize=8.4, fontweight="bold" if idx < 2 else "normal", color=TEXT_MAIN if idx < 2 else "#CBD5E1")
+
+        # Panel 3: Audio Language Detection (Strict E-vs-F N=545)
+        ax3 = fig3.add_subplot(gs3[0:3, 3])
+        style_ax(ax3)
+        ax3.axhspan(-0.5, 1.5, color=BG_HIGHLIGHT, alpha=0.75, zorder=1)
+        for idx, m in enumerate(models_10):
+            if m in c3_p3_stats["models"]:
+                s_item = c3_p3_stats["models"][m]
+                v = s_item["point_pct"]
+                ax3.barh(idx, v, height=0.58, color=colors_10[idx], zorder=3)
+                draw_ci_whiskers(ax3, np.array([idx]), [s_item])
+                lbl = f"{v:.2f}% (96.88% Raw)" if idx == 1 else f"{v:.2f}%"
+                ax3.text(max(v, s_item["ci95_hi"]) + 0.25, idx, lbl, va="center", ha="left", fontsize=8.4, fontweight="bold" if idx < 2 else "normal", color=TEXT_MAIN if idx < 2 else "#CBD5E1")
+            else:
+                ax3.barh(idx, 86.2, height=0.55, color="#21262D", edgecolor=TEXT_MUTED, hatch="//", zorder=2)
+                ax3.text(84.3, idx, "N/A (No Audio Language Head)", va="center", ha="left", fontsize=8.1, style="italic", color=TEXT_SUB)
+        ax3.set_yticks(y10)
+        ax3.set_yticklabels([""] * 10)
+        ax3.invert_yaxis()
+        ax3.set_xlim(84, 106.5)
+        ax3.set_xticks([86, 88, 90, 92, 94, 96, 98, 100])
+        ax3.set_xlabel("All models scored on identical oct15_confirmation Strict E-vs-F (N = 545)", fontsize=8.6, color=TEXT_SUB, labelpad=6)
+        ax3.set_title("3. Audio Language Detection (%)\n(Strict English vs. Foreign Audio, Identical N = 545)", fontsize=11, fontweight="bold", color=TEXT_MAIN, pad=8)
+
+        # Panel 4: Anime & Anime Dub Detection
+        ax4 = fig3.add_subplot(gs3[4:7, 0])
+        style_ax(ax4)
+        ax4.axhspan(-0.5, 1.5, color=BG_HIGHLIGHT, alpha=0.75, zorder=1)
+        for idx, m in enumerate(models_10):
+            if m in c3_p4_oct_stats["models"]:
+                s_item = c3_p4_oct_stats["models"][m]
+                v = s_item["point_pct"]
+                ax4.barh(idx, v, height=0.58, color=colors_10[idx], zorder=3)
+                draw_ci_whiskers(ax4, np.array([idx]), [s_item])
+                ax4.text(max(v, s_item["ci95_hi"]) + 0.6, idx, f"{v:.2f}% (95.8% tc2000)", va="center", ha="left", fontsize=8.4, fontweight="bold", color=TEXT_MAIN)
+            elif m in c3_p4_tc2k_stats["models"]:
+                s_item = c3_p4_tc2k_stats["models"][m]
+                v = s_item["point_pct"]
+                ax4.barh(idx, v, height=0.58, color=colors_10[idx], zorder=3)
+                draw_ci_whiskers(ax4, np.array([idx]), [s_item])
+                ax4.text(max(v, s_item["ci95_hi"]) + 0.6, idx, f"{v:.2f}%", va="center", ha="left", fontsize=8.4, color="#CBD5E1")
+            else:
+                ax4.barh(idx, 49.0, height=0.55, color="#21262D", edgecolor=TEXT_MUTED, hatch="//", zorder=2)
+                ax4.text(46.2, idx, "N/A (No Anime / Dub Head)", va="center", ha="left", fontsize=8.1, style="italic", color=TEXT_SUB)
+        ax4.set_yticks(y10)
+        ax4.set_yticklabels(models_10, fontsize=9.5, fontweight="bold", color=TEXT_MAIN)
+        ax4.invert_yaxis()
+        ax4.set_xlim(45, 122)
+        ax4.set_xticks([50, 60, 70, 80, 90, 100])
+        ax4.set_xlabel("99.61% on oct15_confirmation (505/507); 95.80% on tc_truespec_2000 (N=2,000)", fontsize=8.6, color=TEXT_SUB, labelpad=6)
+        ax4.set_title("4. Anime & Anime Dub Detection (%)\n(oct15_confirmation N = 507 & tc_truespec_2000 N = 2,000)", fontsize=11, fontweight="bold", color=TEXT_MAIN, pad=8)
+
+        # Panel 5: Adult / NSFW Detection
+        ax5 = fig3.add_subplot(gs3[4:7, 1])
+        style_ax(ax5)
+        ax5.axhspan(-0.5, 1.5, color=BG_HIGHLIGHT, alpha=0.75, zorder=1)
+        for idx, m in enumerate(models_10):
+            if m in c3_p5_stats["models"]:
+                s_item = c3_p5_stats["models"][m]
+                v = s_item["point_pct"]
+                ax5.barh(idx, v, height=0.58, color=colors_10[idx], zorder=3)
+                draw_ci_whiskers(ax5, np.array([idx]), [s_item])
+                lbl = f"{v:.2f}% (93.7% Ans.)" if idx == 9 else f"{v:.2f}%"
+                ax5.text(max(v, s_item["ci95_hi"]) + 0.5, idx, lbl, va="center", ha="left", fontsize=8.4, fontweight="bold" if idx < 2 else "normal", color=TEXT_MAIN if idx < 2 else "#CBD5E1")
+            else:
+                ax5.barh(idx, 68.5, height=0.55, color="#21262D", edgecolor=TEXT_MUTED, hatch="//", zorder=2)
+                ax5.text(65.8, idx, "N/A (No Adult / NSFW Head)", va="center", ha="left", fontsize=8.1, style="italic", color=TEXT_SUB)
+        ax5.set_yticks(y10)
+        ax5.set_yticklabels([""] * 10)
+        ax5.invert_yaxis()
+        ax5.set_xlim(65, 114)
+        ax5.set_xticks([70, 75, 80, 85, 90, 95, 100])
+        ax5.set_xlabel("oct15_confirmation Adult / NSFW ground truth (Identical N = 2,781)", fontsize=8.6, color=TEXT_SUB, labelpad=6)
+        ax5.set_title("5. Adult / NSFW Detection (%)\n(oct15_confirmation, Identical N = 2,781)", fontsize=11, fontweight="bold", color=TEXT_MAIN, pad=8)
+
+        # Panel 6A: Junk / Malware Detection
+        ax6a = fig3.add_subplot(gs3[4, 3])
+        style_ax(ax6a)
+        ax6a.axhspan(-0.5, 1.5, color=BG_HIGHLIGHT, alpha=0.75, zorder=1)
+        m6a = ["Armiger Ultra", "Armiger INT8", "Bitmagnet", "RTN Filter", "Other 6 Tools"]
+        v6a = [100.00, 100.00, 54.60, 50.38, None]
+        c6a = [C_ULTRA, C_INT8, "#94A3B8", "#F59E0B", "#21262D"]
+        l6a = [
+            "100.00% (2,170/2,170 oct15)",
+            "100.00% (99.90% Acc beyond N=977)",
+            "54.60% Bal (0% Recall on oct15)",
+            "50.38% Bal (0% Recall on oct15)",
+            "N/A (No Junk Head)",
+        ]
+        for idx, (v, lbl) in enumerate(zip(v6a, l6a)):
+            if v is not None:
+                ax6a.barh(idx, v, height=0.6, color=c6a[idx], zorder=3)
+                ax6a.text(v + 0.8, idx, lbl, va="center", ha="left", fontsize=8.2, fontweight="bold" if idx < 2 else "normal", color=TEXT_MAIN if idx < 2 else "#CBD5E1")
+            else:
+                ax6a.barh(idx, 49.0, height=0.55, color="#21262D", edgecolor=TEXT_MUTED, hatch="//", zorder=2)
+                ax6a.text(46.2, idx, lbl, va="center", ha="left", fontsize=8.1, style="italic", color=TEXT_SUB)
+        ax6a.set_yticks(np.arange(len(m6a)))
+        ax6a.set_yticklabels(m6a, fontsize=9, fontweight="bold", color=TEXT_MAIN)
+        ax6a.invert_yaxis()
+        ax6a.set_xlim(45, 144)
+        ax6a.set_xticks([50, 60, 70, 80, 90, 100])
+        ax6a.set_title("6A. Junk / Malware Detection (oct15 N=2,170 & beyond N=977)", fontsize=10, fontweight="bold", color=TEXT_MAIN, pad=7)
+
+        # Panel 6B: Swarm Liveliness AUROC
+        ax6b = fig3.add_subplot(gs3[6, 3])
+        style_ax(ax6b)
+        ax6b.axhspan(-0.5, 1.5, color=BG_HIGHLIGHT, alpha=0.75, zorder=1)
+        m6b = ["Armiger Ultra", "Armiger Priors", "Seeder Count", "All 8 Tools"]
+        s6b = [
+            p2f_whse_stats["models"]["Armiger Ultra (Fair Hybrid)"],
+            p2f_whse_stats["models"]["Armiger 4-Way Priors"],
+            p2f_pub_stats["models"]["Armiger Ultra (Fair Hybrid)"],  # replaced below for seeder
+            None,
+        ]
+        v6b = [96.83, 86.64, 85.17, None]
+        c6b = [C_ULTRA, C_INT8, "#64748B", "#21262D"]
+        l6b = [
+            "96.83% Whse (92.42% Pub N=757)",
+            "86.64% AUROC (4-Way Priors)",
+            "85.17% Public / 53.02% Whse",
+            "N/A (No Swarm Head)",
+        ]
+        for idx, (v, lbl) in enumerate(zip(v6b, l6b)):
+            if v is not None:
+                ax6b.barh(idx, v, height=0.6, color=c6b[idx], zorder=3)
+                ax6b.text(v + 0.8, idx, lbl, va="center", ha="left", fontsize=8.2, fontweight="bold" if idx < 2 else "normal", color=TEXT_MAIN if idx < 2 else "#CBD5E1")
+            else:
+                ax6b.barh(idx, 52.5, height=0.55, color="#21262D", edgecolor=TEXT_MUTED, hatch="//", zorder=2)
+                ax6b.text(49.5, idx, lbl, va="center", ha="left", fontsize=8.1, style="italic", color=TEXT_SUB)
+        ax6b.set_yticks(np.arange(len(m6b)))
+        ax6b.set_yticklabels(m6b, fontsize=9, fontweight="bold", color=TEXT_MAIN)
+        ax6b.invert_yaxis()
+        ax6b.set_xlim(48, 144)
+        ax6b.set_xticks([50, 60, 70, 80, 90, 100])
+        ax6b.set_xlabel("Public Tracker (N=757: 92.42%, N=493: 93.03%) & Warehouse (N=10,278: 96.83%)", fontsize=8.2, color=TEXT_SUB, labelpad=6)
+        ax6b.set_title("6B. Swarm Liveliness AUROC % (swarm_adapter.pt)", fontsize=10, fontweight="bold", color=TEXT_MAIN, pad=7)
+
+        sha_chart3 = save_clean_rgb_png(fig3, assets_dir / "armiger_vs_torrent_classifiers_6dims.png")
+
+        # ==========================================================================
+        # COMPUTE & RENDER CHART 4: armiger_categorical_breakdown.png
+        # ==========================================================================
+        fig4, (ax4_l, ax4_r) = plt.subplots(1, 2, figsize=(22.5, 11.2), gridspec_kw={"wspace": 0.22})
+        fig4.subplots_adjust(top=0.84, bottom=0.16, left=0.11, right=0.98)
+        fig4.suptitle(
+            "Categorical Accuracy Breakdown Across All 10 Media & Software Categories",
+            fontsize=17, fontweight="bold", color=TEXT_MAIN, y=0.965,
+        )
+        fig4.text(
+            0.5, 0.925,
+            "Left: oct15_confirmation (Identical N = 2,835) vs. Open-Source Classifiers  |  Right: beyond_confirmation (Identical N = 1,025, LOTO Non-Circular)",
+            ha="center", fontsize=11.2, style="italic", color=TEXT_SUB, parse_math=False,
+        )
+
+        # Order for Left Panel (sorted by Armiger Ultra accuracy on oct15_confirmation)
+        oct_cat_spec = [
+            (6, "Audiobook"),
+            (2, "Adult / XXX"),
+            (1, "TV Show"),
+            (0, "Movie"),
+            (7, "Software"),
+            (3, "Music"),
+            (5, "Game"),
+            (8, "Ebook"),
+            (9, "Course"),
+            (4, "Comic"),
+        ]
+        cats_oct_labels = []
+        oct_ultra, oct_int8, oct_mimmo, oct_bit = [], [], [], []
+        chart4_oct_manifest: Dict[str, Any] = {}
+        for c_idx, c_title in oct_cat_spec:
+            mask = (y_oct_cat11 == c_idx)
+            n_c = int(np.sum(mask))
+            cats_oct_labels.append(f"{c_title} (n={n_c:,})")
+            u_v = float(np.mean(d["oct15_cat11_pred_ultra"][mask] == c_idx) * 100.0)
+            i_v = float(np.mean(d["oct15_cat11_pred_int8_hyb"][mask] == c_idx) * 100.0)
+            m_v = float(np.mean(d["oct15_cat11_pred_mimmo_bert"][mask] == c_idx) * 100.0)
+            b_v = float(np.mean(d["oct15_cat11_pred_bitmagnet"][mask] == c_idx) * 100.0)
+            oct_ultra.append(round(u_v, 2))
+            oct_int8.append(round(i_v, 2))
+            oct_mimmo.append(round(m_v, 2))
+            oct_bit.append(round(b_v, 2))
+            chart4_oct_manifest[c_title] = {
+                "n": n_c,
+                "armiger_ultra_pct": round(u_v, 2),
+                "armiger_int8_pct": round(i_v, 2),
+                "mimmo_bert_pct": round(m_v, 2),
+                "bitmagnet_pct": round(b_v, 2),
+            }
+
+        style_ax(ax4_l)
+        y_c = np.arange(len(cats_oct_labels))
+        h = 0.19
+        ax4_l.barh(y_c - 1.5 * h, oct_ultra, height=h, color=C_ULTRA, label="Armiger Ultra Fair Hybrid (95.49% Overall)", zorder=3)
+        ax4_l.barh(y_c - 0.5 * h, oct_int8, height=h, color=C_INT8, label="Armiger INT8 + ZeroCue (95.49% Overall, 95.06% Raw)", zorder=3)
+        ax4_l.barh(y_c + 0.5 * h, oct_mimmo, height=h, color="#818CF8", label="MIMMO BERT 360M (72.24% Overall on N=2,835)", zorder=3)
+        ax4_l.barh(y_c + 1.5 * h, oct_bit, height=h, color="#64748B", label="Bitmagnet Built-In (35.17% Overall on N=2,835)", zorder=3)
+        ax4_l.set_yticks(y_c)
+        ax4_l.set_yticklabels(cats_oct_labels, fontsize=10, fontweight="bold", color=TEXT_MAIN)
+        ax4_l.set_ylim(len(cats_oct_labels) - 0.35, -0.6)
+        ax4_l.set_xlim(0, 128)
+        ax4_l.set_xticks([0, 20, 40, 60, 80, 100])
+        ax4_l.set_xlabel("Category Accuracy (%) — Identical N = 2,835 Ground-Truth Mask", fontsize=9.8, color=TEXT_SUB, labelpad=8)
+        ax4_l.set_title("1. Per-Category Accuracy vs. Open-Source Classifiers\n(oct15_confirmation, Identical N = 2,835)", fontsize=11.5, fontweight="bold", color=TEXT_MAIN, pad=10)
+        for idx in range(len(cats_oct_labels)):
+            ax4_l.text(oct_ultra[idx] + 1.0, idx - 1.1 * h, f"{oct_ultra[idx]:.1f}%", va="center", ha="left", fontsize=8.0, fontweight="bold", color=C_ULTRA_EDGE)
+            ax4_l.text(oct_mimmo[idx] + 1.0, idx + 0.5 * h, f"{oct_mimmo[idx]:.1f}%", va="center", ha="left", fontsize=7.6, color="#CBD5E1")
+            ax4_l.text(oct_bit[idx] + 1.0, idx + 1.5 * h, f"{oct_bit[idx]:.1f}%", va="center", ha="left", fontsize=7.6, color=TEXT_SUB)
+        ax4_l.legend(loc="upper center", bbox_to_anchor=(0.5, -0.09), ncol=2, facecolor=BG_PANEL, edgecolor=BORDER_COLOR, fontsize=8.6, labelcolor=TEXT_MAIN)
+
+        # Order for Right Panel (beyond_confirmation N=1,025 Non-Circular LOTO)
+        y_bc_cat11 = d["beyond_cat11_y_true"]
+        bc_cat_spec = [
+            (6, "Audiobook"),
+            (8, "Ebook"),
+            (4, "Comic"),
+            (0, "Movie"),
+            (1, "TV Show"),
+            (5, "Game"),
+            (7, "Software"),
+            (9, "Course"),
+            (2, "Adult / XXX"),
+            (3, "Music"),
+        ]
+        cats_bc_labels = []
+        bc_ultra, bc_int8, bc_gpt, bc_gem = [], [], [], []
+        chart4_bc_manifest: Dict[str, Any] = {}
+        for c_idx, c_title in bc_cat_spec:
+            mask = (y_bc_cat11 == c_idx)
+            n_c = int(np.sum(mask))
+            cats_bc_labels.append(f"{c_title} (n={n_c:,})")
+            u_v = float(np.mean(d["beyond_cat11_corr_ultra"][mask]) * 100.0)
+            i_v = float(np.mean(d["beyond_cat11_corr_int8_hyb"][mask]) * 100.0)
+            gp_v = float(np.mean(d["beyond_cat11_corr_gpt_noncirc"][mask]) * 100.0)
+            gm_v = float(np.mean(d["beyond_cat11_corr_gemini_noncirc"][mask]) * 100.0)
+            bc_ultra.append(round(u_v, 2))
+            bc_int8.append(round(i_v, 2))
+            bc_gpt.append(round(gp_v, 2))
+            bc_gem.append(round(gm_v, 2))
+            chart4_bc_manifest[c_title] = {
+                "n": n_c,
+                "armiger_ultra_pct": round(u_v, 2),
+                "armiger_int8_pct": round(i_v, 2),
+                "gpt_noncirc_pct": round(gp_v, 2),
+                "gemini_noncirc_pct": round(gm_v, 2),
+            }
+
+        style_ax(ax4_r)
+        ax4_r.barh(y_c - 1.5 * h, bc_ultra, height=h, color=C_ULTRA, label="Armiger Ultra Fair Hybrid (95.12% Non-Circular)", zorder=3)
+        ax4_r.barh(y_c - 0.5 * h, bc_int8, height=h, color=C_INT8, label="Armiger INT8 + ZeroCue (95.12% Non-Circular, 92.88% Raw)", zorder=3)
+        ax4_r.barh(y_c + 0.5 * h, bc_gpt, height=h, color=C_GPT, label="OpenAI GPT gpt-6-luna (95.12% Non-Circ | 96.59% Circ)", zorder=3)
+        ax4_r.barh(y_c + 1.5 * h, bc_gem, height=h, color=C_GEMINI, label="Google Gemini 3.8-flash-low (93.80% Non-Circ | 95.61% Circ)", zorder=3)
+        ax4_r.set_yticks(y_c)
+        ax4_r.set_yticklabels(cats_bc_labels, fontsize=10, fontweight="bold", color=TEXT_MAIN)
+        ax4_r.set_ylim(len(cats_bc_labels) - 0.35, -0.6)
+        ax4_r.set_xlim(0, 128)
+        ax4_r.set_xticks([0, 20, 40, 60, 80, 100])
+        ax4_r.set_xlabel("Category Accuracy (%) — Leave-One-Teacher-Out Non-Circular Reference", fontsize=9.8, color=TEXT_SUB, labelpad=8)
+        ax4_r.set_title("2. Per-Category Accuracy vs. Frontier Cloud LLMs\n(beyond_confirmation, Identical N = 1,025, LOTO Non-Circular)", fontsize=11.5, fontweight="bold", color=TEXT_MAIN, pad=10)
+        for idx in range(len(cats_bc_labels)):
+            ax4_r.text(bc_ultra[idx] + 1.0, idx - 1.1 * h, f"{bc_ultra[idx]:.1f}%", va="center", ha="left", fontsize=8.0, fontweight="bold", color=C_ULTRA_EDGE)
+            ax4_r.text(bc_gpt[idx] + 1.0, idx + 0.5 * h, f"{bc_gpt[idx]:.1f}%", va="center", ha="left", fontsize=7.6, color=C_GPT)
+            ax4_r.text(bc_gem[idx] + 1.0, idx + 1.5 * h, f"{bc_gem[idx]:.1f}%", va="center", ha="left", fontsize=7.6, color=C_GEMINI)
+        ax4_r.legend(loc="upper center", bbox_to_anchor=(0.5, -0.09), ncol=2, facecolor=BG_PANEL, edgecolor=BORDER_COLOR, fontsize=8.6, labelcolor=TEXT_MAIN)
+
+        sha_chart4 = save_clean_rgb_png(fig4, assets_dir / "armiger_categorical_breakdown.png")
+    else:
+        for fn in ("armiger_vs_torrent_classifiers_6dims.png", "armiger_categorical_breakdown.png"):
+            verify_png_chunks_clean(fallback_assets / fn)
+        sha_chart3 = hashlib.sha256((fallback_assets / "armiger_vs_torrent_classifiers_6dims.png").read_bytes()).hexdigest()
+        sha_chart4 = hashlib.sha256((fallback_assets / "armiger_categorical_breakdown.png").read_bytes()).hexdigest()
 
     # ==========================================================================
     # FIVE-SPLIT SUMMARY TABLE STATS

@@ -36,7 +36,7 @@
   ],
   "provenance_sha256": {
     "canonical_eval_vectors.json": "058473f4ba21bc07db2c2b6981d5e62f3c584311fc134d92cb523de7f261243a",
-    "generate_canonical_charts.py": "be91fa37c44496f60c1b1f6a4b7fd331cffc39a4e4ae70a50bacbdc458eedb37",
+    "generate_canonical_charts.py": "49f18bf37ed2f9e0f89437b841b54adfdd2efe95ddc89800b28229223cb764dc",
     "assets/armiger_vs_llms_overall_and_6dims.png": "2367dbf6ae84cc2f75b0b13f377f7053f8f0e63ebe56cf42e1093b26aa18c082",
     "assets/armiger_vs_llms_cost_comparison.png": "ff33da1aa78dc14be919d34d5914db5efabe8c30d1698bda378962a3c92c5dbc",
     "assets/armiger_vs_torrent_classifiers_6dims.png": "a4ebfcb1565ed94c830846845ecf16e46061424180ea01a5852b8d4d1e614a6a",
