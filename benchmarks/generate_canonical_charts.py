@@ -1068,7 +1068,7 @@ def build_all_charts_and_manifest(
         )
         fig3.text(
             0.5, 0.942,
-            "Identical-Denominator Evaluation on oct15_confirmation (N = 2,835 / N = 545 Audio), tc_truespec_2000 (N = 2,000), & Swarm Holdouts (±95% Bootstrap CIs)",
+            "Identical-Denominator Evaluation on oct15_confirmation (N = 2,835 / N = 545 Audio), zero_cue_2000 (N = 2,000), & Swarm Holdouts (±95% Bootstrap CIs)",
             ha="center", fontsize=11.3, style="italic", color=TEXT_SUB, parse_math=False,
         )
 
@@ -1192,8 +1192,8 @@ def build_all_charts_and_manifest(
         ax4.invert_yaxis()
         ax4.set_xlim(45, 122)
         ax4.set_xticks([50, 60, 70, 80, 90, 100])
-        ax4.set_xlabel("99.61% on oct15_confirmation (505/507); 95.80% on tc_truespec_2000 (N=2,000)", fontsize=8.6, color=TEXT_SUB, labelpad=6)
-        ax4.set_title("4. Anime & Anime Dub Detection (%)\n(oct15_confirmation N = 507 & tc_truespec_2000 N = 2,000)", fontsize=11, fontweight="bold", color=TEXT_MAIN, pad=8)
+        ax4.set_xlabel("99.61% on oct15_confirmation (505/507); 95.80% on zero_cue_2000 (N=2,000)", fontsize=8.6, color=TEXT_SUB, labelpad=6)
+        ax4.set_title("4. Anime & Anime Dub Detection (%)\n(oct15_confirmation N = 507 & zero_cue_2000 N = 2,000)", fontsize=11, fontweight="bold", color=TEXT_MAIN, pad=8)
 
         # Panel 5: Adult / NSFW Detection
         ax5 = fig3.add_subplot(gs3[4:7, 1])
@@ -1428,8 +1428,8 @@ def build_all_charts_and_manifest(
         ("oct15", "oct15_confirmation", 2835),
         ("fresh", "fresh_confirmation", 1402),
         ("beyond", "beyond_confirmation", 1025),
-        ("tc2000", "tc_truespec_2000", 2000),
-        ("tc3000", "tc_truespec_multilang_3000", 3000),
+        ("tc2000", "zero_cue_2000", 2000),
+        ("tc3000", "multilang_3000", 3000),
     ]:
         y_sp = d[f"split5_{sp_code}_y_cat"]
         sp_stats = compute_paired_panel_stats(
