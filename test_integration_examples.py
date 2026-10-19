@@ -258,4 +258,7 @@ def test_arr_and_qbittorrent_webhook_receiver(shared_pipeline: ArmigerUltraPipel
     )
     assert qb_res["accepted"] is True
     assert qb_res["verified"] is True
-    assert qb_res["category"] == "movie"
+    assert qb_res["category"] == "unknown"
+    assert qb_res["lang"] == "english"
+    assert qb_res["evidence_masks"]["category"] is False
+    assert qb_res["evidence_masks"]["lang"] is True

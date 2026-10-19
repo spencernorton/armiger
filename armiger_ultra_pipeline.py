@@ -696,10 +696,15 @@ def _canary_summary(report: CanaryRegressionReport) -> Dict[str, Any]:
 
 
 def _prediction_labels(pred: "ArmigerUltraPrediction") -> Dict[str, Any]:
+    junk_head = pred.heads.get("junk", {})
+    pre_csam_p = float(junk_head.get("pre_csam_p_junk", junk_head.get("probs", {}).get("junk", 0.0)))
+    junk_thr = float(junk_head.get("threshold", 0.5))
     return {
         "category": pred.category,
         "adult": pred.adult == "adult",
         "junk": pred.junk == "junk",
+        "neural_junk": pre_csam_p >= junk_thr,
+        "neural_junk_margin": pre_csam_p - junk_thr,
         "owner_scope": pred.owner_scope,
     }
 
@@ -1165,6 +1170,7 @@ class ArmigerUltraPipeline:
 
             p_adult = float(adult_probs[1])
             p_junk = float(junk_probs[1])
+            p_junk_pre_csam = p_junk
             p_excluded = float(scope_probs[1])
 
             if not csam_result.is_safe and csam_result.violation_type == CSAMViolationType.MALWARE_PAYLOAD:
@@ -1238,6 +1244,7 @@ class ArmigerUltraPipeline:
                     "label": pred_junk,
                     "confidence": float(p_junk if pred_junk == "junk" else 1.0 - p_junk),
                     "probs": {"clean": float(round(1.0 - p_junk, 6)), "junk": float(round(p_junk, 6))},
+                    "pre_csam_p_junk": float(round(p_junk_pre_csam, 6)),
                     "threshold": float(self.safety_gate.junk_threshold),
                 },
                 "anime": {
@@ -1638,8 +1645,9 @@ class ArmigerUltraPipeline:
             "record": json.loads(record.canonical_json_bytes().decode("utf-8")),
         }
 
+        ev_masks = getattr(obs, "evidence_masks", {}) or {}
         catalog_key: Optional[Dict[str, str]] = None
-        if include_catalog_key and not obs.junk and obs.category in ("movie", "tv_show"):
+        if include_catalog_key and ev_masks.get("category", True) and not obs.junk and obs.category in ("movie", "tv_show"):
             extra = cand.extra_metadata or {}
             authoritative = extra.get("series_title") or extra.get("movie_title")
             catalog_key = _zero_cue_catalog_key(self.rsi_engine.anonymizer.strip_pii(cand.raw_title), authoritative)
@@ -1652,6 +1660,8 @@ class ArmigerUltraPipeline:
         for head in calibration_heads:
             if head == "category" and obs.junk:
                 continue  # a junk verdict's category is a placeholder ("unknown"), not a category truth
+            if not ev_masks.get(head, True):
+                continue  # never emit unverified/default labels into calibration NLL fitting
             if head in labels and head in logits and labels[head] in NEURAL_HEAD_CLASSES[head]:
                 idx = NEURAL_HEAD_CLASSES[head].index(labels[head])
                 profiles[head] = [round(v, 6) for v in _nll_profile(logits[head][0].tolist(), idx, grid)]
@@ -1659,7 +1669,11 @@ class ArmigerUltraPipeline:
             payload["calibration_nll_profile"] = {"grid": grid, "heads": profiles}
 
         swarm = row.get("swarm") if isinstance(row.get("swarm"), Mapping) else None
-        if swarm is not None:
+        has_verified_swarm_truth = bool(
+            ev_masks.get("junk", False)
+            or (ev_masks.get("category", False) and (obs.stream_info.get("is_valid_media") or obs.stream_info.get("video_codec") or obs.stream_info.get("audio_codec")))
+        )
+        if swarm is not None and has_verified_swarm_truth:
             w2 = extract_way2_source_features(row, swarm=dict(swarm), priors_table=self.priors_table)
             w3 = extract_way3_anomaly_features(row, swarm=dict(swarm), priors_table=self.priors_table)
             p_junk_neural = float(self.calibrator.calibrate_head("junk", logits["junk"][0].tolist())[1])
@@ -1670,11 +1684,14 @@ class ArmigerUltraPipeline:
                 "junk": bool(obs.junk),
             }
 
+        verified_only_labels = {
+            h: v for h, v in labels.items() if ev_masks.get(h, True)
+        }
         self._verified_ledger.append({
             "row": row,
-            "labels": labels,
+            "labels": verified_only_labels,
             "catalog_key": catalog_key,
-            "category": obs.category,
+            "category": obs.category if ev_masks.get("category", True) else "unknown",
         })
         self._telemetry_seq += 1
         bundle = X25519ChaCha20Poly1305Engine.encrypt_bundle(
@@ -1883,6 +1900,11 @@ class ArmigerUltraPipeline:
                 for head in ("junk", "adult"):
                     if b[head] == bool(gt[head]) and c[head] != bool(gt[head]):
                         flips.append(f"{it.item_id}:{head}")
+                if bool(gt["junk"]) and b.get("neural_junk", b["junk"]):
+                    if not c.get("neural_junk", c["junk"]) or (
+                        float(c.get("neural_junk_margin", 0.0)) < float(b.get("neural_junk_margin", 0.0)) - 0.05
+                    ):
+                        flips.append(f"{it.item_id}:neural_junk")
             if flips:
                 regs.append(f"{view}:safety_item_flips:{len(flips)}:{flips[:5]}")
         if "local_verified_ledger" in base and "local_verified_ledger" in cand:
@@ -1890,11 +1912,13 @@ class ArmigerUltraPipeline:
             bl, cl = base["local_verified_ledger"], cand["local_verified_ledger"]
             for i, truth in enumerate(bl["truth"]):
                 checks = {
-                    "category": lambda p: p["category"] == truth["category"],
-                    "junk": lambda p: p["junk"] == (truth["junk"] == "junk"),
-                    "adult": lambda p: p["adult"] == (truth["adult"] == "adult"),
+                    "category": lambda p, t=truth: p["category"] == t["category"],
+                    "junk": lambda p, t=truth: p["junk"] == (t["junk"] == "junk"),
+                    "adult": lambda p, t=truth: p["adult"] == (t["adult"] == "adult"),
                 }
                 for head, ok in checks.items():
+                    if head not in truth:
+                        continue
                     if ok(bl["labels"][i]) and not ok(cl["labels"][i]):
                         flips.append(f"ledger[{i}]:{head}")
             if flips:
@@ -2158,7 +2182,7 @@ class ArmigerUltraPipeline:
                 for head, cfg in components["calibration_delta"]["heads"].items():
                     entries = [
                         e for e in self._verified_ledger
-                        if not (head == "category" and e["labels"]["junk"] == "junk")
+                        if head in e["labels"] and not (head == "category" and e["labels"].get("junk") == "junk")
                     ]
                     if not entries:
                         continue

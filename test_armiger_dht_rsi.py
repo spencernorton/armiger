@@ -322,6 +322,74 @@ class TestPhysicalGroundTruthVerifier(unittest.TestCase):
         self.assertEqual(obs.owner_scope, "allowed_type")
         self.assertTrue(obs.english_subs)
         self.assertEqual(obs.title_language, "english_title")
+        # Verify explicit evidence_masks separate independently backed vs unverified targets
+        self.assertTrue(obs.evidence_masks["category"])
+        self.assertTrue(obs.evidence_masks["lang"])
+        self.assertTrue(obs.evidence_masks["english_subs"])
+        self.assertFalse(obs.evidence_masks["adult"])
+        self.assertFalse(obs.evidence_masks["anime"])
+        self.assertFalse(obs.evidence_masks["junk"])
+        self.assertFalse(obs.evidence_masks["owner_scope"])
+        self.assertFalse(obs.evidence_masks["title_language"])
+
+    def test_no_self_derived_labels_without_independent_evidence(self):
+        # 1. Raw client completion + ffprobe without catalog ID must NOT echo claimed_category,
+        # canary title words ('[OpenAnime]', 'Spring', 'adult_studio'), or default missing audio_languages to 'english'.
+        cand = CandidateObservation(
+            source_adapter="qbittorrent",
+            raw_title="[OpenAnime] Spring.adult_studio.2024.1080p.BluRay.x264",
+            claimed_category="movie",
+            download_completed=True,
+            bytes_downloaded=1_500_000_000,
+            total_bytes=1_500_000_000,
+            catalog_id_type=None,
+            catalog_id_value=None,
+            stream_metadata={
+                "video_codec": "h264",
+                "audio_codec": "aac",
+                "audio_channels": 2.0,
+                # No audio_languages and subtitle word 'bengali' contains substring 'eng'
+                "sub_languages": ["bengali"],
+            },
+        )
+        res = self.verifier.verify(cand)
+        self.assertTrue(res.is_verified)
+        obs = res.observation
+        self.assertEqual(obs.category, "unknown")
+        self.assertFalse(obs.evidence_masks["category"])
+        self.assertFalse(obs.adult)
+        self.assertFalse(obs.evidence_masks["adult"])
+        self.assertFalse(obs.anime)
+        self.assertFalse(obs.evidence_masks["anime"])
+        self.assertEqual(obs.lang, "multi_or_unknown")
+        self.assertFalse(obs.evidence_masks["lang"])
+        self.assertFalse(obs.english_subs)
+        self.assertTrue(obs.evidence_masks["english_subs"])
+        self.assertFalse(obs.evidence_masks["title_language"])
+        self.assertFalse(obs.evidence_masks["junk"])
+        self.assertFalse(obs.evidence_masks["owner_scope"])
+
+        # 2. Contradictory catalog + ffprobe (series_catalog but audio-only ffprobe stream) -> category unverified
+        cand_contradict = CandidateObservation(
+            source_adapter="series_webhook",
+            raw_title="Cosmos.Laundromat.S01E01.FLAC",
+            claimed_category="tv_show",
+            download_completed=True,
+            bytes_downloaded=200_000_000,
+            total_bytes=200_000_000,
+            catalog_id_type="series_catalog",
+            catalog_id_value=371980,
+        )
+        ffprobe_audio_only = {
+            "streams": [{"codec_type": "audio", "codec_name": "flac", "channels": 2}],
+            "format": {"format_name": "flac", "duration": "1800.0", "size": "200000000"},
+        }
+        res_c = self.verifier.verify(cand_contradict, ffprobe_output=ffprobe_audio_only)
+        self.assertTrue(res_c.is_verified)
+        self.assertEqual(res_c.observation.category, "unknown")
+        self.assertFalse(res_c.observation.evidence_masks["category"])
+        self.assertEqual(res_c.observation.lang, "multi_or_unknown")
+        self.assertFalse(res_c.observation.evidence_masks["lang"])
 
 
 class TestCompleteAnonymityAndPrivacy(unittest.TestCase):

@@ -188,6 +188,14 @@ def encode_torrent_features(
 
     raw_files = row.get("files") or []
     total_size = int(row.get("size") or 0)
+    total_valid_files = 0
+    for f in raw_files:
+        if isinstance(f, Mapping):
+            p_all = str(f.get("path") or f.get("p") or f.get("name") or "")
+        else:
+            p_all = str(f or "")
+        if p_all:
+            total_valid_files += 1
     items: List[Tuple[str, int]] = []
     for f in raw_files[:max_files]:
         if isinstance(f, Mapping):
@@ -229,7 +237,7 @@ def encode_torrent_features(
     tot_k = sum(kbytes)
     weights = kbytes if tot_k > 0 else [float(c) for c in kcount]
     wsum = sum(weights)
-    count = max(int(row.get("file_count") or 0), len(items))
+    count = max(int(row.get("file_count") or 0), total_valid_files, len(items))
     biggest = max((max(s, 0) for _, s in items), default=0)
     max_share = (biggest / tot_k if tot_k > 0 else (1.0 / len(items) if items else 0.0))
 
