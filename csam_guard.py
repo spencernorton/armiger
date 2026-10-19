@@ -294,10 +294,13 @@ _MALWARE_LURE_RE = re.compile(
     r"corrupt\.part|"
     r"spam[\s._-]*link[\s._-]*redirect|"
     r"watch[\s._-]*full[\s._-]*movie\.url|"
-    r"importante[\s._-]*leeme|"
     r"activar[\s._-]*sonido|"
     r"\d+(?:\.\d+)?\s*tb\s+collection\.torrent"
     r")(?:$|(?=[^a-z0-9]))"
+)
+
+_BENIGN_BOOKMARK_URL_RE = re.compile(
+    r"(?i)^(?:torrent[\s._-]*downloaded[\s._-]*from|downloaded[\s._-]*from|visit[\s._-]*us|rarbg|1337x|yts|tgx|torrentgalaxy|rutracker|nyaa)"
 )
 
 _PASSWORD_COMPANION_RE = re.compile(
@@ -594,7 +597,7 @@ class CSAMGuard:
             f_posix = f_lower.replace("\\", "/")
             if "/bdmv/" in f_posix or f_posix.startswith("bdmv/") or f_posix.endswith((".m2ts", ".bdmv", ".mpls")):
                 has_bdmv_structure = True
-            if f_posix.endswith((".rpa", ".rpy", ".rpyb")) or "/renpy/" in f"/{f_posix}":
+            if f_posix.endswith((".rpa", ".rpyb")) and fsize >= 65536:
                 has_renpy_structure = True
             if _PASSWORD_COMPANION_RE.search(f_posix):
                 has_password_companion = True
@@ -690,7 +693,14 @@ class CSAMGuard:
                     and (has_large_real_video or has_real_image_set)
                 ):
                     continue
-                if _RENPY_SAY_VBS_CG_RE.search(f_posix) and not title_claims_video and (has_renpy_structure or not check_media_executables):
+                if (
+                    _RENPY_SAY_VBS_CG_RE.search(f_posix)
+                    and not is_strict_media_category
+                    and not title_claims_video
+                    and not has_any_video
+                    and has_renpy_structure
+                    and (0 < fsize <= 4096)
+                ):
                     continue
                 is_disguised = any(stem in f_lower for stem in _DISGUISED_MEDIA_STEMS)
                 dot_f = f_lower.rfind(".")
@@ -709,8 +719,14 @@ class CSAMGuard:
                     # Exempt legitimate Blu-ray BD-J Java menu JARs (BDMV/JAR/00000.jar)
                     if ext == ".jar" and has_bdmv_structure and _BDMV_JAR_PATH_RE.search(f_posix):
                         continue
-                    # Exempt companion tracker bookmark (.url) when real video/audio/course media is present
-                    if ext == ".url" and (has_large_real_video or has_real_image_set or has_real_course_media):
+                    # Exempt known small tracker bookmark (.url) only when not disguised and real media is present
+                    if (
+                        ext == ".url"
+                        and not is_disguised
+                        and (0 < fsize <= 2048)
+                        and _BENIGN_BOOKMARK_URL_RE.search(base_lower)
+                        and (has_large_real_video or has_real_image_set or has_real_course_media)
+                    ):
                         continue
                     if (
                         check_media_executables

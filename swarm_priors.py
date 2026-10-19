@@ -87,7 +87,7 @@ _ALWAYS_TRAP_EXTS_SP = frozenset({
 })
 _VIDEO_EXTS_SP = frozenset({"mkv", "mp4", "avi", "mov", "wmv", "m4v", "webm", "ts", "m2ts", "mpg", "mpeg", "flv"})
 _LAUNCHER_EXTS_SP = frozenset({"scr", "lnk", "hta", "vbs", "vbe", "pif", "ps1", "wsf", "wsh", "bat", "cmd", "com", "msi", "chm", "one", "xll", "xlam"})
-_BENIGN_CONTAINER_EXTS_SP = frozenset({"vcdiff", "apk", "bdmv", "clpi", "mpls", "ifo", "bup", "vob", "npa", "vpk", "pck", "umd", "pak", "xp3", "rgss3a", "wolf", "nsp", "xci", "wbfs", "rpa", "rpy", "rpyb"})
+_BENIGN_CONTAINER_EXTS_SP = frozenset({"vcdiff", "apk", "bdmv", "clpi", "mpls", "ifo", "bup", "vob", "npa", "vpk", "pck", "umd", "pak", "xp3", "rgss3a", "wolf", "nsp", "xci", "wbfs"})
 _VID_OR_ANIME_CLAIM_SP_RE = re.compile(
     r"(?i)(?:\b(?:1080p|720p|2160p|480p|4k|bluray|blu-ray|bdrip|brrip|web-dl|webdl|webrip|hdtv|dvdrip|hdrip|x26[45]|h\.?26[45]|hevc|avc|s\d{1,2}[._ -]?e\d{1,3}|\d{1,2}x\d{2}|season[ ._-]*\d+)\b|"
     r"^\[(?:SubsPlease|Erai-raws|HorribleSubs|Judas|Ember|ToonsHub|ASW|Sakurato|LoliHouse|Nekomoe|ANi|B-Global|Ohys-Raws|Leopard-Raws|ReinForce|Moozzi2|Beatrice-Raws|OpenAnime)\])"
@@ -497,8 +497,14 @@ def extract_way3_anomaly_features(
         vid_depths: list[int] = []
 
         vc_pre = bool(_VID_OR_ANIME_CLAIM_SP_RE.search(name))
-        has_renpy_sp = not vc_pre and any(
-            (((x.get("path") or x.get("p")) if isinstance(x, dict) else str(x or "")) or "").replace("\\", "/").lower().endswith((".rpa", ".rpy", ".rpyb"))
+        has_vid_sp = any(
+            (((x.get("path") or x.get("p")) if isinstance(x, dict) else str(x or "")) or "").rsplit(".", 1)[-1].lower() in _VIDEO_EXTS_SP
+            for x in files[:64]
+            if "." in (((x.get("path") or x.get("p")) if isinstance(x, dict) else str(x or "")) or "")
+        )
+        has_renpy_sp = not vc_pre and not has_vid_sp and any(
+            (((x.get("path") or x.get("p")) if isinstance(x, dict) else str(x or "")) or "").replace("\\", "/").lower().endswith((".rpa", ".rpyb"))
+            and int((x.get("size") or x.get("s") or 0) if isinstance(x, dict) else 0) >= 65536
             for x in files[:64]
         )
         for f in files[:64]:
