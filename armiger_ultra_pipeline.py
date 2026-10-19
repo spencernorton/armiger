@@ -26,6 +26,8 @@ Usage:
 """
 from __future__ import annotations
 
+import base64
+import copy
 import dataclasses
 import hashlib
 import json
@@ -34,6 +36,8 @@ import os
 from pathlib import Path
 import re
 import sys
+import threading
+import time
 import zlib
 from typing import Any, Callable, Dict, List, Mapping, Optional, Sequence, Tuple, Union
 
@@ -75,6 +79,7 @@ from zero_cue_plugin import (
     CATS as ZERO_CUE_CATS,
     ZeroCueCatalogPlugin,
     apply_structural_and_zero_cue_disambiguation,
+    hash_catalog_key,
     lookup_zero_cue_catalog,
     norm_title,
     parse_clean_candidates,
@@ -93,6 +98,9 @@ from calibration_and_dht import (
     SignedDHTManifest,
 )
 from armiger_dht_rsi import (
+    AnonymityGuard,
+    AnonymityViolationError,
+    resolve_opt_in_sharing,
     AnonymizedTelemetryRecord,
     ArmigerDHTRSIEngine,
     AudioWebhookAdapter,
@@ -110,11 +118,15 @@ from armiger_dht_rsi import (
     PhysicalGroundTruthVerifier,
     PublicationWebhookAdapter,
     QBittorrentAdapter,
+    SafeFormatValidator,
     SeriesWebhookAdapter,
+    SybilQuorumVerifier,
     TelemetryAnonymizer,
     ThresholdDHTManifest,
+    ThresholdSignatureVerifier,
     WOTSPlusSHAKE256,
     X25519ChaCha20Poly1305Engine,
+    generate_golden_canary_suite,
 )
 
 # Plugin #6: ArmigerDHTDBSync + CSAMGuard
@@ -398,6 +410,349 @@ class ArmigerUltraPrediction:
 
 
 # =====================================================================
+# Distributed Model Update Bridge: Closed-Loop RSI Telemetry <-> BEP-46 Updates
+# =====================================================================
+#
+# Instance A (contributor) -> `export_rsi_telemetry_bundle` -> hybrid PQ encrypted telemetry
+# Aggregator               -> `RSIUpdateAggregator` (decrypt, consensus, fit, train, sign)
+# Peers (distinct ASNs)    -> `attest_dht_update` (dry-run review + signed attestation)
+# Instance B (receiver)    -> `stage_and_apply_dht_update` (verify, snapshot, stage,
+#                             500-item canary non-regression, commit or roll back)
+
+DHT_UPDATE_SCHEMA = "armiger-dht-update/v1"
+RSI_TELEMETRY_SCHEMA = "armiger-rsi-telemetry/v1"
+DHT_UPDATE_COMPONENTS: Tuple[str, ...] = (
+    "zero_cue_catalog_delta",
+    "calibration_delta",
+    "swarm_adapter_safetensors_delta",
+)
+ZERO_CUE_DELTA_MAPS: Tuple[str, ...] = ("title_year_map", "title_only_map", "anime_map")
+DEFAULT_TEMPERATURE_GRID: Tuple[float, ...] = tuple(round(0.5 + 0.05 * k, 2) for k in range(71))  # 0.50 .. 4.00
+TEMPERATURE_BOUNDS: Tuple[float, float] = (0.25, 10.0)
+MAX_ZERO_CUE_DELTA_ENTRIES = 50_000
+MAX_ADAPTER_DELTA_ABS = 64.0
+SWARM_ADAPTER_TRAINABLE: Tuple[str, ...] = ("junk_gate.bias", "head_scales.junk", "junk_encoder.4.weight")
+DEFAULT_CANARY_VIEWS: Tuple[str, ...] = ("bare_title", "file_tree_swarm")
+CANARY_HEALTHY_SWARM: Dict[str, Any] = {
+    "tracker_known": True,
+    "tracker_seeders": 120,
+    "tracker_leechers": 10,
+    "tracker_completed": 900,
+}
+_HEX16_RE = re.compile(r"^[0-9a-f]{16}$")
+_CANARY_SAMPLE_SUFFIX_RE = re.compile(r"\.sample\d+$")
+_MISSING = object()
+
+# Pipeline-facing name for the BEP-46 threshold manifest. There is no separate type:
+# `ThresholdDHTManifest` (armiger_dht_rsi.py) is the signed update manifest.
+SignedUpdateManifest = ThresholdDHTManifest
+
+
+class DHTUpdateRejected(ValueError):
+    """Raised internally when an update payload fails strict schema or format validation."""
+
+
+@dataclasses.dataclass
+class DHTUpdateResult:
+    """Outcome of `stage_and_apply_dht_update` or a dry-run `evaluate_dht_update_payload`."""
+
+    applied: bool
+    status: str  # committed | rejected_verification | rolled_back | review_passed | review_failed
+    reason: str
+    seq_before: int
+    seq_after: int
+    verification_trace: List[Dict[str, Any]]
+    components: List[str]
+    baseline_canary: Dict[str, Dict[str, Any]]
+    candidate_canary: Dict[str, Dict[str, Any]]
+    regressions: List[str]
+    state_fingerprint_before: str
+    state_fingerprint_after: str
+    elapsed_ms: float
+
+    def to_dict(self) -> Dict[str, Any]:
+        return dataclasses.asdict(self)
+
+
+def encode_safetensors(
+    tensors: Mapping[str, Any],
+    metadata: Optional[Mapping[str, str]] = None,
+) -> bytes:
+    """Serialize float32 tensors to the SafeTensors layout (8-byte LE header length + JSON header + raw buffer)."""
+    header: Dict[str, Any] = {}
+    buffers: List[bytes] = []
+    offset = 0
+    for name in sorted(tensors):
+        arr = np.ascontiguousarray(np.asarray(tensors[name], dtype=np.float32))
+        raw = arr.astype("<f4").tobytes()
+        header[name] = {"dtype": "F32", "shape": [int(d) for d in arr.shape], "data_offsets": [offset, offset + len(raw)]}
+        buffers.append(raw)
+        offset += len(raw)
+    if metadata:
+        header["__metadata__"] = {str(k): str(v) for k, v in metadata.items()}
+    header_bytes = json.dumps(header, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    header_bytes += b" " * ((8 - len(header_bytes) % 8) % 8)
+    return len(header_bytes).to_bytes(8, "little") + header_bytes + b"".join(buffers)
+
+
+def decode_safetensors(data: bytes) -> Tuple[Dict[str, np.ndarray], Dict[str, str]]:
+    """Strictly parse a float32 SafeTensors blob. Tensor bytes are only ever read as little-endian float32.
+
+    Structural validation reuses `SafeFormatValidator._validate_safetensors`. The pickle-opcode byte scan is
+    applied to the JSON header only: arbitrary float32 payloads legitimately contain byte pairs such as
+    0x80 0x03, so scanning the numeric buffer for pickle opcodes produces false positives without adding
+    safety (the buffer is never unpickled or executed).
+    """
+    if not isinstance(data, (bytes, bytearray)) or len(data) < 8:
+        raise DHTUpdateRejected("safetensors_too_short")
+    data = bytes(data)
+    ok, reason = SafeFormatValidator._validate_safetensors(data)
+    if not ok:
+        raise DHTUpdateRejected(f"safe_format_violation:{reason}")
+    header_len = int.from_bytes(data[:8], "little")
+    header_raw = data[8:8 + header_len]
+    for pattern in SafeFormatValidator.PROHIBITED_BYTE_PATTERNS:
+        if pattern in header_raw:
+            raise DHTUpdateRejected("safe_format_violation:prohibited_bytecode_pattern_in_header")
+    header = json.loads(header_raw.decode("utf-8"))
+    buf = data[8 + header_len:]
+    meta = header.pop("__metadata__", {}) or {}
+    if not isinstance(meta, dict) or not all(isinstance(k, str) and isinstance(v, str) for k, v in meta.items()):
+        raise DHTUpdateRejected("safetensors_invalid_metadata")
+    out: Dict[str, np.ndarray] = {}
+    covered = 0
+    for name, meta_t in sorted(header.items(), key=lambda kv: kv[1]["data_offsets"][0]):
+        if meta_t.get("dtype") != "F32":
+            raise DHTUpdateRejected(f"adapter_delta_dtype_not_f32:{name}")
+        shape = meta_t.get("shape")
+        if not isinstance(shape, list) or not all(isinstance(d, int) and d >= 0 for d in shape):
+            raise DHTUpdateRejected(f"safetensors_invalid_shape:{name}")
+        start, end = (int(x) for x in meta_t["data_offsets"])
+        n_elem = int(np.prod(shape)) if shape else 1
+        if end - start != 4 * n_elem:
+            raise DHTUpdateRejected(f"safetensors_size_mismatch:{name}")
+        if start != covered:
+            raise DHTUpdateRejected(f"safetensors_non_contiguous:{name}")
+        covered = end
+        out[name] = np.frombuffer(buf[start:end], dtype="<f4").reshape(shape).astype(np.float32)
+    if covered != len(buf):
+        raise DHTUpdateRejected("safetensors_trailing_bytes")
+    return out, meta
+
+
+def _validate_zero_cue_delta(delta: Any) -> Dict[str, Dict[str, str]]:
+    if not isinstance(delta, dict) or not delta:
+        raise DHTUpdateRejected("zero_cue_delta_not_object")
+    clean: Dict[str, Dict[str, str]] = {}
+    total = 0
+    for map_name, entries in delta.items():
+        if map_name not in ZERO_CUE_DELTA_MAPS:
+            raise DHTUpdateRejected(f"zero_cue_delta_unknown_map:{map_name}")
+        if not isinstance(entries, dict):
+            raise DHTUpdateRejected(f"zero_cue_delta_map_not_object:{map_name}")
+        clean_map: Dict[str, str] = {}
+        for key, cat in entries.items():
+            if not isinstance(key, str) or not _HEX16_RE.match(key):
+                raise DHTUpdateRejected("zero_cue_delta_key_not_blake2b64_hex")
+            if cat not in ZERO_CUE_CATS:
+                raise DHTUpdateRejected(f"zero_cue_delta_unknown_category:{cat}")
+            clean_map[key] = str(cat)
+        total += len(clean_map)
+        clean[map_name] = clean_map
+    if total == 0 or total > MAX_ZERO_CUE_DELTA_ENTRIES:
+        raise DHTUpdateRejected(f"zero_cue_delta_entry_count_out_of_bounds:{total}")
+    return clean
+
+
+def _validate_calibration_delta(delta: Any) -> Dict[str, Any]:
+    if not isinstance(delta, dict) or not delta:
+        raise DHTUpdateRejected("calibration_delta_not_object")
+    unknown = set(delta) - {"heads", "mondrian_thresholds"}
+    if unknown:
+        raise DHTUpdateRejected(f"calibration_delta_unknown_keys:{sorted(unknown)}")
+    clean: Dict[str, Any] = {"heads": {}, "mondrian_thresholds": {}}
+    for head, cfg in (delta.get("heads") or {}).items():
+        if head not in NEURAL_HEAD_CLASSES:
+            raise DHTUpdateRejected(f"calibration_delta_unknown_head:{head}")
+        if not isinstance(cfg, dict) or set(cfg) != {"temperature"}:
+            raise DHTUpdateRejected(f"calibration_delta_head_schema:{head}")
+        temp = cfg["temperature"]
+        if isinstance(temp, bool) or not isinstance(temp, (int, float)) or not math.isfinite(float(temp)):
+            raise DHTUpdateRejected(f"calibration_delta_temperature_not_finite:{head}")
+        if not (TEMPERATURE_BOUNDS[0] <= float(temp) <= TEMPERATURE_BOUNDS[1]):
+            raise DHTUpdateRejected(f"calibration_delta_temperature_out_of_bounds:{head}")
+        clean["heads"][head] = {"temperature": float(temp)}
+    for name, thr in (delta.get("mondrian_thresholds") or {}).items():
+        if name not in ("adult", "junk", "owner_scope"):
+            raise DHTUpdateRejected(f"calibration_delta_unknown_threshold:{name}")
+        if isinstance(thr, bool) or not isinstance(thr, (int, float)) or not (0.0 < float(thr) < 1.0):
+            raise DHTUpdateRejected(f"calibration_delta_threshold_out_of_bounds:{name}")
+        clean["mondrian_thresholds"][name] = float(thr)
+    if not clean["heads"] and not clean["mondrian_thresholds"]:
+        raise DHTUpdateRejected("calibration_delta_empty")
+    return clean
+
+
+def parse_dht_update_payload(payload_bytes: bytes, bundle_format: str) -> Dict[str, Any]:
+    """Strictly parse a BEP-46 update payload into validated components. Unknown keys are rejected.
+
+    Formats:
+      * `json`: {"schema", "epoch", "zero_cue_catalog_delta"?, "calibration_delta"?,
+                 "swarm_adapter_safetensors_delta"?: {"encoding": "safetensors+base64", "data", "sha256"}}
+      * `safetensors`: additive adapter delta tensors only.
+    """
+    fmt = str(bundle_format).lower().strip()
+    components: Dict[str, Any] = {}
+    if fmt == "safetensors":
+        tensors, _meta = decode_safetensors(payload_bytes)
+        if not tensors:
+            raise DHTUpdateRejected("adapter_delta_empty")
+        components["swarm_adapter_safetensors_delta"] = tensors
+        return components
+    if fmt != "json":
+        raise DHTUpdateRejected(f"unsupported_update_format:{fmt}")
+    try:
+        doc = json.loads(payload_bytes.decode("utf-8"))
+    except Exception as exc:  # noqa: BLE001 - any decode error is a rejection
+        raise DHTUpdateRejected(f"json_parse_error:{type(exc).__name__}") from None
+    if not isinstance(doc, dict) or doc.get("schema") != DHT_UPDATE_SCHEMA:
+        raise DHTUpdateRejected("update_schema_mismatch")
+    unknown = set(doc) - {"schema", "epoch", *DHT_UPDATE_COMPONENTS}
+    if unknown:
+        raise DHTUpdateRejected(f"update_unknown_keys:{sorted(unknown)}")
+    if "zero_cue_catalog_delta" in doc:
+        components["zero_cue_catalog_delta"] = _validate_zero_cue_delta(doc["zero_cue_catalog_delta"])
+    if "calibration_delta" in doc:
+        components["calibration_delta"] = _validate_calibration_delta(doc["calibration_delta"])
+    if "swarm_adapter_safetensors_delta" in doc:
+        blob = doc["swarm_adapter_safetensors_delta"]
+        if not isinstance(blob, dict) or set(blob) != {"encoding", "data", "sha256"} or blob["encoding"] != "safetensors+base64":
+            raise DHTUpdateRejected("adapter_delta_envelope_schema")
+        try:
+            raw = base64.b64decode(str(blob["data"]).encode("ascii"), validate=True)
+        except Exception:  # noqa: BLE001
+            raise DHTUpdateRejected("adapter_delta_base64_invalid") from None
+        if hashlib.sha256(raw).hexdigest() != str(blob["sha256"]).lower():
+            raise DHTUpdateRejected("adapter_delta_sha256_mismatch")
+        tensors, _meta = decode_safetensors(raw)
+        if not tensors:
+            raise DHTUpdateRejected("adapter_delta_empty")
+        components["swarm_adapter_safetensors_delta"] = tensors
+    if not components:
+        raise DHTUpdateRejected("update_has_no_components")
+    return components
+
+
+def _canary_files_for(item: CanaryItem) -> List[Dict[str, Any]]:
+    """Deterministic, physically plausible file tree for a golden canary item (exercises structural paths)."""
+    title = _CANARY_SAMPLE_SUFFIX_RE.sub("", item.title)
+    kind = item.item_id.split("_")[1]
+    if kind in ("mov", "tv", "ani", "xxx"):
+        return [{"path": f"{title}.mkv", "size": 1_400_000_000}]
+    if kind == "mus":
+        return [{"path": f"{title}/0{j}.flac", "size": 40_000_000} for j in range(1, 5)]
+    if kind in ("com", "ebk", "jnk"):
+        return [{"path": title, "size": 30_000_000}]
+    if kind == "aud":
+        return [{"path": f"{title}.m4b", "size": 300_000_000}]
+    if kind == "sw":
+        if title.endswith(".iso"):
+            return [{"path": title, "size": 900_000_000}]
+        return [{"path": f"{title}/setup.exe", "size": 900_000_000}, {"path": f"{title}/data.bin", "size": 2_000_000_000}]
+    if kind == "crs":
+        return [{"path": f"{title}/lecture0{j}.mp4", "size": 300_000_000} for j in range(1, 4)]
+    return [{"path": title, "size": 100_000_000}]
+
+
+def build_canary_rows(items: Sequence[CanaryItem], view: str) -> List[Dict[str, Any]]:
+    """Materialise the golden canary suite as pipeline rows for a given view."""
+    if view == "bare_title":
+        return [{"name": it.title} for it in items]
+    if view == "file_tree_swarm":
+        rows = []
+        for it in items:
+            files = _canary_files_for(it)
+            rows.append({
+                "name": it.title,
+                "size": int(sum(f["size"] for f in files)),
+                "files": files,
+                "swarm": dict(CANARY_HEALTHY_SWARM),
+            })
+        return rows
+    raise ValueError(f"unknown canary view: {view}")
+
+
+def _canary_summary(report: CanaryRegressionReport) -> Dict[str, Any]:
+    return {
+        "absolute_gate_passed": bool(report.passed),
+        "absolute_gate_reason": report.reason,
+        "total_items": int(report.total_items),
+        "junk_false_negatives": int(report.junk_false_negatives),
+        "junk_balanced_accuracy": round(float(report.junk_balanced_accuracy), 6),
+        "adult_accuracy": round(float(report.adult_accuracy), 6),
+        "category_accuracy": round(float(report.category_accuracy), 6),
+        "owner_scope_accuracy": round(float(report.owner_scope_accuracy), 6),
+    }
+
+
+def _prediction_labels(pred: "ArmigerUltraPrediction") -> Dict[str, Any]:
+    return {
+        "category": pred.category,
+        "adult": pred.adult == "adult",
+        "junk": pred.junk == "junk",
+        "owner_scope": pred.owner_scope,
+    }
+
+
+def _zero_cue_catalog_key(raw_title: str, authoritative_title: Optional[str] = None) -> Optional[Dict[str, str]]:
+    """Derive the catalog's own BLAKE2b-64 `title|year` key for a verified release name.
+
+    Uses `parse_clean_candidates` exactly as `lookup_zero_cue_catalog` does, so the receiver's unchanged
+    lookup path finds the entry. Prefers the authoritative library title (Series/Movie webhook) when it
+    matches a parsed candidate; otherwise the shortest year-bearing candidate.
+    """
+    cands, _year = parse_clean_candidates(raw_title)
+    year_cands = [(ct, cy) for ct, cy in cands if cy is not None and len(ct) >= 4]
+    if not year_cands:
+        return None
+    chosen: Optional[Tuple[str, int]] = None
+    if authoritative_title:
+        auth_norm = norm_title(authoritative_title)
+        for ct, cy in year_cands:
+            if ct == auth_norm:
+                chosen = (ct, int(cy))
+                break
+    if chosen is None:
+        ct, cy = min(year_cands, key=lambda c: (len(c[0]), c[0]))
+        chosen = (ct, int(cy))
+    return {"map": "title_year_map", "key": hash_catalog_key(f"{chosen[0]}|{chosen[1]}")}
+
+
+def _nll_profile(logits: Sequence[float], label_idx: int, grid: Sequence[float]) -> List[float]:
+    z = np.asarray(logits, dtype=np.float64)
+    out = []
+    for temp in grid:
+        s = z / float(temp)
+        s = s - s.max()
+        out.append(float(-(s[label_idx] - math.log(float(np.exp(s).sum())))))
+    return out
+
+
+def _verified_head_labels(obs: Any) -> Dict[str, str]:
+    """Map a VerifiedObservation to neural-head class labels."""
+    return {
+        "category": obs.category if obs.category in NEURAL_HEAD_CLASSES["category"] else "unknown",
+        "adult": "adult" if obs.adult else "non_adult",
+        "junk": "junk" if obs.junk else "clean",
+        "anime": "anime" if obs.anime else "non_anime",
+        "lang": obs.lang if obs.lang in NEURAL_HEAD_CLASSES["lang"] else "multi_or_unknown",
+        "owner_scope": obs.owner_scope if obs.owner_scope in NEURAL_HEAD_CLASSES["owner_scope"] else "allowed_type",
+        "title_language": obs.title_language if obs.title_language in NEURAL_HEAD_CLASSES["title_language"] else "english_title",
+        "english_subs": "has_eng_subs" if obs.english_subs else "no_eng_subs",
+    }
+
+
+# =====================================================================
 # Main Unified SDK Class: ArmigerUltraPipeline
 # =====================================================================
 
@@ -415,7 +770,7 @@ class ArmigerUltraPipeline:
 
     def __init__(
         self,
-        model_dir: Union[str, Path],
+        model_dir: Union[str, Path, None] = None,
         *,
         variant: str = "ultra",
         onnx_Session: Any = None,
@@ -434,8 +789,16 @@ class ArmigerUltraPipeline:
         dht_sync_subscription: Optional[SubscriptionConfig] = None,
         trusted_root_pubkeys_hex: Optional[Sequence[str]] = None,
         dht_master_secret: Optional[bytes] = None,
+        opt_in_sharing: Optional[bool] = None,
+        ephemeral_identity: bool = True,
+        min_k_samples: int = 25,
+        adult_threshold: Optional[float] = None,
+        junk_threshold: Optional[float] = None,
+        scope_threshold: Optional[float] = None,
     ) -> None:
-        self.model_dir = Path(model_dir).resolve()
+        self.opt_in_sharing: bool = resolve_opt_in_sharing(opt_in_sharing)
+        eff_dir = model_dir if model_dir is not None else Path(__file__).resolve().parent
+        self.model_dir = Path(eff_dir).resolve()
         self.variant = variant.lower().strip()
         self.config_path = self.model_dir / "config.json"
         self.config: Dict[str, Any] = {}
@@ -477,21 +840,35 @@ class ArmigerUltraPipeline:
             else "0" * 64
         )
         self.dht_updater = dht_updater or ArmigerDHTUpdater(root_pubkey_hex=root_key_hex)
-        self.rsi_engine = rsi_engine or ArmigerDHTRSIEngine(mode=rsi_mode)
+        self.rsi_engine = rsi_engine or ArmigerDHTRSIEngine(
+            mode=rsi_mode,
+            opt_in_sharing=self.opt_in_sharing,
+            ephemeral_identity=ephemeral_identity,
+            min_k_samples=min_k_samples,
+        )
+        self.anonymity_guard = self.rsi_engine.anonymity_guard
 
         # 7. Plugin #6: ArmigerDHTDBSync + CSAMGuard (`armiger_dht_db_sync.py` + `csam_guard.py`)
         mondrian = self.config.get("mondrian_thresholds", {})
         self.safety_gate = safety_gate or ArmigerSafetyGate(
-            adult_threshold=float(mondrian.get("adult", 0.5451)),
-            junk_threshold=float(mondrian.get("junk", 0.1010)),
-            scope_threshold=float(mondrian.get("owner_scope", 0.4770)),
+            adult_threshold=float(adult_threshold if adult_threshold is not None else mondrian.get("adult", 0.5451)),
+            junk_threshold=float(junk_threshold if junk_threshold is not None else mondrian.get("junk", 0.1010)),
+            scope_threshold=float(scope_threshold if scope_threshold is not None else mondrian.get("owner_scope", 0.4770)),
         )
         self.dht_db_sync = dht_db_sync or ArmigerDHTDatabaseSync(
-            subscription=dht_sync_subscription or SubscriptionConfig(sync_mode=SyncMode.SUBSCRIBE_AND_SEED),
+            subscription=dht_sync_subscription or SubscriptionConfig(
+                sync_mode=SyncMode.SUBSCRIBE_AND_SEED if self.opt_in_sharing else SyncMode.PULL_ONLY
+            ),
             master_secret=dht_master_secret,
             trusted_root_pubkeys_hex=trusted_root_pubkeys_hex,
+            opt_in_sharing=self.opt_in_sharing,
+            ephemeral_identity=ephemeral_identity,
+            min_k_samples=min_k_samples,
         )
         self.csam_guard = csam_guard or self.dht_db_sync.csam_guard
+
+        # 8. Distributed model update bridge (closed-loop RSI telemetry -> BEP-46 -> hot reload)
+        self._init_dht_update_bridge()
 
     # -----------------------------------------------------------------
     # Factory Classmethods (`from_Directory`, `from_directory`, `from_pretrained`)
@@ -987,24 +1364,7 @@ class ArmigerUltraPipeline:
         current_timestamp: Optional[float] = None,
     ) -> Tuple[bool, str, Optional[AnonymizedTelemetryRecord]]:
         """Ingest physical ground-truth telemetry from Series/Movie/Audio/Publication/qBittorrent or direct observation."""
-        if isinstance(observation_or_webhook, CandidateObservation):
-            cand = observation_or_webhook
-        else:
-            payload = dict(observation_or_webhook)
-            ad_lower = adapter.lower().strip()
-            if ad_lower == "series_webhook":
-                cand = SeriesWebhookAdapter.parse_webhook(payload)
-            elif ad_lower == "movie_webhook":
-                cand = MovieWebhookAdapter.parse_webhook(payload)
-            elif ad_lower == "audio_webhook":
-                cand = AudioWebhookAdapter.parse_webhook(payload)
-            elif ad_lower == "publication_webhook":
-                cand = PublicationWebhookAdapter.parse_webhook(payload)
-            elif ad_lower in ("qbittorrent", "qb"):
-                cand = QBittorrentAdapter.parse_event(payload)
-            else:
-                cand = CandidateObservation(**payload)
-
+        cand = self._parse_rsi_candidate(observation_or_webhook, adapter)
         return self.rsi_engine.ingest_candidate(
             cand,
             ffprobe_output=ffprobe_output,
@@ -1067,7 +1427,1052 @@ class ArmigerUltraPipeline:
         """Verify Ed25519-signed blinded SHA-256 tombstone manifest and purge matching local records."""
         return self.dht_db_sync.apply_signed_tombstones(manifest)
 
+    def sharing_status(self) -> Dict[str, Any]:
+        """Return unified runtime audit telemetry confirming opt-in status and zero-egress counters."""
+        rsi_st = self.rsi_engine.sharing_status()
+        db_st = self.dht_db_sync.sharing_status()
+        return {
+            "opt_in_sharing_enabled": bool(self.opt_in_sharing),
+            "outbound_bundles_shared": int(rsi_st["outbound_bundles_shared"] + db_st["outbound_bundles_shared"]),
+            "outbound_packets_blocked_opt_out": int(
+                rsi_st["outbound_packets_blocked_opt_out"] + db_st["outbound_packets_blocked_opt_out"]
+            ),
+            "outbound_bytes_shared": int(rsi_st["outbound_bytes_shared"] + db_st["outbound_bytes_shared"]),
+            "ephemeral_pubkey_hex": rsi_st["ephemeral_pubkey_hex"],
+            "rsi_engine": rsi_st,
+            "dht_db_sync": db_st,
+        }
+
+    def export_signed_delta_bundle(self, *args: Any, **kwargs: Any) -> Optional[Dict[str, Any]]:
+        if not self.opt_in_sharing:
+            self.rsi_engine._outbound_packets_blocked_opt_out += 1
+            return None
+        return self.rsi_engine.export_signed_delta_bundle(*args, **kwargs)
+
+    def export_signed_bundle(self, *args: Any, **kwargs: Any) -> Optional[Dict[str, Any]]:
+        if not self.opt_in_sharing:
+            self.rsi_engine._outbound_packets_blocked_opt_out += 1
+            return None
+        return self.rsi_engine.export_signed_bundle(*args, **kwargs)
+
+    def ingest_signed_delta_bundle(self, signed_bundle: Mapping[str, Any]) -> Tuple[bool, str, Optional[Dict[str, Any]]]:
+        return self.rsi_engine.ingest_signed_delta_bundle(signed_bundle)
+
+    def ingest_signed_bundle(self, signed_bundle: Mapping[str, Any]) -> Tuple[bool, str, Optional[Dict[str, Any]]]:
+        return self.rsi_engine.ingest_signed_bundle(signed_bundle)
+
+    async def publish_to_dht(self, swarm: Any, *args: Any, **kwargs: Any) -> Tuple[bool, str, int]:
+        if not self.opt_in_sharing:
+            self.rsi_engine._outbound_packets_blocked_opt_out += 1
+            return False, "opt_in_sharing_disabled", 0
+        return await self.rsi_engine.publish_to_dht(swarm, *args, **kwargs)
+
+    def broadcast_weights(self, *args: Any, **kwargs: Any) -> Optional[Dict[str, Any]]:
+        if not self.opt_in_sharing:
+            self.rsi_engine._outbound_packets_blocked_opt_out += 1
+            return None
+        return self.rsi_engine.broadcast_weights(*args, **kwargs)
+
+    # -----------------------------------------------------------------
+    # Distributed Model Update Bridge (Closed-Loop RSI -> BEP-46 -> Hot Reload)
+    # -----------------------------------------------------------------
+
+    def _init_dht_update_bridge(self) -> None:
+        self._dht_update_lock = threading.RLock()
+        self._dht_trust: Optional[Dict[str, Any]] = None
+        self._dht_canary_items: List[CanaryItem] = generate_golden_canary_suite()
+        self._dht_canary_gate = GoldenCanaryRegressionGate(self._dht_canary_items)
+        self._dht_canary_views: Tuple[str, ...] = DEFAULT_CANARY_VIEWS
+        self._dht_max_category_regression = 0.005
+        self._dht_max_scope_regression = 0.005
+        self._dht_baseline_cache: Optional[Tuple[str, Dict[str, Any]]] = None
+        self._dht_touched_catalog_keys: set = set()
+        self._dht_update_history: List[Dict[str, Any]] = []
+        # Local-only ledger of this instance's own physically verified imports. Never transmitted.
+        self._verified_ledger: List[Dict[str, Any]] = []
+        self._telemetry_seq = 0
+
+    def configure_dht_update_trust(
+        self,
+        *,
+        trusted_signers: Mapping[str, str],
+        trusted_pq_signers: Mapping[str, str],
+        threshold_m: int,
+        trusted_attestors: Mapping[str, Mapping[str, Any]],
+        min_distinct_asns: int = 5,
+        require_pq: bool = True,
+        canary_views: Sequence[str] = DEFAULT_CANARY_VIEWS,
+        max_category_regression: float = 0.005,
+        max_scope_regression: float = 0.005,
+    ) -> None:
+        """Pin the federation trust roots used by `stage_and_apply_dht_update`.
+
+        Trust is configured out-of-band, never taken from the update itself:
+          * `trusted_signers`: Ed25519 pubkey hex -> name (M-of-N federation signers)
+          * `trusted_pq_signers`: WOTS+-SHAKE256 pubkey hex -> name (pinned; required when `require_pq`)
+          * `trusted_attestors`: peer Ed25519 pubkey hex -> {"asn": int, "pq_pubkey_hex": str}. An attestation
+            only counts toward the distinct-ASN quorum if its key is registered and it claims the registered ASN.
+        """
+        if threshold_m < 1:
+            raise ValueError("threshold_m must be >= 1")
+        if require_pq and not trusted_pq_signers:
+            raise ValueError("require_pq needs pinned trusted_pq_signers")
+        for view in canary_views:
+            if view not in ("bare_title", "file_tree_swarm"):
+                raise ValueError(f"unknown canary view: {view}")
+        attestors: Dict[str, Dict[str, Any]] = {}
+        for pk, info in trusted_attestors.items():
+            attestors[str(pk).lower()] = {
+                "asn": int(info["asn"]),
+                "pq_pubkey_hex": str(info.get("pq_pubkey_hex", "")).lower(),
+            }
+        with self._dht_update_lock:
+            self._dht_trust = {
+                "trusted_signers": {str(k).lower(): str(v) for k, v in trusted_signers.items()},
+                "trusted_pq_signers": {str(k).lower(): str(v) for k, v in trusted_pq_signers.items()},
+                "threshold_m": int(threshold_m),
+                "trusted_attestors": attestors,
+                "min_distinct_asns": int(min_distinct_asns),
+                "require_pq": bool(require_pq),
+            }
+            self._dht_canary_views = tuple(canary_views)
+            self._dht_max_category_regression = float(max_category_regression)
+            self._dht_max_scope_regression = float(max_scope_regression)
+            self._dht_baseline_cache = None
+            # Keep the engine's view of the federation consistent with the bridge
+            self.rsi_engine.trusted_signers = dict(self._dht_trust["trusted_signers"])
+            self.rsi_engine.threshold_m = int(threshold_m)
+            self.rsi_engine.min_distinct_asns = int(min_distinct_asns)
+
+    def _parse_rsi_candidate(
+        self,
+        observation_or_webhook: Union[CandidateObservation, Mapping[str, Any]],
+        adapter: str,
+    ) -> CandidateObservation:
+        if isinstance(observation_or_webhook, CandidateObservation):
+            return observation_or_webhook
+        payload = dict(observation_or_webhook)
+        ad_lower = adapter.lower().strip()
+        if ad_lower == "series_webhook":
+            return SeriesWebhookAdapter.parse_webhook(payload)
+        if ad_lower == "movie_webhook":
+            return MovieWebhookAdapter.parse_webhook(payload)
+        if ad_lower == "audio_webhook":
+            return AudioWebhookAdapter.parse_webhook(payload)
+        if ad_lower == "publication_webhook":
+            return PublicationWebhookAdapter.parse_webhook(payload)
+        if ad_lower in ("qbittorrent", "qb"):
+            return QBittorrentAdapter.parse_event(payload)
+        return CandidateObservation(**payload)
+
+    def export_rsi_telemetry_bundle(
+        self,
+        observation_or_webhook: Union[CandidateObservation, Mapping[str, Any]],
+        *,
+        aggregator_x25519_pub: Union[bytes, str],
+        aggregator_mlkem_ek: Union[bytes, str],
+        epoch: str = DEFAULT_EPOCH,
+        adapter: str = "direct",
+        ffprobe_output: Optional[Dict[str, Any]] = None,
+        torrent_row: Optional[Mapping[str, Any]] = None,
+        include_catalog_key: bool = True,
+        calibration_heads: Sequence[str] = ("category", "adult", "junk", "owner_scope"),
+        temperature_grid: Sequence[float] = DEFAULT_TEMPERATURE_GRID,
+    ) -> Tuple[bool, str, Optional[EncryptedTelemetryBundle]]:
+        """Verify a physical ground-truth import and emit one hybrid PQ encrypted telemetry bundle.
+
+        Pipeline: adapter parse -> `PhysicalGroundTruthVerifier` (download completion, ffprobe stream,
+        catalog provenance; raw model predictions are never accepted as truth) -> `TelemetryAnonymizer`
+        (PII strip, salted blinded stem, DP size/duration) -> payload -> X25519 + ML-KEM-768 combined
+        shared material -> AEAD cipher bound to `seq`.
+
+        Payload fields beyond the anonymized record (each is opt-out or derived from local data only):
+          * `zero_cue_catalog_key`: the catalog's own BLAKE2b-64 `title|year` key + verified category,
+            for movie/tv imports. Exposure equals the published catalog format: anyone holding a candidate
+            title list can test membership. Disable with `include_catalog_key=False`.
+          * `calibration_nll_profile`: per-head NLL of this instance's raw logits over a temperature grid.
+          * `swarm_features`: Way-2/Way-3 vectors + neural p_junk + verified junk label, when `torrent_row`
+            carries swarm stats (Way-2 encodes public-tracker identity and release-group priors).
+
+        Unlike `ArmigerDHTRSIEngine.get_pending_telemetry_batch`, this returns immediately and does NOT
+        apply Poisson timing jitter; the caller must schedule dispatch to resist timing correlation.
+        """
+        if not self.opt_in_sharing or not self.rsi_engine.opt_in_sharing:
+            self.rsi_engine._outbound_packets_blocked_opt_out += 1
+            return False, "opt_in_sharing_disabled", None
+        if self.rsi_engine.mode != DHTRSIMode.ANONYMOUS_CONTRIBUTE:
+            self.rsi_engine._outbound_packets_blocked_opt_out += 1
+            return False, f"telemetry_export_disabled_in_mode:{self.rsi_engine.mode.value}", None
+        try:
+            x_pub = bytes.fromhex(aggregator_x25519_pub) if isinstance(aggregator_x25519_pub, str) else bytes(aggregator_x25519_pub)
+            ek = bytes.fromhex(aggregator_mlkem_ek) if isinstance(aggregator_mlkem_ek, str) else bytes(aggregator_mlkem_ek)
+        except ValueError:
+            return False, "invalid_aggregator_public_key_encoding", None
+        if len(x_pub) != 32 or len(ek) != MLKEM768.EK_BYTES:
+            return False, "invalid_aggregator_public_key_lengths", None
+
+        cand = self._parse_rsi_candidate(observation_or_webhook, adapter)
+        res = self.rsi_engine.verifier.verify(cand, ffprobe_output)
+        if not res.is_verified or res.observation is None:
+            return False, f"physical_verification_failed:{res.rejection_reason}", None
+        obs = res.observation
+        record = self.rsi_engine.anonymizer.anonymize(obs)
+        labels = _verified_head_labels(obs)
+
+        if torrent_row is not None:
+            row = dict(torrent_row)
+            row.setdefault("name", cand.raw_title)
+        else:
+            row = {
+                "name": cand.raw_title,
+                "size": int(cand.total_bytes),
+                "files": [{"path": cand.file_path, "size": int(cand.total_bytes)}] if cand.file_path else [],
+            }
+
+        payload: Dict[str, Any] = {
+            "schema": RSI_TELEMETRY_SCHEMA,
+            "epoch": str(epoch),
+            "record": json.loads(record.canonical_json_bytes().decode("utf-8")),
+        }
+
+        catalog_key: Optional[Dict[str, str]] = None
+        if include_catalog_key and not obs.junk and obs.category in ("movie", "tv_show"):
+            extra = cand.extra_metadata or {}
+            authoritative = extra.get("series_title") or extra.get("movie_title")
+            catalog_key = _zero_cue_catalog_key(self.rsi_engine.anonymizer.strip_pii(cand.raw_title), authoritative)
+            if catalog_key is not None:
+                payload["zero_cue_catalog_key"] = {**catalog_key, "category": obs.category}
+
+        logits = self._run_neural_logits([row])
+        grid = [float(t) for t in temperature_grid]
+        profiles: Dict[str, List[float]] = {}
+        for head in calibration_heads:
+            if head == "category" and obs.junk:
+                continue  # a junk verdict's category is a placeholder ("unknown"), not a category truth
+            if head in labels and head in logits and labels[head] in NEURAL_HEAD_CLASSES[head]:
+                idx = NEURAL_HEAD_CLASSES[head].index(labels[head])
+                profiles[head] = [round(v, 6) for v in _nll_profile(logits[head][0].tolist(), idx, grid)]
+        if profiles:
+            payload["calibration_nll_profile"] = {"grid": grid, "heads": profiles}
+
+        swarm = row.get("swarm") if isinstance(row.get("swarm"), Mapping) else None
+        if swarm is not None:
+            w2 = extract_way2_source_features(row, swarm=dict(swarm), priors_table=self.priors_table)
+            w3 = extract_way3_anomaly_features(row, swarm=dict(swarm), priors_table=self.priors_table)
+            p_junk_neural = float(self.calibrator.calibrate_head("junk", logits["junk"][0].tolist())[1])
+            payload["swarm_features"] = {
+                "way2": [round(float(v), 6) for v in w2],
+                "way3": [round(float(v), 6) for v in w3],
+                "p_junk_neural": p_junk_neural,
+                "junk": bool(obs.junk),
+            }
+
+        self._verified_ledger.append({
+            "row": row,
+            "labels": labels,
+            "catalog_key": catalog_key,
+            "category": obs.category,
+        })
+        self._telemetry_seq += 1
+        bundle = X25519ChaCha20Poly1305Engine.encrypt_bundle(
+            payload_bytes=json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8"),
+            recipient_pubkey_bytes=x_pub + ek,
+            seq=self._telemetry_seq,
+        )
+        if not bundle.is_post_quantum:
+            return False, "hybrid_kem_not_negotiated", None
+        self.rsi_engine._outbound_bundles_shared += 1
+        self.rsi_engine._outbound_bytes_shared += len(bundle.ciphertext_hex) // 2
+        return True, "verified_anonymized_hybrid_pq_encrypted", bundle
+
+    def calibration_nll(
+        self,
+        rows: Sequence[Mapping[str, Any]],
+        labels: Sequence[str],
+        *,
+        head: str = "category",
+        temperature: Optional[float] = None,
+    ) -> float:
+        """Mean NLL of the calibrated `head` on labelled rows (current calibrator, or an explicit temperature)."""
+        if not rows:
+            raise ValueError("rows must be non-empty")
+        logits = self._run_neural_logits(rows)[head]
+        classes = NEURAL_HEAD_CLASSES[head]
+        total = 0.0
+        for i, lab in enumerate(labels):
+            if temperature is None:
+                probs = self.calibrator.calibrate_head(head, logits[i].tolist())
+                total -= math.log(max(float(probs[classes.index(lab)]), 1e-12))
+            else:
+                total += _nll_profile(logits[i].tolist(), classes.index(lab), [float(temperature)])[0]
+        return total / len(rows)
+
+    # ---- state snapshot / fingerprint / restore ------------------------------------------
+
+    def _adapter_tensors(self) -> Dict[str, Any]:
+        if not hasattr(self.swarm_adapter, "state_dict"):
+            return {}
+        return dict(self.swarm_adapter.state_dict())
+
+    def dht_state_fingerprint(self, *, include_seq: bool = True) -> str:
+        """SHA-256 over every piece of state a DHT update can change (calibration, gates, adapter, catalog overlay)."""
+        h = hashlib.sha256()
+        cal = {
+            "heads": self.calibrator.heads,
+            "mondrian": self.calibrator.mondrian,
+            "gate": [
+                float(self.safety_gate.adult_threshold),
+                float(self.safety_gate.junk_threshold),
+                float(self.safety_gate.scope_threshold),
+            ],
+        }
+        h.update(json.dumps(cal, sort_keys=True, default=float).encode("utf-8"))
+        for name, tensor in sorted(self._adapter_tensors().items()):
+            h.update(name.encode("utf-8"))
+            h.update(tensor.detach().cpu().numpy().astype("<f4").tobytes())
+        if self._zero_cue_catalog is not None:
+            catalog = self._zero_cue_catalog.catalog
+            for map_name, key in sorted(self._dht_touched_catalog_keys):
+                m = catalog.get(map_name, {})
+                if key in m:
+                    h.update(f"{map_name}|{key}|{m[key]}".encode("utf-8"))
+        if include_seq:
+            h.update(f"seq:{int(self.rsi_engine.current_seq)}".encode("utf-8"))
+        return h.hexdigest()
+
+    def snapshot_dht_state(self) -> Dict[str, Any]:
+        """Deep snapshot of all DHT-mutable state. Catalog changes are tracked as an exact undo log."""
+        return {
+            "calibrator_heads": copy.deepcopy(self.calibrator.heads),
+            "calibrator_mondrian": copy.deepcopy(self.calibrator.mondrian),
+            "safety_gate": (
+                float(self.safety_gate.adult_threshold),
+                float(self.safety_gate.junk_threshold),
+                float(self.safety_gate.scope_threshold),
+            ),
+            "adapter_state": {k: v.detach().clone() for k, v in self._adapter_tensors().items()},
+            "rsi_seq": int(self.rsi_engine.current_seq),
+            "updater_seq": int(self.dht_updater.current_seq),
+            "catalog_undo": [],
+            "fingerprint": self.dht_state_fingerprint(),
+        }
+
+    def _restore_dht_state(self, snap: Mapping[str, Any]) -> None:
+        if snap["catalog_undo"]:
+            catalog = self.zero_cue_catalog.catalog
+            for map_name, key, prev in reversed(snap["catalog_undo"]):
+                m = catalog.setdefault(map_name, {})
+                if prev is _MISSING:
+                    m.pop(key, None)
+                else:
+                    m[key] = prev
+        # Restore from fresh copies so the snapshot stays valid for any later restore.
+        self.calibrator.heads = copy.deepcopy(snap["calibrator_heads"])
+        self.calibrator.mondrian = copy.deepcopy(snap["calibrator_mondrian"])
+        (self.safety_gate.adult_threshold,
+         self.safety_gate.junk_threshold,
+         self.safety_gate.scope_threshold) = snap["safety_gate"]
+        if snap["adapter_state"]:
+            self.swarm_adapter.load_state_dict({k: v.clone() for k, v in snap["adapter_state"].items()}, strict=True)
+        self.rsi_engine.current_seq = int(snap["rsi_seq"])
+        self.dht_updater.current_seq = int(snap["updater_seq"])
+
+    def _apply_dht_components(self, components: Mapping[str, Any], snap: Dict[str, Any]) -> List[str]:
+        """Hot-apply validated components in place. Every mutation is reversible via `snap`."""
+        applied: List[str] = []
+        if "zero_cue_catalog_delta" in components:
+            catalog = self.zero_cue_catalog.catalog
+            for map_name, entries in components["zero_cue_catalog_delta"].items():
+                m = catalog.setdefault(map_name, {})
+                for key, value in entries.items():
+                    snap["catalog_undo"].append((map_name, key, m.get(key, _MISSING)))
+                    self._dht_touched_catalog_keys.add((map_name, key))
+                    m[key] = value
+            applied.append("zero_cue_catalog_delta")
+
+        if "calibration_delta" in components:
+            delta = components["calibration_delta"]
+            heads = copy.deepcopy(self.calibrator.heads)
+            for head, cfg in delta["heads"].items():
+                entry = dict(heads.get(head, {}))
+                entry["temperature"] = float(cfg["temperature"])
+                heads[head] = entry
+            self.calibrator.heads = heads
+            if delta["mondrian_thresholds"]:
+                mondrian = copy.deepcopy(self.calibrator.mondrian)
+                attr = {"adult": "adult_threshold", "junk": "junk_threshold", "owner_scope": "scope_threshold"}
+                for name, thr in delta["mondrian_thresholds"].items():
+                    mondrian[name] = float(thr)
+                    setattr(self.safety_gate, attr[name], float(thr))
+                self.calibrator.mondrian = mondrian
+            applied.append("calibration_delta")
+
+        if "swarm_adapter_safetensors_delta" in components:
+            if not hasattr(self.swarm_adapter, "named_parameters"):
+                raise DHTUpdateRejected("adapter_runtime_unavailable")
+            import torch
+
+            tensors = dict(self.swarm_adapter.named_parameters())
+            tensors.update(dict(self.swarm_adapter.named_buffers()))
+            deltas = components["swarm_adapter_safetensors_delta"]
+            for name, d in deltas.items():  # validate everything before touching any weight
+                if name not in tensors:
+                    raise DHTUpdateRejected(f"adapter_delta_unknown_tensor:{name}")
+                if tuple(d.shape) != tuple(tensors[name].shape):
+                    raise DHTUpdateRejected(f"adapter_delta_shape_mismatch:{name}")
+                if not np.all(np.isfinite(d)):
+                    raise DHTUpdateRejected(f"adapter_delta_not_finite:{name}")
+                if float(np.max(np.abs(d))) > MAX_ADAPTER_DELTA_ABS:
+                    raise DHTUpdateRejected(f"adapter_delta_magnitude_out_of_bounds:{name}")
+            with torch.no_grad():
+                for name, d in deltas.items():
+                    tensors[name].add_(torch.from_numpy(np.ascontiguousarray(d)).to(tensors[name].dtype))
+            applied.append("swarm_adapter_safetensors_delta")
+        return applied
+
+    # ---- golden canary (500 items x views) + local verified ledger ------------------------
+
+    def run_dht_canary(self, *, views: Optional[Sequence[str]] = None) -> Dict[str, Dict[str, Any]]:
+        """Evaluate the live pipeline on the 500-item golden canary (per view) and the local verified ledger."""
+        out: Dict[str, Dict[str, Any]] = {}
+        items = self._dht_canary_items
+        for view in views or self._dht_canary_views:
+            preds = self.classify_batch(build_canary_rows(items, view))
+            labels = {it.item_id: _prediction_labels(p) for it, p in zip(items, preds)}
+            report = self._dht_canary_gate.evaluate(lambda it, _l=labels: _l[it.item_id])
+            out[view] = {"report": report, "labels": labels}
+        if self._verified_ledger:
+            preds = self.classify_batch([e["row"] for e in self._verified_ledger])
+            out["local_verified_ledger"] = {
+                "labels": [_prediction_labels(p) for p in preds],
+                "truth": [e["labels"] for e in self._verified_ledger],
+            }
+        return out
+
+    def _dht_baseline(self) -> Dict[str, Dict[str, Any]]:
+        key = f"{self.dht_state_fingerprint(include_seq=False)}|ledger={len(self._verified_ledger)}|views={self._dht_canary_views}"
+        if self._dht_baseline_cache is not None and self._dht_baseline_cache[0] == key:
+            return self._dht_baseline_cache[1]
+        base = self.run_dht_canary()
+        self._dht_baseline_cache = (key, base)
+        return base
+
+    def _compare_canary(self, base: Mapping[str, Any], cand: Mapping[str, Any]) -> List[str]:
+        """Non-regression rule: any canary metric or safety-head item that gets worse is a regression."""
+        regs: List[str] = []
+        eps = 1e-12
+        items = self._dht_canary_items
+        for view in self._dht_canary_views:
+            rb, rc = base[view]["report"], cand[view]["report"]
+            if rc.junk_false_negatives > rb.junk_false_negatives:
+                regs.append(f"{view}:junk_false_negatives {rb.junk_false_negatives}->{rc.junk_false_negatives}")
+            if rc.junk_balanced_accuracy < rb.junk_balanced_accuracy - eps:
+                regs.append(f"{view}:junk_balanced_accuracy {rb.junk_balanced_accuracy:.4f}->{rc.junk_balanced_accuracy:.4f}")
+            if rc.adult_accuracy < rb.adult_accuracy - eps:
+                regs.append(f"{view}:adult_accuracy {rb.adult_accuracy:.4f}->{rc.adult_accuracy:.4f}")
+            if rc.category_accuracy < rb.category_accuracy - self._dht_max_category_regression:
+                regs.append(f"{view}:category_accuracy {rb.category_accuracy:.4f}->{rc.category_accuracy:.4f}")
+            if rc.owner_scope_accuracy < rb.owner_scope_accuracy - self._dht_max_scope_regression:
+                regs.append(f"{view}:owner_scope_accuracy {rb.owner_scope_accuracy:.4f}->{rc.owner_scope_accuracy:.4f}")
+            flips = []
+            for it in items:
+                b, c, gt = base[view]["labels"][it.item_id], cand[view]["labels"][it.item_id], it.ground_truth
+                for head in ("junk", "adult"):
+                    if b[head] == bool(gt[head]) and c[head] != bool(gt[head]):
+                        flips.append(f"{it.item_id}:{head}")
+            if flips:
+                regs.append(f"{view}:safety_item_flips:{len(flips)}:{flips[:5]}")
+        if "local_verified_ledger" in base and "local_verified_ledger" in cand:
+            flips = []
+            bl, cl = base["local_verified_ledger"], cand["local_verified_ledger"]
+            for i, truth in enumerate(bl["truth"]):
+                checks = {
+                    "category": lambda p: p["category"] == truth["category"],
+                    "junk": lambda p: p["junk"] == (truth["junk"] == "junk"),
+                    "adult": lambda p: p["adult"] == (truth["adult"] == "adult"),
+                }
+                for head, ok in checks.items():
+                    if ok(bl["labels"][i]) and not ok(cl["labels"][i]):
+                        flips.append(f"ledger[{i}]:{head}")
+            if flips:
+                regs.append(f"local_verified_ledger:flips:{len(flips)}:{flips[:5]}")
+        return regs
+
+    def _stage_and_evaluate(
+        self,
+        components: Mapping[str, Any],
+        *,
+        commit_seq: Optional[int],
+    ) -> Tuple[bool, bool, List[str], List[str], Dict[str, Any], Dict[str, Any], str, str]:
+        """Snapshot -> apply -> canary -> commit (if `commit_seq` and no regressions) or restore.
+
+        Returns (passed, committed, applied, regressions, baseline, candidate, fp_before, fp_after).
+        """
+        fp_before = self.dht_state_fingerprint()
+        baseline = self._dht_baseline()
+        snap = self.snapshot_dht_state()
+        applied: List[str] = []
+        regressions: List[str] = []
+        candidate: Dict[str, Any] = {}
+        try:
+            applied = self._apply_dht_components(components, snap)
+            candidate = self.run_dht_canary()
+            regressions = self._compare_canary(baseline, candidate)
+        except DHTUpdateRejected as exc:
+            regressions = [f"apply_rejected:{exc}"]
+        except Exception as exc:  # noqa: BLE001 - any failure while staged must roll back
+            regressions = [f"apply_error:{type(exc).__name__}:{exc}"]
+        passed = not regressions
+        committed = bool(passed and commit_seq is not None)
+        if committed:
+            self.rsi_engine.current_seq = int(commit_seq)
+            self.dht_updater.current_seq = max(int(self.dht_updater.current_seq), int(commit_seq))
+            key = f"{self.dht_state_fingerprint(include_seq=False)}|ledger={len(self._verified_ledger)}|views={self._dht_canary_views}"
+            self._dht_baseline_cache = (key, candidate)
+        else:
+            self._restore_dht_state(snap)
+            if self.dht_state_fingerprint() != fp_before:
+                raise RuntimeError("DHT rollback failed: state fingerprint differs from pre-update snapshot")
+        return passed, committed, applied, regressions, baseline, candidate, fp_before, self.dht_state_fingerprint()
+
+    def _filter_attestations(self, attestations: Sequence[PeerAttestation]) -> Tuple[List[PeerAttestation], List[str]]:
+        registry = (self._dht_trust or {}).get("trusted_attestors", {})
+        require_pq = bool((self._dht_trust or {}).get("require_pq", True))
+        kept: List[PeerAttestation] = []
+        dropped: List[str] = []
+        seen: set = set()
+        for att in attestations:
+            pk = str(att.peer_pubkey_hex).lower()
+            reg = registry.get(pk)
+            if reg is None:
+                dropped.append(f"{att.peer_id}:unregistered_attestor")
+            elif int(att.asn) != reg["asn"]:
+                dropped.append(f"{att.peer_id}:asn_claim_mismatch")
+            elif require_pq and str(att.pq_pubkey_hex).lower() != reg["pq_pubkey_hex"]:
+                dropped.append(f"{att.peer_id}:pq_key_mismatch")
+            elif pk in seen:
+                dropped.append(f"{att.peer_id}:duplicate_attestor")
+            else:
+                seen.add(pk)
+                kept.append(att)
+        return kept, dropped
+
+    @staticmethod
+    def _summaries(canary: Mapping[str, Any]) -> Dict[str, Dict[str, Any]]:
+        return {v: _canary_summary(d["report"]) for v, d in canary.items() if "report" in d}
+
+    def stage_and_apply_dht_update(
+        self,
+        manifest: ThresholdDHTManifest,
+        payload_bytes: bytes,
+        *,
+        attestations: Optional[Sequence[PeerAttestation]] = None,
+        expected_prev_seq: Optional[int] = None,
+        now_timestamp: Optional[int] = None,
+    ) -> DHTUpdateResult:
+        """Verify, stage, canary-gate and hot-apply (or roll back) a signed BEP-46 update.
+
+        (a) Verify: BEP-44 CAS (`expected_prev_seq`), strictly monotonic `seq`, M-of-N Ed25519 + pinned
+            WOTS+-SHAKE256 threshold signatures, payload SHA-256, K-of-N distinct-ASN quorum over registered
+            attestors (Ed25519 + WOTS+), `SafeFormatValidator`, strict component schema.
+        (b) Snapshot calibration temperatures/thresholds, `SwarmResidualAdapter` tensors, catalog undo log, seq.
+        (c) Stage `zero_cue_catalog_delta`, `calibration_delta`, `swarm_adapter_safetensors_delta` in place and
+            run the 500-item `GoldenCanaryRegressionGate` on the live pipeline (bare-title and
+            file-tree+swarm views) plus this instance's verified ledger.
+        (d) Commit (advance `seq`) only if no canary metric or safety item regresses vs the pre-update
+            baseline; otherwise restore the snapshot and prove it by state fingerprint.
+
+        The canary acts as a baseline-relative non-regression gate: the shipped pipeline does not pass the
+        suite's absolute thresholds (see PROOF_OF_DISTRIBUTED_KNOWLEDGE_TRANSFER.md); absolute results are
+        reported in `baseline_canary` / `candidate_canary` for transparency.
+
+        Concurrency: classification calls made from other threads while an update is staged observe the
+        staged state. Serialize classification with updates if that matters to the caller.
+        """
+        t0 = time.perf_counter()
+        with self._dht_update_lock:
+            seq_before = int(self.rsi_engine.current_seq)
+            fp_before = self.dht_state_fingerprint()
+            trace: List[Dict[str, Any]] = []
+
+            def step(name: str, ok: bool, detail: Any) -> bool:
+                trace.append({"step": name, "ok": bool(ok), "detail": str(detail)})
+                return bool(ok)
+
+            def reject(reason: str) -> DHTUpdateResult:
+                return DHTUpdateResult(
+                    applied=False, status="rejected_verification", reason=reason,
+                    seq_before=seq_before, seq_after=int(self.rsi_engine.current_seq),
+                    verification_trace=trace, components=[], baseline_canary={}, candidate_canary={},
+                    regressions=[], state_fingerprint_before=fp_before,
+                    state_fingerprint_after=self.dht_state_fingerprint(),
+                    elapsed_ms=round((time.perf_counter() - t0) * 1000.0, 2),
+                )
+
+            if self.rsi_engine.mode == DHTRSIMode.OFF:
+                step("rsi_mode", False, "off")
+                return reject("plugin_mode_off")
+            trust = self._dht_trust
+            if trust is None:
+                step("trust_roots", False, "not_configured")
+                return reject("dht_update_trust_not_configured")
+            if not isinstance(payload_bytes, (bytes, bytearray)):
+                step("payload_type", False, type(payload_bytes).__name__)
+                return reject("payload_not_bytes")
+            payload_bytes = bytes(payload_bytes)
+
+            if expected_prev_seq is not None:
+                if not step("bep44_cas_expected_prev_seq", int(expected_prev_seq) == seq_before,
+                            f"expected={expected_prev_seq} current={seq_before}"):
+                    return reject(f"cas_mismatch:{expected_prev_seq}!={seq_before}")
+
+            ok, why = ThresholdSignatureVerifier.verify(
+                manifest=manifest,
+                trusted_signers=trust["trusted_signers"],
+                threshold_m=trust["threshold_m"],
+                current_seq=seq_before,
+                trusted_pq_signers=trust["trusted_pq_signers"],
+                require_pq=trust["require_pq"],
+            )
+            if not step("monotonic_seq_and_hybrid_threshold_signatures", ok, f"{why} seq={manifest.seq}"):
+                return reject(f"manifest_threshold_failed:{why}")
+
+            digest = hashlib.sha256(payload_bytes).hexdigest()
+            if not step("payload_sha256", digest == str(manifest.bundle_sha256).lower(), digest):
+                return reject("bundle_sha256_digest_mismatch")
+
+            kept, dropped = self._filter_attestations(attestations or [])
+            step("attestor_registry", True, f"accepted={len(kept)} dropped={dropped}")
+            min_asns = max(int(trust["min_distinct_asns"]), int(manifest.min_asn_quorum))
+            q_ok, q_why, asns = SybilQuorumVerifier.verify_quorum(
+                attestations=kept,
+                target_hash=manifest.bundle_sha256,
+                min_distinct_asns=min_asns,
+                now_timestamp=now_timestamp,
+                require_pq=trust["require_pq"],
+            )
+            if not step("sybil_distinct_asn_quorum", q_ok, f"{q_why} asns={sorted(asns)}"):
+                return reject(f"sybil_quorum_failed:{q_why}")
+
+            f_ok, f_why = SafeFormatValidator.validate(payload_bytes, manifest.bundle_format)
+            if not step("safe_format_validator", f_ok, f_why):
+                return reject(f"safe_format_violation:{f_why}")
+
+            try:
+                components = parse_dht_update_payload(payload_bytes, manifest.bundle_format)
+            except DHTUpdateRejected as exc:
+                step("strict_payload_schema", False, exc)
+                return reject(f"payload_schema_rejected:{exc}")
+            step("strict_payload_schema", True, sorted(components))
+
+            passed, committed, applied, regs, base, cand, fp_b, fp_a = self._stage_and_evaluate(
+                components, commit_seq=int(manifest.seq),
+            )
+            step("golden_canary_non_regression", passed, "; ".join(regs) or "no_regressions")
+            if committed:
+                step("hot_reload_commit", True, f"seq {seq_before}->{int(self.rsi_engine.current_seq)}")
+            else:
+                step("automatic_rollback", fp_a == fp_before, f"fingerprint_restored={fp_a == fp_before}")
+            result = DHTUpdateResult(
+                applied=committed,
+                status="committed" if committed else "rolled_back",
+                reason="update_committed" if committed else f"canary_regression:{regs[0] if regs else 'unknown'}",
+                seq_before=seq_before,
+                seq_after=int(self.rsi_engine.current_seq),
+                verification_trace=trace,
+                components=applied or sorted(components),
+                baseline_canary=self._summaries(base),
+                candidate_canary=self._summaries(cand),
+                regressions=regs,
+                state_fingerprint_before=fp_b,
+                state_fingerprint_after=fp_a,
+                elapsed_ms=round((time.perf_counter() - t0) * 1000.0, 2),
+            )
+            self._dht_update_history.append({
+                "seq": int(manifest.seq), "status": result.status, "reason": result.reason,
+                "components": list(result.components), "bundle_sha256": digest,
+            })
+            return result
+
+    def evaluate_dht_update_payload(
+        self,
+        payload_bytes: bytes,
+        *,
+        bundle_format: str = "json",
+        require_ledger_confirmation: bool = True,
+    ) -> DHTUpdateResult:
+        """Dry-run review used by attesting peers: stage, canary-gate and ALWAYS roll back.
+
+        With `require_ledger_confirmation`, every zero-cue entry must be confirmed (same key, same category)
+        by this instance's own verified imports, and a calibration delta must not raise NLL on that ledger.
+        """
+        t0 = time.perf_counter()
+        with self._dht_update_lock:
+            seq = int(self.rsi_engine.current_seq)
+            fp_before = self.dht_state_fingerprint()
+            trace: List[Dict[str, Any]] = []
+
+            def fail(reason: str, components: Sequence[str] = ()) -> DHTUpdateResult:
+                trace.append({"step": "review", "ok": False, "detail": reason})
+                return DHTUpdateResult(
+                    applied=False, status="review_failed", reason=reason, seq_before=seq, seq_after=seq,
+                    verification_trace=trace, components=list(components), baseline_canary={},
+                    candidate_canary={}, regressions=[], state_fingerprint_before=fp_before,
+                    state_fingerprint_after=self.dht_state_fingerprint(),
+                    elapsed_ms=round((time.perf_counter() - t0) * 1000.0, 2),
+                )
+
+            f_ok, f_why = SafeFormatValidator.validate(bytes(payload_bytes), bundle_format)
+            if not f_ok:
+                return fail(f"safe_format_violation:{f_why}")
+            try:
+                components = parse_dht_update_payload(bytes(payload_bytes), bundle_format)
+            except DHTUpdateRejected as exc:
+                return fail(f"payload_schema_rejected:{exc}")
+
+            if require_ledger_confirmation and "zero_cue_catalog_delta" in components:
+                local: Dict[Tuple[str, str], str] = {}
+                for entry in self._verified_ledger:
+                    ck = entry.get("catalog_key")
+                    if ck:
+                        local[(ck["map"], ck["key"])] = entry["category"]
+                unconfirmed, contradicted = [], []
+                for map_name, entries in components["zero_cue_catalog_delta"].items():
+                    for key, cat in entries.items():
+                        mine = local.get((map_name, key))
+                        if mine is None:
+                            unconfirmed.append(key)
+                        elif mine != cat:
+                            contradicted.append(key)
+                trace.append({"step": "ledger_confirmation", "ok": not (unconfirmed or contradicted),
+                              "detail": f"unconfirmed={len(unconfirmed)} contradicted={len(contradicted)}"})
+                if contradicted:
+                    return fail(f"zero_cue_entries_contradict_local_ledger:{len(contradicted)}", sorted(components))
+                if unconfirmed:
+                    return fail(f"zero_cue_entries_unconfirmed_by_local_ledger:{len(unconfirmed)}", sorted(components))
+
+            if require_ledger_confirmation and "calibration_delta" in components and self._verified_ledger:
+                for head, cfg in components["calibration_delta"]["heads"].items():
+                    entries = [
+                        e for e in self._verified_ledger
+                        if not (head == "category" and e["labels"]["junk"] == "junk")
+                    ]
+                    if not entries:
+                        continue
+                    rows = [e["row"] for e in entries]
+                    labels = [e["labels"][head] for e in entries]
+                    cur = self.calibration_nll(rows, labels, head=head)
+                    new = self.calibration_nll(rows, labels, head=head, temperature=cfg["temperature"])
+                    ok = new <= cur + 1e-9
+                    trace.append({"step": f"ledger_calibration_nll:{head}", "ok": ok, "detail": f"{cur:.5f}->{new:.5f}"})
+                    if not ok:
+                        return fail(f"calibration_worsens_local_ledger_nll:{head}", sorted(components))
+
+            passed, _committed, applied, regs, base, cand, fp_b, fp_a = self._stage_and_evaluate(components, commit_seq=None)
+            trace.append({"step": "golden_canary_non_regression", "ok": passed, "detail": "; ".join(regs) or "no_regressions"})
+            return DHTUpdateResult(
+                applied=False,
+                status="review_passed" if passed else "review_failed",
+                reason="review_passed" if passed else f"canary_regression:{regs[0]}",
+                seq_before=seq, seq_after=int(self.rsi_engine.current_seq),
+                verification_trace=trace, components=applied or sorted(components),
+                baseline_canary=self._summaries(base), candidate_canary=self._summaries(cand),
+                regressions=regs, state_fingerprint_before=fp_b, state_fingerprint_after=fp_a,
+                elapsed_ms=round((time.perf_counter() - t0) * 1000.0, 2),
+            )
+
+    def attest_dht_update(
+        self,
+        payload_bytes: bytes,
+        *,
+        signer: Tuple[Any, str, bytes, str],
+        asn: int,
+        bundle_format: str = "json",
+        peer_id: Optional[str] = None,
+        timestamp: Optional[int] = None,
+        require_ledger_confirmation: bool = True,
+    ) -> Tuple[Optional[PeerAttestation], DHTUpdateResult]:
+        """Review an update payload and, only if the review passes, sign a hybrid Ed25519 + WOTS+ attestation."""
+        review = self.evaluate_dht_update_payload(
+            payload_bytes, bundle_format=bundle_format, require_ledger_confirmation=require_ledger_confirmation,
+        )
+        if review.status != "review_passed":
+            return None, review
+        ed_priv, ed_pub_hex, pq_priv, pq_pub_hex = signer
+        target = hashlib.sha256(bytes(payload_bytes)).hexdigest()
+        unsigned = PeerAttestation(
+            peer_id=peer_id or ed_pub_hex[:16], asn=int(asn), peer_pubkey_hex=ed_pub_hex.lower(),
+            timestamp=int(timestamp if timestamp is not None else time.time()), signature_hex="",
+        )
+        msg = unsigned.canonical_bytes(target)
+        return dataclasses.replace(
+            unsigned,
+            signature_hex=ed_priv.sign(msg).hex(),
+            pq_pubkey_hex=pq_pub_hex.lower(),
+            pq_signature_hex=WOTSPlusSHAKE256.sign(pq_priv, msg).hex(),
+        ), review
+
     def close(self) -> None:
         """Close underlying SQLite shard database connections cleanly."""
         if self.dht_db_sync is not None:
             self.dht_db_sync.close()
+
+
+# =====================================================================
+# Federation Aggregator: Decrypt -> Consensus -> Fit/Train -> Sign
+# =====================================================================
+
+def generate_federation_signer() -> Tuple[Any, str, bytes, str]:
+    """(Ed25519PrivateKey, ed25519_pub_hex, wots_priv_seed, wots_pub_hex) for a federation signer or peer.
+
+    WOTS+ is a one-time signature scheme. `ThresholdSignatureVerifier.generate_hybrid_signer` derives a single
+    WOTS+ key per Ed25519 key, so signing more than one message with the same signer weakens the PQ half.
+    Production use needs a many-time hash-based scheme (XMSS / SPHINCS+) or per-message keys under a Merkle root.
+    """
+    return ThresholdSignatureVerifier.generate_hybrid_signer()
+
+
+class RSIUpdateAggregator:
+    """Federation aggregator for the closed-loop RSI -> BEP-46 update bridge.
+
+    Holds a hybrid X25519 + ML-KEM-768 keypair; contributors encrypt to (`x25519_pub`, `mlkem_ek`). The
+    aggregator only ever sees anonymized records, catalog keys, NLL profiles and swarm feature vectors.
+    """
+
+    def __init__(self, *, epoch: str = DEFAULT_EPOCH) -> None:
+        self._hybrid_priv, self._hybrid_pub = X25519ChaCha20Poly1305Engine.generate_keypair()
+        self.epoch = str(epoch)
+        self.observations: List[Dict[str, Any]] = []
+        self.rejected: List[str] = []
+        self._seen_ciphertexts: set = set()
+
+    @property
+    def x25519_pub(self) -> bytes:
+        return self._hybrid_pub[:32]
+
+    @property
+    def mlkem_ek(self) -> bytes:
+        return self._hybrid_pub[32:]
+
+    def ingest_bundles(self, bundles: Sequence[EncryptedTelemetryBundle]) -> Dict[str, int]:
+        """Decrypt + authenticate bundles; drop replays, classical-only bundles, AEAD failures and wrong epochs."""
+        accepted = rejected = 0
+        for bundle in bundles:
+            try:
+                digest = hashlib.sha256(bytes.fromhex(bundle.ciphertext_hex)).hexdigest()
+            except ValueError:
+                self.rejected.append("malformed_ciphertext_hex")
+                rejected += 1
+                continue
+            if digest in self._seen_ciphertexts:
+                self.rejected.append("duplicate_bundle_replay")
+                rejected += 1
+                continue
+            if not bundle.is_post_quantum:
+                self.rejected.append("classical_only_bundle_refused")
+                rejected += 1
+                continue
+            try:
+                raw = X25519ChaCha20Poly1305Engine.decrypt_bundle(bundle, self._hybrid_priv)
+                doc = json.loads(raw.decode("utf-8"))
+            except ValueError as exc:
+                self.rejected.append(f"aead_or_json_rejected:{str(exc)[:60]}")
+                rejected += 1
+                continue
+            if not isinstance(doc, dict) or doc.get("schema") != RSI_TELEMETRY_SCHEMA or doc.get("epoch") != self.epoch:
+                self.rejected.append("schema_or_epoch_mismatch")
+                rejected += 1
+                continue
+            self._seen_ciphertexts.add(digest)
+            self.observations.append(doc)
+            accepted += 1
+        return {"accepted": accepted, "rejected": rejected}
+
+    def build_zero_cue_delta(self, *, min_support: int = 3) -> Tuple[Dict[str, Dict[str, str]], Dict[str, Any]]:
+        """Unanimous-vote consensus on catalog keys; keys with any conflicting category are dropped."""
+        votes: Dict[Tuple[str, str], Dict[str, int]] = {}
+        for doc in self.observations:
+            zk = doc.get("zero_cue_catalog_key")
+            if not isinstance(zk, dict):
+                continue
+            m, k, c = zk.get("map"), str(zk.get("key", "")), zk.get("category")
+            if m in ZERO_CUE_DELTA_MAPS and _HEX16_RE.match(k) and c in ZERO_CUE_CATS:
+                votes.setdefault((m, k), {}).setdefault(c, 0)
+                votes[(m, k)][c] += 1
+        delta: Dict[str, Dict[str, str]] = {}
+        stats = {"keys_seen": len(votes), "accepted": 0, "conflicting": 0, "insufficient_support": 0}
+        for (m, k), ctr in sorted(votes.items()):
+            if len(ctr) > 1:
+                stats["conflicting"] += 1
+            elif sum(ctr.values()) < min_support:
+                stats["insufficient_support"] += 1
+            else:
+                delta.setdefault(m, {})[k] = next(iter(ctr))
+                stats["accepted"] += 1
+        return delta, stats
+
+    def fit_calibration_delta(
+        self,
+        *,
+        heads: Sequence[str] = ("category",),
+        min_samples: int = 20,
+        min_rel_improvement: float = 0.02,
+    ) -> Tuple[Dict[str, Any], Dict[str, Any]]:
+        """Federated temperature scaling: sum contributors' NLL(T) profiles, pick argmin T per head."""
+        delta: Dict[str, Any] = {"heads": {}}
+        stats: Dict[str, Any] = {}
+        for head in heads:
+            by_grid: Dict[Tuple[float, ...], List[List[float]]] = {}
+            for doc in self.observations:
+                prof = doc.get("calibration_nll_profile")
+                if isinstance(prof, dict) and head in prof.get("heads", {}):
+                    by_grid.setdefault(tuple(float(t) for t in prof["grid"]), []).append(prof["heads"][head])
+            if not by_grid:
+                stats[head] = {"n": 0, "skipped": "no_profiles"}
+                continue
+            grid, profiles = max(by_grid.items(), key=lambda kv: len(kv[1]))
+            n = len(profiles)
+            if n < min_samples or 1.0 not in grid:
+                stats[head] = {"n": n, "skipped": "insufficient_samples_or_grid"}
+                continue
+            mean = np.asarray(profiles, dtype=np.float64).mean(axis=0)
+            best = int(np.argmin(mean))
+            nll_t1 = float(mean[grid.index(1.0)])
+            entry = {"n": n, "temperature": float(grid[best]), "mean_nll_T1": round(nll_t1, 6), "mean_nll_Tstar": round(float(mean[best]), 6)}
+            if float(mean[best]) > nll_t1 * (1.0 - float(min_rel_improvement)):
+                entry["skipped"] = "improvement_below_threshold"
+            else:
+                delta["heads"][head] = {"temperature": float(grid[best])}
+            stats[head] = entry
+        return (delta if delta["heads"] else {}), stats
+
+    def train_swarm_adapter_delta(
+        self,
+        base_adapter: SwarmResidualAdapter,
+        *,
+        trainable: Sequence[str] = SWARM_ADAPTER_TRAINABLE,
+        steps: int = 300,
+        lr: float = 0.05,
+        l2: float = 1e-3,
+        logit_scale: float = 10.0,
+        min_samples: int = 20,
+        seed: int = 0,
+    ) -> Tuple[Optional[Dict[str, np.ndarray]], Dict[str, Any]]:
+        """Fine-tune the adapter's junk residual path on contributed (Way-2, Way-3, p_junk, verified junk) samples.
+
+        Trains only `trainable` tensors on a copy of `base_adapter` (inputs mirror the pipeline's
+        `evaluate_swarm` call: zero pooled/side21 context) and returns additive float32 deltas.
+        """
+        import torch
+        import torch.nn.functional as TF
+
+        samples = [d["swarm_features"] for d in self.observations if isinstance(d.get("swarm_features"), dict)]
+        n_pos = sum(1 for s in samples if s.get("junk"))
+        stats: Dict[str, Any] = {"n_samples": len(samples), "n_junk": n_pos}
+        if len(samples) < min_samples or n_pos == 0 or n_pos == len(samples):
+            stats["skipped"] = "insufficient_or_single_class_samples"
+            return None, stats
+        torch.manual_seed(int(seed))
+        adapter = copy.deepcopy(base_adapter)
+        adapter.eval()
+        named = dict(adapter.named_parameters())
+        missing = [n for n in trainable if n not in named]
+        if missing:
+            raise ValueError(f"unknown trainable tensors: {missing}")
+        for q in adapter.parameters():
+            q.requires_grad_(False)
+        params = [named[n] for n in trainable]
+        for q in params:
+            q.requires_grad_(True)
+        orig = [q.detach().clone() for q in params]
+
+        w2 = torch.tensor([s["way2"] for s in samples], dtype=torch.float32)
+        w3 = torch.tensor([s["way3"] for s in samples], dtype=torch.float32)
+        y = torch.tensor([1.0 if s["junk"] else 0.0 for s in samples], dtype=torch.float32)
+        pj = torch.tensor([min(max(float(s["p_junk_neural"]), 1e-6), 1.0 - 1e-6) for s in samples], dtype=torch.float32)
+        zl = torch.log(pj / (1.0 - pj))
+        n = len(samples)
+        pooled = torch.zeros((n, adapter.d_pooled))
+        side21 = torch.zeros((n, adapter.d_side21))
+
+        def adapter_margin() -> "torch.Tensor":
+            out = adapter.forward(pooled, side21, {"junk": torch.stack([torch.zeros_like(zl), zl], dim=-1)}, w2, w3)
+            return (out["junk"][:, 1] - out["junk"][:, 0]) - zl
+
+        with torch.no_grad():
+            stats["bce_before"] = round(float(TF.binary_cross_entropy_with_logits(adapter_margin() * logit_scale, y)), 6)
+        opt = torch.optim.Adam(params, lr=float(lr))
+        for _ in range(int(steps)):
+            loss = TF.binary_cross_entropy_with_logits(adapter_margin() * logit_scale, y)
+            loss = loss + float(l2) * sum(((q - o) ** 2).sum() for q, o in zip(params, orig))
+            opt.zero_grad()
+            loss.backward()
+            opt.step()
+            with torch.no_grad():
+                if "head_scales.junk" in named:
+                    named["head_scales.junk"].clamp_(0.0, 2.0)
+        with torch.no_grad():
+            stats["bce_after"] = round(float(TF.binary_cross_entropy_with_logits(adapter_margin() * logit_scale, y)), 6)
+            deltas = {n_: (named[n_].detach() - o).cpu().numpy().astype(np.float32) for n_, o in zip(trainable, orig)}
+        stats["delta_l2"] = {k: round(float(np.linalg.norm(v)), 6) for k, v in deltas.items()}
+        return deltas, stats
+
+    def build_update_payload(
+        self,
+        *,
+        zero_cue_catalog_delta: Optional[Mapping[str, Mapping[str, str]]] = None,
+        calibration_delta: Optional[Mapping[str, Any]] = None,
+        swarm_adapter_delta: Optional[Mapping[str, np.ndarray]] = None,
+    ) -> bytes:
+        """Canonical JSON update bundle; adapter deltas travel as SHA-256-pinned base64 SafeTensors."""
+        doc: Dict[str, Any] = {"schema": DHT_UPDATE_SCHEMA, "epoch": self.epoch}
+        if zero_cue_catalog_delta:
+            doc["zero_cue_catalog_delta"] = {m: dict(v) for m, v in zero_cue_catalog_delta.items()}
+        if calibration_delta:
+            doc["calibration_delta"] = copy.deepcopy(dict(calibration_delta))
+        if swarm_adapter_delta:
+            raw = encode_safetensors(swarm_adapter_delta, metadata={"kind": "additive_delta", "base": "swarm_adapter.pt"})
+            doc["swarm_adapter_safetensors_delta"] = {
+                "encoding": "safetensors+base64",
+                "data": base64.b64encode(raw).decode("ascii"),
+                "sha256": hashlib.sha256(raw).hexdigest(),
+            }
+        if len(doc) == 2:
+            raise ValueError("update payload has no components")
+        return json.dumps(doc, sort_keys=True, separators=(",", ":")).encode("utf-8")
+
+    @staticmethod
+    def sign_manifest(
+        payload_bytes: bytes,
+        *,
+        seq: int,
+        signers: Sequence[Tuple[Any, str, bytes, str]],
+        version: str,
+        min_asn_quorum: int = 5,
+        bundle_format: str = "json",
+        timestamp: Optional[int] = None,
+    ) -> ThresholdDHTManifest:
+        """Produce a BEP-46 `ThresholdDHTManifest` signed by every signer with Ed25519 + WOTS+-SHAKE256.
+
+        `infohash` is the SHA-1 content id of the payload (BEP-46 mutable-item target derivation is out of scope).
+        """
+        unsigned = ThresholdDHTManifest(
+            seq=int(seq),
+            version=str(version),
+            infohash=hashlib.sha1(payload_bytes).hexdigest(),
+            bundle_sha256=hashlib.sha256(payload_bytes).hexdigest(),
+            bundle_format=str(bundle_format),
+            min_asn_quorum=int(min_asn_quorum),
+            timestamp=int(timestamp if timestamp is not None else time.time()),
+            signatures={},
+        )
+        msg = unsigned.canonical_payload()
+        sigs: Dict[str, str] = {}
+        pq_sigs: Dict[str, str] = {}
+        for ed_priv, ed_pub_hex, pq_priv, pq_pub_hex in signers:
+            sigs[ed_pub_hex.lower()] = ed_priv.sign(msg).hex()
+            pq_sigs[pq_pub_hex.lower()] = WOTSPlusSHAKE256.sign(pq_priv, msg).hex()
+        return dataclasses.replace(unsigned, signatures=sigs, pq_signatures=pq_sigs)
+
+
+ArmigerPipeline = ArmigerUltraPipeline

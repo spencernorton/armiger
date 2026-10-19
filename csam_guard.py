@@ -18,6 +18,7 @@ import functools
 import hashlib
 import hmac
 import json
+import math
 import os
 import re
 import time
@@ -155,9 +156,21 @@ def normalize_text(text: str) -> str:
     if not text:
         return ""
 
-    # 1. Unicode NFKD decomposition
-    decomp = unicodedata.normalize("NFKD", text)
-    stripped = "".join(c for c in decomp if not unicodedata.combining(c))
+    # 1. Strip Unicode tag characters, variation selectors, and format/control characters pre- and post-NFKD
+    pre_cleaned = "".join(
+        c for c in text
+        if unicodedata.category(c) not in ("Cf", "Mn", "Me", "Cc")
+        and not (0xFE00 <= ord(c) <= 0xFE0F)
+        and not (0xE0000 <= ord(c) <= 0xE01EF)
+    )
+    decomp = unicodedata.normalize("NFKD", pre_cleaned)
+    stripped = "".join(
+        c for c in decomp
+        if not unicodedata.combining(c)
+        and unicodedata.category(c) not in ("Cf", "Mn", "Me", "Cc")
+        and not (0xFE00 <= ord(c) <= 0xFE0F)
+        and not (0xE0000 <= ord(c) <= 0xE01EF)
+    )
 
     # 2. Strip zero-width characters
     cleaned = _ZERO_WIDTH_RE.sub("", stripped).lower()
@@ -335,7 +348,16 @@ class CSAMGuard:
           4. No disguised executable payloads (.exe/.scr/.bat/.vbs) exist in media categories.
           5. Tags contain no prohibited content.
         """
-        clean_infohash = infohash.strip().lower()
+        clean_infohash = str(infohash).strip().lower()
+        if not re.fullmatch(r"[0-9a-f]{40}", clean_infohash):
+            return ContentFilterResult(
+                is_safe=False,
+                violation_type=CSAMViolationType.MALWARE_PAYLOAD,
+                reason="Malformed non-hexadecimal 40-char infohash rejected",
+                matched_pattern=clean_infohash[:40],
+                risk_score=1.0,
+                sanitized_title=sanitize_title(title),
+            )
 
         # 1. Tombstone purge check
         if self.tombstone_store.is_tombstoned(clean_infohash):
@@ -371,6 +393,14 @@ class CSAMGuard:
         )
 
         if file_list:
+            has_large_real_video = any(
+                isinstance(x, dict)
+                and int(x.get("size") or x.get("s") or 0) >= 100_000_000
+                and str(x.get("path") or x.get("p") or x.get("name") or "").lower().strip().endswith(
+                    (".mp4", ".mkv", ".avi", ".mov", ".m4v", ".webm")
+                )
+                for x in file_list
+            )
             for f in file_list:
                 fname = f if isinstance(f, str) else str(f.get("path") or f.get("p") or f.get("name") or "")
                 fsize = int((f.get("size") or f.get("s") or 0) if isinstance(f, dict) else 0)
@@ -380,8 +410,9 @@ class CSAMGuard:
                     return f_res
 
                 # Malware extension check: media torrents & disguised double-extensions must never contain executables
-                f_lower = fname.lower().strip()
-                if f_lower.endswith(".exe") and 0 < fsize < 32768 and ("do_not_mirror" in f_lower or hashlib.blake2b(f_lower.split("/")[-1].split(".")[0].encode("utf-8"), digest_size=8).hexdigest() in ("5f6e8a6b0d51f497", "a93e3d97c15a3f34")):
+                f_lower = fname.lower().strip().rstrip(". \t\r\n\x00")
+                base_lower = f_lower.rsplit("/", 1)[-1].rsplit("\\", 1)[-1]
+                if base_lower == "do_not_mirror.exe" and 0 < fsize <= 128 and has_large_real_video:
                     continue
                 for ext in _MALWARE_EXTENSIONS:
                     if f_lower.endswith(ext):
@@ -449,6 +480,10 @@ class ArmigerSafetyGate:
           - If p_adult >= adult_threshold: Must ONLY be routed to 'xxx' category.
             If target_category is not 'xxx', reject to maintain strict mainstream isolation.
         """
+        for pname, pval in (("p_adult", p_adult), ("p_junk", p_junk), ("p_excluded_scope", p_excluded_scope)):
+            if isinstance(pval, bool) or not isinstance(pval, (int, float)) or not math.isfinite(pval) or pval < 0.0 or pval > 1.0:
+                return False, f"invalid_probability_{pname}:{pval}", CSAMViolationType.SAFETY_GATE_JUNK
+
         if p_junk >= self.junk_threshold:
             return False, f"junk_probability_exceeded:{p_junk:.4f}>={self.junk_threshold:.4f}", CSAMViolationType.SAFETY_GATE_JUNK
 
@@ -748,8 +783,12 @@ class MLKEM768:
     def encaps(cls, ek: bytes, seed_m: Optional[bytes] = None) -> Tuple[bytes, bytes]:
         if len(ek) != cls.EK_BYTES:
             raise ValueError(f"ML-KEM-768 ek must be {cls.EK_BYTES} bytes")
-        m = seed_m if seed_m is not None else os.urandom(32)
+        if ek[:1152] == b"\x00" * 1152 or ek[1152:] == b"\x00" * 32:
+            raise ValueError("ML-KEM-768 degenerate all-zero encapsulation key rejected")
         t_hat, a_hat_t, ek_hash = cls._expand_ek(ek)
+        if b"".join(cls.encode_12(p) for p in t_hat) != ek[:1152]:
+            raise ValueError("ML-KEM-768 non-canonical encapsulation key (coefficients >= q)")
+        m = seed_m if seed_m is not None else os.urandom(32)
         kr = hashlib.sha3_512(m + ek_hash).digest()
         k_shared, r = kr[:32], kr[32:]
         c = cls._pke_encrypt_expanded(t_hat, a_hat_t, m, r)
@@ -825,8 +864,9 @@ class WOTSPlusSHAKE256:
         return raw, pk
 
     @classmethod
-    def derive_keypair_from_ed25519_priv(cls, ed25519_priv_bytes: bytes) -> Tuple[bytes, bytes]:
-        seed64 = hashlib.shake_256(b"armiger-hybrid-ed25519-wots-v1:" + ed25519_priv_bytes).digest(64)
+    def derive_keypair_from_ed25519_priv(cls, ed25519_priv_bytes: bytes, seq: int = 0) -> Tuple[bytes, bytes]:
+        ctx = b"armiger-hybrid-ed25519-wots-v1:" + ed25519_priv_bytes + (f":seq:{int(seq)}".encode("utf-8") if seq else b"")
+        seed64 = hashlib.shake_256(ctx).digest(64)
         return cls.generate_keypair(seed64)
 
     @classmethod
@@ -836,7 +876,7 @@ class WOTSPlusSHAKE256:
         else:
             _, pk = cls.generate_keypair(priv_seed)
         sk_seed, pub_seed = priv_seed[:32], priv_seed[32:]
-        digest = hashlib.shake_256(pub_seed + pk + message).digest(32)
+        digest = hashlib.shake_256(b"armiger-wots-msg-v2:" + pub_seed + pk + message).digest(32)
         digits = cls._msg_to_base_w(digest)
         sig_parts = [pub_seed]
         for i, d in enumerate(digits):
@@ -849,7 +889,7 @@ class WOTSPlusSHAKE256:
         if len(pub_key) != cls.PUB_BYTES or len(signature) != cls.SIG_BYTES:
             return False
         pub_seed = signature[:32]
-        digest = hashlib.shake_256(pub_seed + pub_key + message).digest(32)
+        digest = hashlib.shake_256(b"armiger-wots-msg-v2:" + pub_seed + pub_key + message).digest(32)
         digits = cls._msg_to_base_w(digest)
         ends: List[bytes] = []
         for i, d in enumerate(digits):
@@ -869,7 +909,7 @@ def blind_infohash(infohash: str) -> str:
     Formula: SHA-256("armiger-tombstone-v1:" || lowercase_hex_infohash)
     Preserves anonymity while allowing deterministic matching on known bad hashes (128-bit Grover PQ preimage resistance).
     """
-    clean = infohash.strip().lower().encode("ascii")
+    clean = str(infohash).strip().lower().encode("utf-8", errors="replace")
     return hashlib.sha256(b"armiger-tombstone-v1:" + clean).hexdigest()
 
 

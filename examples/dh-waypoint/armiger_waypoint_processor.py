@@ -19,7 +19,7 @@ ROOT_DIR = Path(__file__).resolve().parents[2]
 if str(ROOT_DIR) not in sys.path:
     sys.path.insert(0, str(ROOT_DIR))
 
-from armiger_dht_rsi import CandidateObservation, DHTRSIMode
+from armiger_dht_rsi import CandidateObservation, DHTRSIMode, resolve_opt_in_sharing
 from armiger_ultra_pipeline import ArmigerUltraPipeline, ArmigerUltraPrediction
 
 # Map Armiger 11-class labels to DH-Waypoint canonical content types
@@ -43,14 +43,25 @@ class ArmigerWaypointAdapter:
 
     def __init__(
         self,
-        pipeline: ArmigerUltraPipeline,
+        pipeline: Optional[ArmigerUltraPipeline] = None,
         *,
         use_zero_cue_catalog: bool = True,
         reject_dead_swarms: bool = False,
+        opt_in_sharing: Optional[bool] = None,
     ) -> None:
-        self.pipeline = pipeline
+        self.opt_in_sharing: bool = resolve_opt_in_sharing(opt_in_sharing)
+        self.pipeline = pipeline or ArmigerUltraPipeline.from_directory(
+            ROOT_DIR, variant="int8", preload_catalog=False, opt_in_sharing=self.opt_in_sharing
+        )
+        if opt_in_sharing is None and pipeline is not None:
+            self.opt_in_sharing = bool(getattr(pipeline, "opt_in_sharing", False))
         self.use_zero_cue_catalog = use_zero_cue_catalog
         self.reject_dead_swarms = reject_dead_swarms
+
+    def sharing_status(self) -> Dict[str, Any]:
+        st = self.pipeline.sharing_status()
+        st["opt_in_sharing_enabled"] = bool(self.opt_in_sharing)
+        return st
 
     @staticmethod
     def _torrent_to_row(t: Mapping[str, Any]) -> Dict[str, Any]:
