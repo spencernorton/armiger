@@ -342,10 +342,10 @@ def encode_torrent_features(
                 flagged = True
             elif vc and vid_share == 0.0 and (has_real_exe or has_scr_trap):
                 flagged = True
-            elif len(items) <= 2 and f_exts_str[0] in ("zip", "zipx", "rar", "7z") and vid_share == 0.0:
+            elif len(items) <= 2 and any(e in ("zip", "zipx", "rar", "7z") for e in f_exts_str) and vid_share == 0.0:
                 if _SIDE_EP_ZIP_RE.search(name) and not _SIDE_BENIGN_ZIP_RE.search(name):
                     flagged = True
-            elif len(items) <= 2 and f_exts_str[0] in ("iso", "img", "vhd", "vhdx", "udf") and vid_share == 0.0:
+            elif len(items) <= 2 and any(e in ("iso", "img", "vhd", "vhdx", "udf") for e in f_exts_str) and vid_share == 0.0:
                 name_stem = re.sub(r"\.(?:iso|img|vhd|vhdx|udf|dmg)$", "", name.strip(), flags=re.IGNORECASE)
                 if _SIDE_EP_ZIP_RE.search(name_stem) and not re.search(r"(?i)\b(?:dvd|bd25|bd50|remux|untouched|pal|ntsc|iso)\b", name_stem):
                     flagged = True
