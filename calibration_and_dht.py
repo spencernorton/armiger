@@ -59,10 +59,15 @@ class ArmigerCalibrator:
         p_junk: float,
         p_excluded_scope: float,
     ) -> dict[str, bool]:
+        def _flag(val: float, thresh: float) -> bool:
+            if isinstance(val, bool) or not isinstance(val, (int, float)) or not math.isfinite(val) or val < 0.0 or val > 1.0:
+                return True
+            return bool(val >= thresh)
+
         return {
-            "adult_flagged": bool(p_adult >= float(self.mondrian.get("adult", 0.5451))),
-            "junk_flagged": bool(p_junk >= float(self.mondrian.get("junk", 0.1010))),
-            "scope_excluded": bool(p_excluded_scope >= float(self.mondrian.get("owner_scope", 0.4770))),
+            "adult_flagged": _flag(p_adult, float(self.mondrian.get("adult", 0.5451))),
+            "junk_flagged": _flag(p_junk, float(self.mondrian.get("junk", 0.1010))),
+            "scope_excluded": _flag(p_excluded_scope, float(self.mondrian.get("owner_scope", 0.4770))),
         }
 
 
@@ -82,13 +87,15 @@ class SignedDHTManifest:
 
     def canonical_payload(self) -> bytes:
         body = {
-            "bundle_sha256": self.bundle_sha256,
+            "bundle_sha256": self.bundle_sha256.lower(),
             "infohash": self.infohash.lower(),
             "quorum_attestations": int(self.quorum_attestations),
             "seq": int(self.seq),
             "timestamp": int(self.timestamp),
             "version": self.version,
         }
+        if self.pq_pubkey_hex:
+            body["pq_pubkey_hex"] = self.pq_pubkey_hex.lower()
         return json.dumps(body, sort_keys=True, separators=(",", ":")).encode("utf-8")
 
 
@@ -129,33 +136,49 @@ class ArmigerDHTUpdater:
         """Verify monotonic sequence, quorum threshold, SHA-256 digest, and Hybrid Ed25519 + WOTS+-SHAKE256 signature."""
         if self.mode == "off":
             return False, "dht_updates_disabled"
+        if isinstance(manifest.seq, bool) or not isinstance(manifest.seq, int) or manifest.seq <= 0:
+            return False, "invalid_manifest_seq_type"
+        if isinstance(manifest.timestamp, bool) or not isinstance(manifest.timestamp, int) or manifest.timestamp <= 0:
+            return False, "invalid_manifest_timestamp_type"
         if manifest.seq <= self.current_seq:
             return False, f"stale_or_replayed_seq:{manifest.seq}<={self.current_seq}"
-        if manifest.quorum_attestations < self.min_quorum:
+        if self.min_quorum <= 0 or manifest.quorum_attestations < self.min_quorum:
             return False, f"insufficient_quorum:{manifest.quorum_attestations}<{self.min_quorum}"
+        if manifest.bundle_sha256 != manifest.bundle_sha256.lower() or manifest.infohash != manifest.infohash.lower():
+            return False, "non_canonical_uppercase_hex_in_manifest"
 
         actual_sha = hashlib.sha256(bundle_bytes).hexdigest()
         if actual_sha != manifest.bundle_sha256.lower():
             return False, "bundle_sha256_mismatch"
 
         payload = manifest.canonical_payload()
+        try:
+            pub_bytes = bytes.fromhex(self.root_pubkey_hex)
+            sig_bytes = bytes.fromhex(manifest.ed25519_signature_hex)
+        except ValueError:
+            return False, "ed25519_signature_invalid_hex"
+
         if signature_verifier is not None:
-            ok = bool(
-                signature_verifier(
-                    bytes.fromhex(self.root_pubkey_hex),
-                    payload,
-                    bytes.fromhex(manifest.ed25519_signature_hex),
-                )
-            )
+            ok = bool(signature_verifier(pub_bytes, payload, sig_bytes))
             if not ok:
                 return False, "ed25519_signature_invalid"
+        else:
+            from cryptography.exceptions import InvalidSignature
+            from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
+            try:
+                Ed25519PublicKey.from_public_bytes(pub_bytes).verify(sig_bytes, payload)
+            except (InvalidSignature, ValueError):
+                return False, "ed25519_signature_invalid"
 
-        if self.root_pq_pubkey_hex or manifest.pq_signature_hex:
+        if self.root_pq_pubkey_hex or manifest.pq_signature_hex or manifest.pq_pubkey_hex:
+            if not self.root_pq_pubkey_hex:
+                return False, "untrusted_pq_pubkey_when_root_pq_unset"
+            if manifest.pq_pubkey_hex and manifest.pq_pubkey_hex.lower() != self.root_pq_pubkey_hex:
+                return False, "pq_pubkey_mismatch_against_pinned_root"
             from armiger_dht_rsi import WOTSPlusSHAKE256
-            expected_pq_pub = self.root_pq_pubkey_hex or manifest.pq_pubkey_hex.lower()
             try:
                 pq_ok = WOTSPlusSHAKE256.verify(
-                    bytes.fromhex(expected_pq_pub),
+                    bytes.fromhex(self.root_pq_pubkey_hex),
                     payload,
                     bytes.fromhex(manifest.pq_signature_hex),
                 )

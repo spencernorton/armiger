@@ -25,7 +25,14 @@ from cryptography.hazmat.primitives.serialization import Encoding, PublicFormat,
 from armiger_dht_rsi import (
     AnonymizedTelemetryRecord,
     ArmigerDHTRSIEngine,
+    AuthoritativeASNVerifier,
     BlindedTitleStem,
+    ByzantineResilientAggregator,
+    CatalogConsensusResult,
+    ContinuousAggregationResult,
+    ContinuousDeltaSubmission,
+    TelemetrySubmission,
+    ZeroCueCatalogDelta,
     BundleFormat,
     CanaryItem,
     CandidateObservation,
@@ -347,7 +354,7 @@ class TestCompleteAnonymityAndPrivacy(unittest.TestCase):
     def test_blind_title_stem(self):
         title = "Big.Buck.Bunny.2008.1080p.BluRay.x264.DTS-HD.MA.5.1-OPEN"
         blinded = self.anonymizer.blind_title_stem(title)
-        self.assertEqual(len(blinded.blinded_hash), 16)
+        self.assertEqual(len(blinded.blinded_hash), 64)
         self.assertIn("1080p", blinded.token_features)
         self.assertIn("x264", blinded.token_features)
         self.assertIn("bluray", blinded.token_features)
@@ -562,16 +569,16 @@ class TestSpoofProofProtocol(unittest.TestCase):
         sigs_1 = self._sign_manifest(m_data, [self.priv1])
         manifest_1 = ThresholdDHTManifest(**m_data, signatures=sigs_1)
         ok, reason = ThresholdSignatureVerifier.verify(
-            manifest_1, self.trusted_signers, threshold_m=2, current_seq=10
+            manifest_1, self.trusted_signers, threshold_m=2, current_seq=10, require_pq=False
         )
         self.assertFalse(ok)
         self.assertIn("insufficient_threshold_signatures:1<2", reason)
 
-        # 2-of-3 signatures when threshold is 2 -> PASS!
+        # 2-of-3 signatures when threshold is 2 -> PASS (explicit classical-only mode)!
         sigs_2 = self._sign_manifest(m_data, [self.priv1, self.priv2])
         manifest_2 = ThresholdDHTManifest(**m_data, signatures=sigs_2)
         ok, reason = ThresholdSignatureVerifier.verify(
-            manifest_2, self.trusted_signers, threshold_m=2, current_seq=10
+            manifest_2, self.trusted_signers, threshold_m=2, current_seq=10, require_pq=False
         )
         self.assertTrue(ok)
         self.assertIn("threshold_verified", reason)
@@ -848,6 +855,7 @@ class TestOptInOutModesAndMasterEngine(unittest.TestCase):
     def test_mode_anonymous_contribute_end_to_end(self):
         engine = ArmigerDHTRSIEngine(
             mode="anonymous_contribute",
+            opt_in_sharing=True,
             current_seq=100,
             trusted_signers=self.trusted_signers,
             threshold_m=1,
@@ -877,8 +885,6 @@ class TestOptInOutModesAndMasterEngine(unittest.TestCase):
             },
         )
 
-        import random
-        random.seed(42)
         now = 100000.0
         ok, reason, record = engine.ingest_candidate(cand, current_timestamp=now)
         self.assertTrue(ok)
@@ -996,6 +1002,7 @@ def run_swarm_and_redteam_benchmark() -> Dict[str, Any]:
 
     engine = ArmigerDHTRSIEngine(
         mode="anonymous_contribute",
+        opt_in_sharing=True,
         current_seq=500,
         trusted_signers=trusted_signers,
         threshold_m=3,
@@ -1192,14 +1199,13 @@ def run_swarm_and_redteam_benchmark() -> Dict[str, Any]:
         assert s_ok
     sig_elapsed_sec = time.perf_counter() - t0_sig
 
-    # 1,000-node peer attestations across all 50 ASNs (20 nodes per ASN)
+    # 1,000-node peer attestations across all 50 ASNs (20 distinct-key nodes per ASN)
     swarm_attestations = []
-    # Pre-generate 50 ASN representative node keys (reused across the 20 peers in each ASN for fast deterministic simulation)
-    asn_keys = [ed25519.Ed25519PrivateKey.generate() for _ in range(50)]
-    asn_pubs = [k.public_key().public_bytes(Encoding.Raw, PublicFormat.Raw).hex() for k in asn_keys]
     for node_idx in range(1000):
         asn_slot = node_idx % 50
         asn_num = FIFTY_REAL_ASNS[asn_slot]
+        node_key = ed25519.Ed25519PrivateKey.generate()
+        node_pub = node_key.public_key().public_bytes(Encoding.Raw, PublicFormat.Raw).hex()
         peer_id = f"swarm_node_{node_idx:04d}_as{asn_num}"
         att_body = {
             "asn": int(asn_num),
@@ -1208,12 +1214,12 @@ def run_swarm_and_redteam_benchmark() -> Dict[str, Any]:
             "timestamp": int(base_ts),
         }
         att_canon = json.dumps(att_body, sort_keys=True, separators=(",", ":")).encode("utf-8")
-        att_sig = asn_keys[asn_slot].sign(att_canon).hex()
+        att_sig = node_key.sign(att_canon).hex()
         swarm_attestations.append(
             PeerAttestation(
                 peer_id=peer_id,
                 asn=asn_num,
-                peer_pubkey_hex=asn_pubs[asn_slot],
+                peer_pubkey_hex=node_pub,
                 timestamp=int(base_ts),
                 signature_hex=att_sig,
             )
@@ -1711,6 +1717,691 @@ class TestThousandNodeSwarmAndAdversarialRedTeam(unittest.TestCase):
         self.assertLess(perf["aead_decrypt_per_bundle_ms"], 5.0)
         self.assertLess(perf["ed25519_3of5_verify_ms"], 10.0)
         self.assertLess(perf["golden_canary_500_eval_ms"], 50.0)
+
+
+
+class TestByzantineResilientAggregatorAndASNBinding(unittest.TestCase):
+    """Track 1 Vulnerability & Proof-of-Function Tests:
+    - ByzantineResilientAggregator Multi-ASN k-Anonymity Consensus (aggregate_catalog_observations)
+    - ByzantineResilientAggregator Per-ASN Trimmed Mean & Median (aggregate_continuous_deltas)
+    - AuthoritativeASNVerifier CIDR IPv4/IPv6 & Pinned Public-Key Bindings
+    - Strict Uniqueness & Sybil Spoofing Rejection in ThresholdDHTManifest & SybilQuorumVerifier
+    """
+
+    def setUp(self) -> None:
+        self.agg_priv, self.agg_pub = HybridPQCAEADEngine.generate_keypair()
+        self.blinding_salt = b"track1-byzantine-test-salt-32b!!"
+        self.anonymizer = TelemetryAnonymizer(
+            blinding_salt=self.blinding_salt,
+            dp_epsilon=10.0,
+            poisson_mean_seconds=60.0,
+        )
+        self.verifier = PhysicalGroundTruthVerifier()
+        self.asn_verifier = AuthoritativeASNVerifier()
+        self.honest_asns = [13335, 15169, 16509, 7922, 7018, 3320]
+        self.honest_ips = {
+            asn: ".".join(str(x) for x in octs)
+            for asn, octs in (
+                (13335, (104, 16, 10, 15)),
+                (15169, (8, 8, 8, 8)),
+                (16509, (52, 94, 12, 34)),
+                (7922, (73, 15, 20, 9)),
+                (7018, (12, 40, 10, 5)),
+                (3320, (80, 130, 4, 12)),
+            )
+        }
+        self.malicious_asns = [24940, 16276, 14061]
+        self.malicious_ips = {
+            asn: ".".join(str(x) for x in octs)
+            for asn, octs in (
+                (24940, (88, 198, 10, 5)),
+                (16276, (51, 38, 22, 9)),
+                (14061, (104, 131, 8, 4)),
+            )
+        }
+
+    def _build_encrypted_catalog_submission(
+        self,
+        raw_title: str,
+        category: str,
+        junk: bool,
+        asn: int,
+        ip_address: str,
+        peer_idx: int,
+        has_video: bool = True,
+        has_audio: bool = True,
+        video_codec: str = "hevc",
+        audio_codec: str = "truehd",
+        audio_channels: float = 7.1,
+        size_mb: float = 42000.0,
+        duration_mins: float = 145.0,
+    ) -> TelemetrySubmission:
+        stem = self.anonymizer.blind_title_stem(raw_title)
+        rec = AnonymizedTelemetryRecord(
+            blinded_stem=stem,
+            category=category,
+            adult=False,
+            anime=False,
+            lang="english",
+            junk=junk,
+            owner_scope="excluded" if junk else "allowed_type",
+            english_subs=True,
+            title_language="english_title",
+            dp_size_mb=size_mb,
+            dp_duration_mins=duration_mins,
+            verified_features={
+                "has_video": has_video,
+                "has_audio": has_audio,
+                "video_codec": video_codec,
+                "audio_codec": audio_codec,
+                "audio_channels": audio_channels,
+                "catalog_type": "movie_catalog" if not junk else "none",
+            },
+            timestamp=int(time.time()),
+        )
+        bundle = HybridPQCAEADEngine.encrypt_bundle(
+            payload_bytes=rec.canonical_json_bytes(),
+            recipient_pubkey_bytes=self.agg_pub,
+            seq=peer_idx + 1,
+        )
+        priv = ed25519.Ed25519PrivateKey.generate()
+        pub_hex = priv.public_key().public_bytes(Encoding.Raw, PublicFormat.Raw).hex()
+        peer_id = f"peer_{asn}_{peer_idx}"
+        ts = int(time.time())
+        target_h = hashlib.sha256(bundle.ciphertext_hex.encode("utf-8")).hexdigest()
+        att = PeerAttestation(
+            peer_id=peer_id,
+            asn=asn,
+            peer_pubkey_hex=pub_hex,
+            timestamp=ts,
+            signature_hex="",
+            ip_address=ip_address,
+        )
+        sig_hex = priv.sign(att.canonical_bytes(target_h)).hex()
+        signed_att = PeerAttestation(
+            peer_id=peer_id,
+            asn=asn,
+            peer_pubkey_hex=pub_hex,
+            timestamp=ts,
+            signature_hex=sig_hex,
+            ip_address=ip_address,
+        )
+        return TelemetrySubmission(
+            encrypted_bundle=bundle,
+            asn=asn,
+            peer_id=peer_id,
+            peer_pubkey_hex=pub_hex,
+            ip_address=ip_address,
+            attestation=signed_att,
+            canonical_title=raw_title,
+        )
+
+    def test_01_byzantine_30pct_coalition_blocked_on_open_odyssey_2026_alone(self) -> None:
+        """(a) A 30% Byzantine coalition alone attempting to mislabel Open.Odyssey.2026.2160p as audiobook or junk is 100% blocked."""
+        aggregator = ByzantineResilientAggregator(
+            aggregator_privkey_bytes=self.agg_priv,
+            asn_verifier=self.asn_verifier,
+            min_distinct_asns=5,
+            min_observations=10,
+            min_agreement_ratio=0.90,
+        )
+        release_title = "Open.Odyssey.2026.2160p.UHD.BluRay.REMUX.HEVC.TrueHD.7.1.Atmos-OPEN"
+
+        # 3 malicious ASNs submit 12 poisoned observations claiming audiobook or junk
+        poison_subs = []
+        for idx in range(12):
+            mal_asn = self.malicious_asns[idx % len(self.malicious_asns)]
+            mal_ip = f"{self.malicious_ips[mal_asn].rsplit('.', 1)[0]}.{(idx % 200) + 10}"
+            poison_cat = "audiobook" if idx % 2 == 0 else "unknown"
+            poison_junk = (idx % 2 == 1)
+            poison_subs.append(
+                self._build_encrypted_catalog_submission(
+                    raw_title=release_title,
+                    category=poison_cat,
+                    junk=poison_junk,
+                    asn=mal_asn,
+                    ip_address=mal_ip,
+                    peer_idx=idx,
+                    has_video=False,
+                    has_audio=True,
+                    video_codec="none",
+                    audio_codec="m4b",
+                    audio_channels=2.0,
+                    size_mb=450.0,
+                )
+            )
+
+        res = aggregator.aggregate_catalog_observations(
+            submissions=poison_subs,
+            canonical_title=release_title,
+            emit_bep46_manifest=True,
+        )
+        self.assertFalse(res.consensus_reached)
+        self.assertIsNone(res.delta)
+        self.assertIsNone(res.manifest)
+        self.assertEqual(res.quarantined_byzantine_count, 12)
+
+    def test_02_byzantine_30pct_coalition_blocked_while_6_honest_asns_emit_signed_bep46_update(self) -> None:
+        """(a) A 30% Byzantine poisoning coalition attempting to mislabel Open.Odyssey.2026.2160p as audiobook
+        or junk is 100% blocked, while 6 honest ASNs reach consensus and emit a signed BEP-46 update.
+        """
+        aggregator = ByzantineResilientAggregator(
+            aggregator_privkey_bytes=self.agg_priv,
+            asn_verifier=self.asn_verifier,
+            min_distinct_asns=5,
+            min_observations=10,
+            min_agreement_ratio=0.90,
+            threshold_m=2,
+            current_seq=200,
+        )
+        release_title = "Open.Odyssey.2026.2160p"
+
+        submissions = []
+        # 6 honest ASNs x 2 peers per ASN = 12 honest encrypted observations (70.6% of total)
+        for i in range(12):
+            h_asn = self.honest_asns[i % 6]
+            base_ip = self.honest_ips[h_asn].rsplit(".", 1)[0]
+            h_ip = f"{base_ip}.{(i % 50) + 10}"
+            submissions.append(
+                self._build_encrypted_catalog_submission(
+                    raw_title=release_title,
+                    category="movie",
+                    junk=False,
+                    asn=h_asn,
+                    ip_address=h_ip,
+                    peer_idx=i,
+                    has_video=True,
+                    has_audio=True,
+                    video_codec="hevc",
+                    audio_codec="truehd",
+                    audio_channels=7.1,
+                    size_mb=48000.0,
+                    duration_mins=152.0,
+                )
+            )
+
+        # 30% Byzantine poisoning coalition: 5 malicious observations across 3 malicious ASNs
+        # attempting to mislabel Open.Odyssey.2026.2160p as 'audiobook' or 'junk'
+        for j in range(5):
+            m_asn = self.malicious_asns[j % 3]
+            base_ip = self.malicious_ips[m_asn].rsplit(".", 1)[0]
+            m_ip = f"{base_ip}.{(j % 50) + 100}"
+            is_junk_attack = (j % 2 == 1)
+            submissions.append(
+                self._build_encrypted_catalog_submission(
+                    raw_title=release_title,
+                    category="unknown" if is_junk_attack else "audiobook",
+                    junk=is_junk_attack,
+                    asn=m_asn,
+                    ip_address=m_ip,
+                    peer_idx=100 + j,
+                    has_video=not is_junk_attack,
+                    has_audio=True,
+                    video_codec="hevc" if not is_junk_attack else "none",
+                    audio_codec="m4b",
+                    audio_channels=2.0,
+                    size_mb=300.0,
+                    duration_mins=152.0,
+                )
+            )
+
+        res = aggregator.aggregate_catalog_observations(
+            submissions=submissions,
+            canonical_title=release_title,
+            emit_bep46_manifest=True,
+            require_authoritative_asn=True,
+        )
+        # 1. Poisoning coalition is 100% quarantined/blocked
+        self.assertEqual(res.quarantined_byzantine_count, 5)
+        # 2. 6 honest ASNs reach k-anonymity consensus
+        self.assertTrue(res.consensus_reached, f"Expected consensus, got {res.reason}")
+        self.assertEqual(res.distinct_asns, 6)
+        self.assertEqual(res.total_valid_observations, 12)
+        self.assertGreaterEqual(res.agreement_ratio, 0.90)
+        self.assertIsNotNone(res.delta)
+        self.assertEqual(res.delta.category, "movie")
+        self.assertFalse(res.delta.junk)
+        self.assertEqual(res.delta.canonical_title, "Open.Odyssey.2026.2160p")
+        self.assertEqual(res.delta.stream_signature["video_codec"], "hevc")
+        self.assertEqual(res.delta.stream_signature["audio_codec"], "truehd")
+
+        # 3. Signed BEP-46 manifest is emitted and verifies under Hybrid Ed25519 + WOTS+-SHAKE256
+        self.assertIsNotNone(res.manifest)
+        self.assertIsNotNone(res.signed_bundle_bytes)
+        ok_sig, sig_reason = ThresholdSignatureVerifier.verify(
+            manifest=res.manifest,
+            trusted_signers=aggregator.trusted_ed_signers,
+            threshold_m=2,
+            current_seq=200,
+            trusted_pq_signers=aggregator.trusted_pq_signers,
+            require_pq=True,
+        )
+        self.assertTrue(ok_sig, f"Expected BEP-46 manifest signature verification, got {sig_reason}")
+
+    def test_03_catalog_k_anonymity_enforces_min_asns_observations_and_agreement_ratio(self) -> None:
+        """Verify aggregate_catalog_observations blocks <5 ASNs, <10 observations, or <90% agreement."""
+        aggregator = ByzantineResilientAggregator(
+            aggregator_privkey_bytes=self.agg_priv,
+            asn_verifier=self.asn_verifier,
+            min_distinct_asns=5,
+            min_observations=10,
+            min_agreement_ratio=0.90,
+        )
+        title = "New.Release.2026.1080p.BluRay.x264-OPEN"
+
+        # Case 1: 6 ASNs but only 8 observations (< 10 min_observations)
+        subs_8 = [
+            self._build_encrypted_catalog_submission(
+                title, "movie", False, self.honest_asns[i % 6], self.honest_ips[self.honest_asns[i % 6]], i
+            )
+            for i in range(8)
+        ]
+        res_8 = aggregator.aggregate_catalog_observations(subs_8, canonical_title=title)
+        self.assertFalse(res_8.consensus_reached)
+        self.assertIn("insufficient_observations:8<10", res_8.reason)
+
+        # Case 2: 12 observations across only 4 ASNs (< 5 min_distinct_asns)
+        subs_4asn = [
+            self._build_encrypted_catalog_submission(
+                title, "movie", False, self.honest_asns[i % 4], self.honest_ips[self.honest_asns[i % 4]], i
+            )
+            for i in range(12)
+        ]
+        res_4asn = aggregator.aggregate_catalog_observations(subs_4asn, canonical_title=title)
+        self.assertFalse(res_4asn.consensus_reached)
+        self.assertIn("insufficient_distinct_asns:4<5", res_4asn.reason)
+
+        # Case 3: 70% movie vs 30% tv_show with identical valid video stream signature (< 0.90 agreement)
+        ten_asns = FIFTY_REAL_ASNS[:10]
+        subs_split = []
+        for i, asn_val in enumerate(ten_asns):
+            cat = "movie" if i < 7 else "tv_show"
+            subs_split.append(
+                self._build_encrypted_catalog_submission(
+                    title, cat, False, asn_val, f"198.18.{i}.10", i
+                )
+            )
+        res_split = aggregator.aggregate_catalog_observations(subs_split, canonical_title=title)
+        self.assertFalse(res_split.consensus_reached)
+        self.assertIn("insufficient_agreement_ratio", res_split.reason)
+
+    def test_04_single_asn_500_observation_flood_gets_only_one_asn_vote(self) -> None:
+        """Verify that a single malicious ASN flooding 500 poisoned observations gets only 1 ASN vote."""
+        aggregator = ByzantineResilientAggregator(
+            aggregator_privkey_bytes=self.agg_priv,
+            asn_verifier=self.asn_verifier,
+            min_distinct_asns=5,
+            trim_fraction=0.20,
+        )
+        submissions = []
+        # 7 honest ASNs submit 1 observation each with temperature=1.15
+        for i, asn_val in enumerate(FIFTY_REAL_ASNS[:7]):
+            submissions.append(
+                ContinuousDeltaSubmission(
+                    peer_id=f"honest_{i}",
+                    asn=asn_val,
+                    peer_pubkey_hex=ed25519.Ed25519PrivateKey.generate().public_key().public_bytes(Encoding.Raw, PublicFormat.Raw).hex(),
+                    deltas={"temperature": 1.15, "adapter_vec": [0.05, -0.02, 0.01]},
+                )
+            )
+        # 1 malicious ASN (ASN 60068) floods 500 observations of +1000.0!
+        flood_asn = 60068
+        for f_idx in range(500):
+            submissions.append(
+                ContinuousDeltaSubmission(
+                    peer_id=f"flood_{f_idx}",
+                    asn=flood_asn,
+                    peer_pubkey_hex=ed25519.Ed25519PrivateKey.generate().public_key().public_bytes(Encoding.Raw, PublicFormat.Raw).hex(),
+                    deltas={"temperature": 1000.0, "adapter_vec": [1000.0, -1000.0, 1000.0]},
+                )
+            )
+
+        res = aggregator.aggregate_continuous_deltas(submissions)
+        self.assertTrue(res.success)
+        # 7 honest ASNs + 1 flooding ASN = 8 distinct ASNs total
+        self.assertEqual(res.distinct_asn_count, 8)
+        self.assertEqual(res.total_submissions, 507)
+        self.assertAlmostEqual(float(res.trimmed_mean_deltas["temperature"]), 1.15, places=4)
+        self.assertAlmostEqual(float(res.median_deltas["temperature"]), 1.15, places=4)
+        self.assertAlmostEqual(res.trimmed_mean_deltas["adapter_vec"][0], 0.05, places=4)
+
+    def test_05_extreme_gradient_and_temperature_poisoning_25pct_malicious_asns_neutralized(self) -> None:
+        """(a2) Extreme gradient/temperature poisoning (+1000.0 logits) from 25% malicious ASNs
+        is neutralized by per-ASN coordinate-wise trimmed mean/median.
+        """
+        aggregator = ByzantineResilientAggregator(
+            aggregator_privkey_bytes=self.agg_priv,
+            asn_verifier=self.asn_verifier,
+            min_distinct_asns=5,
+            trim_fraction=0.20,
+        )
+        submissions = []
+        # 12 distinct ASNs: 9 honest ASNs (75%) submit ~1.20 temperature and small logit bias deltas,
+        # 3 malicious ASNs (25%) submit extreme +1000.0 logit/temperature poisoning
+        honest_temps = [1.18, 1.19, 1.19, 1.20, 1.20, 1.20, 1.21, 1.21, 1.22]
+        for i in range(9):
+            asn_val = FIFTY_REAL_ASNS[i]
+            t_val = honest_temps[i]
+            submissions.append(
+                ContinuousDeltaSubmission(
+                    peer_id=f"honest_asn_{asn_val}",
+                    asn=asn_val,
+                    peer_pubkey_hex=ed25519.Ed25519PrivateKey.generate().public_key().public_bytes(Encoding.Raw, PublicFormat.Raw).hex(),
+                    deltas={
+                        "category_temperature": t_val,
+                        "logit_bias": [0.01, -0.01, 0.02, -0.02],
+                    },
+                )
+            )
+        for j in range(3):
+            mal_asn = FIFTY_REAL_ASNS[20 + j]
+            submissions.append(
+                ContinuousDeltaSubmission(
+                    peer_id=f"byzantine_asn_{mal_asn}",
+                    asn=mal_asn,
+                    peer_pubkey_hex=ed25519.Ed25519PrivateKey.generate().public_key().public_bytes(Encoding.Raw, PublicFormat.Raw).hex(),
+                    deltas={
+                        "category_temperature": 1000.0,
+                        "logit_bias": [1000.0, 1000.0, 1000.0, 1000.0],
+                    },
+                )
+            )
+
+        res = aggregator.aggregate_continuous_deltas(submissions, trim_fraction=0.20)
+        self.assertTrue(res.success)
+        self.assertEqual(res.distinct_asn_count, 12)
+        self.assertAlmostEqual(float(res.trimmed_mean_deltas["category_temperature"]), 1.20, delta=0.015)
+        self.assertAlmostEqual(float(res.median_deltas["category_temperature"]), 1.20, delta=0.015)
+        self.assertAlmostEqual(res.trimmed_mean_deltas["logit_bias"][0], 0.01, delta=0.005)
+        self.assertAlmostEqual(res.trimmed_mean_deltas["logit_bias"][1], -0.01, delta=0.005)
+        self.assertAlmostEqual(res.median_deltas["logit_bias"][2], 0.02, delta=0.005)
+
+    def test_06_coordinate_wise_trimmed_mean_clips_35pct_byzantine_asns(self) -> None:
+        """Verify up to 35% Byzantine malicious ASNs sending extreme weight/logit values are clipped out."""
+        aggregator = ByzantineResilientAggregator(
+            aggregator_privkey_bytes=self.agg_priv,
+            asn_verifier=self.asn_verifier,
+            min_distinct_asns=5,
+            trim_fraction=0.20,
+        )
+        submissions = []
+        # 20 distinct ASNs: 13 honest (65%) + 7 malicious (35%) sending +1000.0 / -1000.0
+        for i in range(13):
+            asn_val = FIFTY_REAL_ASNS[i]
+            jitter = (i - 6) * 0.001
+            submissions.append(
+                ContinuousDeltaSubmission(
+                    peer_id=f"h_{i}",
+                    asn=asn_val,
+                    peer_pubkey_hex=ed25519.Ed25519PrivateKey.generate().public_key().public_bytes(Encoding.Raw, PublicFormat.Raw).hex(),
+                    deltas={"lora_delta": [0.025 + jitter, -0.040 + jitter, 1.10 + jitter]},
+                )
+            )
+        for j in range(7):
+            mal_asn = FIFTY_REAL_ASNS[30 + j]
+            submissions.append(
+                ContinuousDeltaSubmission(
+                    peer_id=f"m_{j}",
+                    asn=mal_asn,
+                    peer_pubkey_hex=ed25519.Ed25519PrivateKey.generate().public_key().public_bytes(Encoding.Raw, PublicFormat.Raw).hex(),
+                    deltas={"lora_delta": [1000.0, -1000.0, 1000.0]},
+                )
+            )
+
+        res = aggregator.aggregate_continuous_deltas(submissions, trim_fraction=0.20)
+        self.assertTrue(res.success)
+        self.assertEqual(res.distinct_asn_count, 20)
+        self.assertAlmostEqual(res.trimmed_mean_deltas["lora_delta"][0], 0.025, delta=0.005)
+        self.assertAlmostEqual(res.trimmed_mean_deltas["lora_delta"][1], -0.040, delta=0.005)
+        self.assertAlmostEqual(res.trimmed_mean_deltas["lora_delta"][2], 1.10, delta=0.005)
+
+    def test_07_self_asserted_asn_spoofing_one_key_claiming_10_asns_rejected(self) -> None:
+        """(b) Self-asserted ASN spoofing where a single public key claims 10 distinct ASNs is 100% rejected."""
+        target_hash = "ab" * 32
+        ts = int(time.time())
+        single_priv = ed25519.Ed25519PrivateKey.generate()
+        single_pub_hex = single_priv.public_key().public_bytes(Encoding.Raw, PublicFormat.Raw).hex()
+
+        spoofed_attestations = []
+        for i in range(10):
+            claimed_asn = FIFTY_REAL_ASNS[i]
+            peer_id = f"sybil_key_node_{i}"
+            body = {
+                "asn": int(claimed_asn),
+                "peer_id": peer_id,
+                "target_hash": target_hash,
+                "timestamp": ts,
+            }
+            sig_hex = single_priv.sign(json.dumps(body, sort_keys=True, separators=(",", ":")).encode("utf-8")).hex()
+            spoofed_attestations.append(
+                PeerAttestation(
+                    peer_id=peer_id,
+                    asn=claimed_asn,
+                    peer_pubkey_hex=single_pub_hex,
+                    timestamp=ts,
+                    signature_hex=sig_hex,
+                )
+            )
+
+        ok, reason, verified_asns = SybilQuorumVerifier.verify_quorum(
+            spoofed_attestations, target_hash, min_distinct_asns=5, now_timestamp=ts
+        )
+        self.assertFalse(ok)
+        self.assertEqual(len(verified_asns), 0)
+        self.assertIn("pubkey_claimed_multiple_asns", reason)
+
+    def test_08_self_asserted_asn_spoofing_one_subnet_claiming_10_asns_rejected(self) -> None:
+        """(b) Self-asserted ASN spoofing where one /24 IPv4 or /48 IPv6 subnet claims 10 distinct ASNs is 100% rejected."""
+        target_hash = "cd" * 32
+        ts = int(time.time())
+
+        # Case A: 10 distinct keys all in the same 198.51.100.0/24 subnet claiming 10 distinct ASNs
+        ipv4_spoof_atts = []
+        for i in range(10):
+            priv = ed25519.Ed25519PrivateKey.generate()
+            pub_hex = priv.public_key().public_bytes(Encoding.Raw, PublicFormat.Raw).hex()
+            claimed_asn = FIFTY_REAL_ASNS[i]
+            peer_id = f"subnet_v4_node_{i}"
+            body = {"asn": int(claimed_asn), "peer_id": peer_id, "target_hash": target_hash, "timestamp": ts}
+            sig_hex = priv.sign(json.dumps(body, sort_keys=True, separators=(",", ":")).encode("utf-8")).hex()
+            ipv4_spoof_atts.append(
+                PeerAttestation(
+                    peer_id=peer_id,
+                    asn=claimed_asn,
+                    peer_pubkey_hex=pub_hex,
+                    timestamp=ts,
+                    signature_hex=sig_hex,
+                    ip_address=f"198.51.100.{i + 10}",
+                )
+            )
+
+        ok_v4, reason_v4, asns_v4 = SybilQuorumVerifier.verify_quorum(
+            ipv4_spoof_atts, target_hash, min_distinct_asns=5, now_timestamp=ts
+        )
+        self.assertFalse(ok_v4)
+        self.assertEqual(len(asns_v4), 0)
+        self.assertIn("subnet_claimed_multiple_asns", reason_v4)
+
+        # Case B: 10 distinct keys all in the same 2001:db8:abcd::/48 IPv6 subnet claiming 10 distinct ASNs
+        ipv6_spoof_atts = []
+        for i in range(10):
+            priv = ed25519.Ed25519PrivateKey.generate()
+            pub_hex = priv.public_key().public_bytes(Encoding.Raw, PublicFormat.Raw).hex()
+            claimed_asn = FIFTY_REAL_ASNS[i]
+            peer_id = f"subnet_v6_node_{i}"
+            body = {"asn": int(claimed_asn), "peer_id": peer_id, "target_hash": target_hash, "timestamp": ts}
+            sig_hex = priv.sign(json.dumps(body, sort_keys=True, separators=(",", ":")).encode("utf-8")).hex()
+            ipv6_spoof_atts.append(
+                PeerAttestation(
+                    peer_id=peer_id,
+                    asn=claimed_asn,
+                    peer_pubkey_hex=pub_hex,
+                    timestamp=ts,
+                    signature_hex=sig_hex,
+                    ip_address=f"2001:db8:abcd:{i}::1",
+                )
+            )
+
+        ok_v6, reason_v6, asns_v6 = SybilQuorumVerifier.verify_quorum(
+            ipv6_spoof_atts, target_hash, min_distinct_asns=5, now_timestamp=ts
+        )
+        self.assertFalse(ok_v6)
+        self.assertEqual(len(asns_v6), 0)
+        self.assertIn("subnet_claimed_multiple_asns", reason_v6)
+
+    def test_09_authoritative_asn_verifier_cidr_ipv4_ipv6_and_pinned_key_bindings(self) -> None:
+        """Verify AuthoritativeASNVerifier enforces IPv4/IPv6 CIDR routes and pinned ASN public-key bindings."""
+        verifier = AuthoritativeASNVerifier(require_authoritative_binding=True)
+        priv = ed25519.Ed25519PrivateKey.generate()
+        pub_hex = priv.public_key().public_bytes(Encoding.Raw, PublicFormat.Raw).hex()
+        verifier.register_pinned_key(pub_hex, 13335)
+
+        # 1. Matching IPv4 CIDR + matching pinned key -> PASS
+        ok1, reason1 = verifier.verify_binding(13335, pubkey_hex=pub_hex, ip_address=".".join(["104", "16", "25", "10"]))
+        self.assertTrue(ok1, reason1)
+
+        # 2. Matching IPv6 CIDR (Google ASN 15169) -> PASS
+        ok2, reason2 = verifier.verify_binding(15169, ip_address=":".join(["2001", "4860", "4860", "", "8888"]))
+        self.assertTrue(ok2, reason2)
+
+        # 3. Pinned key mismatch (pinned to 13335, claims 15169) -> REJECT
+        ok3, reason3 = verifier.verify_binding(15169, pubkey_hex=pub_hex, ip_address=".".join(["8", "8", "8", "8"]))
+        self.assertFalse(ok3)
+        self.assertIn("pinned_pubkey_asn_mismatch", reason3)
+
+        # 4. BGP CIDR route mismatch (ASN 13335 IP claiming AWS 16509) -> REJECT
+        ok4, reason4 = verifier.verify_binding(16509, ip_address=".".join(["104", "16", "1", "1"]))
+        self.assertFalse(ok4)
+        self.assertIn("cidr_route_asn_mismatch", reason4)
+
+        # 5. Unrouted IP when require_authoritative_binding=True -> REJECT
+        ok5, reason5 = verifier.verify_binding(99999, ip_address="192.0.2.55")
+        self.assertFalse(ok5)
+        self.assertIn("unrouted_ip_for_asn", reason5)
+
+    def test_10_duplicate_signer_keys_in_threshold_dht_manifest_rejected(self) -> None:
+        """(b) Duplicate signer keys in ThresholdDHTManifest are 100% rejected."""
+        s1_ed, s1_pub, s1_pq_priv, s1_pq_pub = ThresholdSignatureVerifier.generate_hybrid_signer()
+        s2_ed, s2_pub, s2_pq_priv, s2_pq_pub = ThresholdSignatureVerifier.generate_hybrid_signer()
+        trusted = {s1_pub: "signer_1", s2_pub: "signer_2"}
+
+        m_body = {
+            "seq": 15,
+            "version": "2.1.0",
+            "infohash": "11" * 20,
+            "bundle_sha256": "22" * 32,
+            "bundle_format": "json",
+            "min_asn_quorum": 5,
+            "timestamp": int(time.time()),
+        }
+        temp_m = ThresholdDHTManifest(**m_body, signatures={})
+        payload = temp_m.canonical_payload()
+        sig1 = s1_ed.sign(payload).hex()
+
+        # Attack 1: Same public key submitted twice via case-variation / suffix in dict to meet threshold_m=2
+        dup_dict_manifest = ThresholdDHTManifest(
+            **m_body,
+            signatures={s1_pub.lower(): sig1, s1_pub.upper(): sig1},
+        )
+        ok_d1, reason_d1 = ThresholdSignatureVerifier.verify(
+            dup_dict_manifest, trusted, threshold_m=2, current_seq=10
+        )
+        self.assertFalse(ok_d1)
+        self.assertIn("duplicate_manifest_signer_pubkey", reason_d1)
+
+        # Attack 2: Same public key submitted twice in sequence of (pubkey, sig) pairs
+        dup_list_manifest = ThresholdDHTManifest(
+            **m_body,
+            signatures=[(s1_pub, sig1), (s1_pub, sig1)],
+        )
+        ok_d2, reason_d2 = ThresholdSignatureVerifier.verify(
+            dup_list_manifest, trusted, threshold_m=2, current_seq=10
+        )
+        self.assertFalse(ok_d2)
+        self.assertIn("duplicate_manifest_signer_pubkey", reason_d2)
+
+        # Attack 3: Two public keys mapped to the same signer identity in trusted_signers
+        sig2 = s2_ed.sign(payload).hex()
+        same_identity_trusted = {s1_pub: "same_entity", s2_pub: "same_entity"}
+        same_id_manifest = ThresholdDHTManifest(
+            **m_body,
+            signatures={s1_pub: sig1, s2_pub: sig2},
+        )
+        ok_d3, reason_d3 = ThresholdSignatureVerifier.verify(
+            same_id_manifest, same_identity_trusted, threshold_m=2, current_seq=10
+        )
+        self.assertFalse(ok_d3)
+        self.assertIn("duplicate_signer_identity", reason_d3)
+
+    def test_11_duplicate_peer_pubkeys_in_sybil_quorum_rejected(self) -> None:
+        """Verify SybilQuorumVerifier rejects attestation lists that reuse the same public key."""
+        target_hash = "ef" * 32
+        ts = int(time.time())
+        priv = ed25519.Ed25519PrivateKey.generate()
+        pub_hex = priv.public_key().public_bytes(Encoding.Raw, PublicFormat.Raw).hex()
+
+        atts = []
+        for i in range(5):
+            asn = FIFTY_REAL_ASNS[i] if i > 0 else FIFTY_REAL_ASNS[1]
+            # Even if first two attestations claim the same ASN with the same public key, reuse is rejected
+            same_asn = 13335
+            peer_id = f"dup_pk_peer_{i}"
+            body = {"asn": same_asn, "peer_id": peer_id, "target_hash": target_hash, "timestamp": ts}
+            sig_hex = priv.sign(json.dumps(body, sort_keys=True, separators=(",", ":")).encode("utf-8")).hex()
+            atts.append(PeerAttestation(peer_id=peer_id, asn=same_asn, peer_pubkey_hex=pub_hex, timestamp=ts, signature_hex=sig_hex))
+
+        ok, reason, verified_asns = SybilQuorumVerifier.verify_quorum(atts, target_hash, min_distinct_asns=1, now_timestamp=ts)
+        self.assertFalse(ok)
+        self.assertIn("duplicate_pubkey_rejected", reason)
+
+    def test_12_encrypted_continuous_delta_bundles_end_to_end_with_bep46_manifest(self) -> None:
+        """Verify encrypted continuous delta bundles decrypt via HybridPQCAEADEngine and emit a signed BEP-46 manifest."""
+        aggregator = ByzantineResilientAggregator(
+            aggregator_privkey_bytes=self.agg_priv,
+            asn_verifier=self.asn_verifier,
+            min_distinct_asns=5,
+            trim_fraction=0.20,
+            threshold_m=2,
+            current_seq=300,
+        )
+        submissions = []
+        for i in range(6):
+            asn_val = self.honest_asns[i]
+            ip_val = self.honest_ips[asn_val]
+            payload = json.dumps({"deltas": {"head_temp": 1.12, "lora_w": [0.02, -0.03]}}).encode("utf-8")
+            bundle = HybridPQCAEADEngine.encrypt_bundle(payload, self.agg_pub, seq=301 + i)
+            priv = ed25519.Ed25519PrivateKey.generate()
+            pub_hex = priv.public_key().public_bytes(Encoding.Raw, PublicFormat.Raw).hex()
+            submissions.append(
+                ContinuousDeltaSubmission(
+                    peer_id=f"enc_peer_{i}",
+                    asn=asn_val,
+                    peer_pubkey_hex=pub_hex,
+                    deltas={},
+                    ip_address=ip_val,
+                    encrypted_bundle=bundle,
+                    timestamp=int(time.time()),
+                )
+            )
+
+        res = aggregator.aggregate_continuous_deltas(
+            submissions,
+            require_authoritative_asn=True,
+            emit_bep46_manifest=True,
+        )
+        self.assertTrue(res.success)
+        self.assertEqual(res.distinct_asn_count, 6)
+        self.assertAlmostEqual(float(res.trimmed_mean_deltas["head_temp"]), 1.12, places=4)
+        self.assertIsNotNone(res.manifest)
+        ok_m, _ = ThresholdSignatureVerifier.verify(
+            res.manifest,
+            aggregator.trusted_ed_signers,
+            threshold_m=2,
+            current_seq=300,
+            trusted_pq_signers=aggregator.trusted_pq_signers,
+            require_pq=True,
+        )
+        self.assertTrue(ok_m)
 
 
 if __name__ == "__main__":

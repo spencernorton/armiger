@@ -28,7 +28,7 @@ ROOT_DIR = Path(__file__).resolve().parents[2]
 if str(ROOT_DIR) not in sys.path:
     sys.path.insert(0, str(ROOT_DIR))
 
-from armiger_dht_rsi import DHTRSIMode
+from armiger_dht_rsi import DHTRSIMode, resolve_opt_in_sharing
 from armiger_ultra_pipeline import ArmigerUltraPipeline
 
 ROUTE_TO_ADAPTER: Dict[str, str] = {
@@ -72,14 +72,25 @@ class ArmigerArrWebhookService:
 
     def __init__(
         self,
-        pipeline: ArmigerUltraPipeline,
+        pipeline: Optional[ArmigerUltraPipeline] = None,
         *,
-        enable_ffprobe: bool = True,
+        enable_ffprobe: bool = False,
         ffprobe_runner: Callable[[str], Optional[Dict[str, Any]]] = run_ffprobe_json,
+        opt_in_sharing: Optional[bool] = None,
     ) -> None:
-        self.pipeline = pipeline
+        self.opt_in_sharing: bool = resolve_opt_in_sharing(opt_in_sharing)
+        self.pipeline = pipeline or ArmigerUltraPipeline.from_directory(
+            ROOT_DIR, variant="int8", preload_catalog=False, opt_in_sharing=self.opt_in_sharing
+        )
+        if opt_in_sharing is None and pipeline is not None:
+            self.opt_in_sharing = bool(getattr(pipeline, "opt_in_sharing", False))
         self.enable_ffprobe = enable_ffprobe
         self.ffprobe_runner = ffprobe_runner
+
+    def sharing_status(self) -> Dict[str, Any]:
+        st = self.pipeline.sharing_status()
+        st["opt_in_sharing_enabled"] = bool(self.opt_in_sharing)
+        return st
 
     @staticmethod
     def _extract_media_path(payload: Mapping[str, Any]) -> Optional[str]:

@@ -825,7 +825,7 @@ class TestEndToEndDHTSyncEngine(unittest.TestCase):
         shard_id = "anime/ja/hd_1080p/2026_q4"
         # A shard contains 1 valid record and 1 disguised malware dropper
         rec_clean = TorrentRecord(
-            infohash="clean" + "0" * 35,
+            infohash="c1ea0" + "0" * 35,
             title="Clean Anime Movie",
             category="anime",
             language="ja",
@@ -841,7 +841,7 @@ class TestEndToEndDHTSyncEngine(unittest.TestCase):
             created_at=100,
         )
         rec_malware = TorrentRecord(
-            infohash="malware" + "0" * 33,
+            infohash="bad0000" + "0" * 33,
             title="Clean Anime Movie Part 2",
             category="anime",
             language="ja",

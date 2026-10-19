@@ -29,13 +29,20 @@ from __future__ import annotations
 import dataclasses
 import enum
 import hashlib
+import hmac
 import json
 import os
 import pathlib
 import sqlite3
 import time
 import zlib
-from typing import Any, Iterable, Sequence
+from typing import Any, Iterable, Mapping, Sequence
+from armiger_dht_rsi import (
+    AnonymityGuard,
+    AnonymityViolationError,
+    _bep44_canonical_sign_buffer,
+    resolve_opt_in_sharing,
+)
 
 from cryptography.exceptions import InvalidSignature, InvalidTag
 from cryptography.hazmat.primitives import hashes
@@ -167,16 +174,16 @@ class TorrentRecord:
     def canonical_dict(self) -> dict[str, Any]:
         """Deterministic dictionary for serialization and hashing."""
         return {
-            "category": self.category.lower(),
-            "content_sha256": self.content_sha256.lower(),
+            "category": self.category.strip().lower(),
+            "content_sha256": self.content_sha256.strip().lower(),
             "created_at": int(self.created_at),
-            "epoch": self.epoch.lower(),
+            "epoch": self.epoch.strip().lower(),
             "file_count": int(self.file_count),
             "file_list": sorted(self.file_list),
-            "infohash": self.infohash.lower(),
-            "language": self.language.lower(),
+            "infohash": self.infohash.strip().lower(),
+            "language": self.language.strip().lower(),
             "leechers": int(self.leechers),
-            "quality_tier": self.quality_tier.lower(),
+            "quality_tier": self.quality_tier.strip().lower(),
             "safety_gate_passed": bool(self.safety_gate_passed),
             "seeders": int(self.seeders),
             "size_bytes": int(self.size_bytes),
@@ -238,7 +245,7 @@ class DHTShardManifest:
         return dataclasses.replace(self, attestations=list(attestations))
 
     def canonical_dict_without_sig(self) -> dict[str, Any]:
-        return {
+        d: dict[str, Any] = {
             "bep46_infohash": self.bep46_infohash.lower(),
             "ciphertext_sha256": self.ciphertext_sha256.lower(),
             "compressed_size_bytes": int(self.compressed_size_bytes),
@@ -251,6 +258,9 @@ class DHTShardManifest:
             "timestamp": int(self.timestamp),
             "uncompressed_size_bytes": int(self.uncompressed_size_bytes),
         }
+        if self.root_pq_pubkey_hex:
+            d["root_pq_pubkey_hex"] = self.root_pq_pubkey_hex.strip().lower()
+        return d
 
     def canonical_payload(self) -> bytes:
         return json.dumps(self.canonical_dict_without_sig(), sort_keys=True, separators=(",", ":")).encode("utf-8")
@@ -260,8 +270,8 @@ class DHTShardManifest:
 
     def bep44_target(self, salt: str | None = None) -> str:
         """Compute BEP-44 DHT target lookup key: SHA1(pubkey || salt)."""
-        pub_bytes = bytes.fromhex(self.root_pubkey_hex)
-        salt_bytes = (salt or f"armiger-shard:{self.shard_id}").encode("utf-8")
+        pub_bytes = bytes.fromhex(self.root_pubkey_hex.strip().lower())
+        salt_bytes = (salt.lower() if salt else f"armiger-shard:{self.shard_id.strip().lower()}").encode("utf-8")
         return hashlib.sha1(pub_bytes + salt_bytes).hexdigest()
 
 
@@ -270,7 +280,9 @@ class DHTShardManifest:
 # ---------------------------------------------------------------------------
 
 class MerkleTree:
-    """Binary Merkle tree over canonical record leaf hashes."""
+    """Binary Merkle tree over canonical record leaf hashes with domain-separated odd-node padding."""
+
+    ODD_NODE_SENTINEL: bytes = hashlib.sha256(b"armiger-merkle-odd-node-sentinel-v1").digest()
 
     def __init__(self, leaves: Sequence[bytes]) -> None:
         self.leaves = list(leaves)
@@ -290,7 +302,7 @@ class MerkleTree:
             next_level: list[bytes] = []
             for i in range(0, len(current), 2):
                 left = current[i]
-                right = current[i + 1] if i + 1 < len(current) else left
+                right = current[i + 1] if i + 1 < len(current) else self.ODD_NODE_SENTINEL
                 parent = hashlib.sha256(left + right).digest()
                 next_level.append(parent)
             self.levels.append(next_level)
@@ -313,8 +325,9 @@ class MerkleTree:
             is_right = (cur_idx % 2 == 0)
             sib_idx = cur_idx + 1 if is_right else cur_idx - 1
             if sib_idx >= len(level):
-                sib_idx = cur_idx  # Odd leaf duplicated
-            proof.append((level[sib_idx].hex(), is_right))
+                proof.append((self.ODD_NODE_SENTINEL.hex(), True))
+            else:
+                proof.append((level[sib_idx].hex(), is_right))
             cur_idx //= 2
 
         return proof
@@ -322,14 +335,31 @@ class MerkleTree:
     @staticmethod
     def verify_proof(leaf_hash: bytes, proof: Sequence[tuple[str, bool]], root_hex: str) -> bool:
         """Verify an inclusion proof against expected Merkle root."""
-        current = leaf_hash
-        for sib_hex, is_right in proof:
-            sib = bytes.fromhex(sib_hex)
+        if not isinstance(leaf_hash, (bytes, bytearray)) or len(leaf_hash) != 32:
+            return False
+        try:
+            expected_root = bytes.fromhex(str(root_hex).strip())
+            if len(expected_root) != 32:
+                return False
+        except (ValueError, TypeError):
+            return False
+
+        current = bytes(leaf_hash)
+        for item in proof:
+            if not isinstance(item, (tuple, list)) or len(item) != 2:
+                return False
+            sib_hex, is_right = item
+            try:
+                sib = bytes.fromhex(str(sib_hex).strip())
+            except (ValueError, TypeError):
+                return False
+            if len(sib) != 32:
+                return False
             if is_right:
                 current = hashlib.sha256(current + sib).digest()
             else:
                 current = hashlib.sha256(sib + current).digest()
-        return current.hex().lower() == root_hex.lower()
+        return hmac.compare_digest(current, expected_root)
 
 
 # ---------------------------------------------------------------------------
@@ -521,16 +551,41 @@ def compress_payload(data: bytes) -> tuple[bytes, str]:
     return zlib.compress(data, level=9), "zlib"
 
 
-def decompress_payload(compressed: bytes, codec: str = "zstd") -> bytes:
-    """Decompress payload using specified codec."""
+MAX_DECOMPRESSED_SHARD_BYTES = 4 * 1024 * 1024
+MAX_DECOMPRESSION_RATIO = 50
+
+
+def decompress_payload(
+    compressed: bytes,
+    codec: str = "zstd",
+    max_output_bytes: int = MAX_DECOMPRESSED_SHARD_BYTES,
+    max_ratio: int = MAX_DECOMPRESSION_RATIO,
+) -> bytes:
+    """Decompress payload using specified codec with strict zip-bomb size & ratio caps."""
+    if not compressed:
+        return b""
+    hard_cap = min(max_output_bytes, max(65536, len(compressed) * max_ratio))
+
+    def _zlib_bounded(data: bytes) -> bytes:
+        dobj = zlib.decompressobj()
+        out = dobj.decompress(data, hard_cap + 1)
+        if dobj.unconsumed_tail or len(out) > hard_cap:
+            return b""
+        return out
+
     if codec == "zstd":
         if _HAS_ZSTD:
-            dctx = zstd.ZstdDecompressor()
-            return dctx.decompress(compressed)
-        # If zstd not present, attempt zlib decompression as transparent fallback
-        return zlib.decompress(compressed)
+            try:
+                dctx = zstd.ZstdDecompressor()
+                out = dctx.decompress(compressed, max_output_size=hard_cap + 1)
+                if len(out) > hard_cap:
+                    return b""
+                return out
+            except Exception:
+                return _zlib_bounded(compressed)
+        return _zlib_bounded(compressed)
     elif codec == "zlib":
-        return zlib.decompress(compressed)
+        return _zlib_bounded(compressed)
     raise ValueError(f"Unsupported compression codec: {codec}")
 
 
@@ -645,7 +700,10 @@ class ShardDatabase:
 
     def insert_record(self, record: TorrentRecord) -> bool:
         """Insert a torrent record into the appropriate partitioned table."""
-        is_adult = (record.category.lower() == CATEGORY_ADULT)
+        cat_clean = record.category.strip().lower()
+        if cat_clean not in ALL_CATEGORIES:
+            return False
+        is_adult = (cat_clean == CATEGORY_ADULT)
         if is_adult and not self.enable_xxx:
             return False  # Drop un-opted adult record
 
@@ -660,12 +718,12 @@ class ShardDatabase:
                 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
-                    record.infohash.lower(),
+                    record.infohash.strip().lower(),
                     record.title,
-                    record.category.lower(),
-                    record.language.lower(),
-                    record.quality_tier.lower(),
-                    record.epoch.lower(),
+                    cat_clean,
+                    record.language.strip().lower(),
+                    record.quality_tier.strip().lower(),
+                    record.epoch.strip().lower(),
                     record.size_bytes,
                     record.file_count,
                     record.seeders,
@@ -684,16 +742,19 @@ class ShardDatabase:
         main_rows: list[tuple[Any, ...]] = []
         adult_rows: list[tuple[Any, ...]] = []
         for record in records:
-            is_adult = (record.category.lower() == CATEGORY_ADULT)
+            cat_clean = record.category.strip().lower()
+            if cat_clean not in ALL_CATEGORIES:
+                continue
+            is_adult = (cat_clean == CATEGORY_ADULT)
             if is_adult and not self.enable_xxx:
                 continue
             row = (
-                record.infohash.lower(),
+                record.infohash.strip().lower(),
                 record.title,
-                record.category.lower(),
-                record.language.lower(),
-                record.quality_tier.lower(),
-                record.epoch.lower(),
+                cat_clean,
+                record.language.strip().lower(),
+                record.quality_tier.strip().lower(),
+                record.epoch.strip().lower(),
                 record.size_bytes,
                 record.file_count,
                 record.seeders,
@@ -943,19 +1004,30 @@ class QuorumVerifier:
           4. Distinct ASNs >= min_distinct_asns
           5. Each attestation Hybrid Ed25519 + WOTS+-SHAKE256 signature
         """
+        # 0. Policy & type sanity checks
+        if isinstance(manifest.seq, bool) or not isinstance(manifest.seq, int) or manifest.seq < 0:
+            return False, "invalid_manifest_seq_type"
+        if self.min_quorum <= 0 or self.min_distinct_asns <= 0:
+            return False, "invalid_quorum_policy_threshold"
+        if not self.trusted_roots:
+            return False, "no_trusted_root_pubkeys_configured"
+
         # 1. Monotonic sequence check
         if manifest.seq <= current_seq:
             return False, f"stale_or_downgrade_sequence:{manifest.seq}<={current_seq}"
 
         # 2. Root Ed25519 signature check
-        root_pub_bytes = bytes.fromhex(manifest.root_pubkey_hex)
-        if self.trusted_roots and root_pub_bytes not in self.trusted_roots:
+        try:
+            root_pub_bytes = bytes.fromhex(manifest.root_pubkey_hex.strip().lower())
+        except ValueError:
+            return False, "invalid_root_pubkey_hex"
+        if root_pub_bytes not in self.trusted_roots:
             return False, f"untrusted_root_pubkey:{manifest.root_pubkey_hex}"
 
         payload = manifest.canonical_payload()
         try:
             vk = Ed25519PublicKey.from_public_bytes(root_pub_bytes)
-            vk.verify(bytes.fromhex(manifest.ed25519_signature_hex), payload)
+            vk.verify(bytes.fromhex(manifest.ed25519_signature_hex.strip()), payload)
         except (InvalidSignature, ValueError) as exc:
             return False, f"invalid_root_ed25519_signature:{exc}"
 
@@ -979,16 +1051,48 @@ class QuorumVerifier:
         manifest_digest = manifest.canonical_digest()
         verified_asns: set[int] = set()
         seen_node_ids: set[str] = set()
+        seen_pubkeys: set[str] = set()
+        seen_pq_pubkeys: set[str] = set()
+        seen_sigs: set[str] = set()
+        seen_ip_digests: set[str] = set()
+        now = int(time.time())
 
         for att in manifest.attestations:
-            # Prevent node duplicate Sybil
-            if att.node_id.lower() in seen_node_ids:
+            norm_node = str(att.node_id).strip().lower()
+            norm_pk = str(att.pubkey_hex).strip().lower()
+            norm_sig = str(att.signature_hex).strip().lower()
+            norm_ip = str(att.ip_digest).strip().lower()
+
+            # Reject duplicate node_id, pubkey, signature, or IP digest Sybil replay
+            if norm_pk in seen_pubkeys or norm_sig in seen_sigs:
+                return False, f"sybil_duplicate_attestor_pubkey_or_signature:{norm_pk[:16]}"
+            if norm_node in seen_node_ids or (norm_ip and norm_ip in seen_ip_digests):
                 continue
-            seen_node_ids.add(att.node_id.lower())
+
+            seen_node_ids.add(norm_node)
+            seen_pubkeys.add(norm_pk)
+            seen_sigs.add(norm_sig)
+            if norm_ip:
+                seen_ip_digests.add(norm_ip)
+
+            if att.pq_pubkey_hex:
+                norm_pq_pk = str(att.pq_pubkey_hex).strip().lower()
+                if norm_pq_pk in seen_pq_pubkeys:
+                    return False, f"sybil_duplicate_attestor_pq_pubkey:{norm_pq_pk[:16]}"
+                seen_pq_pubkeys.add(norm_pq_pk)
+
+            # Enforce attestation timestamp freshness (reject ts<=0, >24h stale, or >5m in future)
+            if isinstance(att.timestamp, bool) or not isinstance(att.timestamp, int):
+                continue
+            if att.timestamp <= 0 or (now - att.timestamp) > 86400 or (att.timestamp - now) > 300:
+                continue
+
+            if isinstance(att.asn, bool) or not isinstance(att.asn, int) or att.asn <= 0:
+                continue
 
             try:
-                node_vk = Ed25519PublicKey.from_public_bytes(bytes.fromhex(att.pubkey_hex))
-                node_vk.verify(bytes.fromhex(att.signature_hex), manifest_digest)
+                node_vk = Ed25519PublicKey.from_public_bytes(bytes.fromhex(norm_pk))
+                node_vk.verify(bytes.fromhex(norm_sig), manifest_digest)
             except (InvalidSignature, ValueError):
                 continue
 
@@ -1016,6 +1120,10 @@ class QuorumVerifier:
 class ArmigerDHTDatabaseSync:
     """End-to-end decentralized, CSAM-safe, encrypted, modular DHT database sync plugin."""
 
+    CATEGORY_TO_CODE: dict[str, int] = {
+        cat: idx for idx, cat in enumerate(ALL_CATEGORIES)
+    }
+
     def __init__(
         self,
         subscription: SubscriptionConfig | None = None,
@@ -1023,8 +1131,15 @@ class ArmigerDHTDatabaseSync:
         trusted_root_pubkeys_hex: Sequence[str] | None = None,
         db_path: str | pathlib.Path = ":memory:",
         tombstone_store: TombstoneStore | None = None,
+        *,
+        opt_in_sharing: bool | None = None,
+        ephemeral_identity: bool = True,
+        min_k_samples: int = 25,
     ) -> None:
-        self.subscription = subscription or SubscriptionConfig()
+        self.opt_in_sharing: bool = resolve_opt_in_sharing(opt_in_sharing)
+        self.subscription = subscription or SubscriptionConfig(
+            sync_mode=SyncMode.SUBSCRIBE_AND_SEED if self.opt_in_sharing else SyncMode.PULL_ONLY
+        )
         self.master_secret = master_secret or os.urandom(32)
         self.tombstone_store = tombstone_store or TombstoneStore(trusted_root_pubkeys_hex)
         self.csam_guard = CSAMGuard(self.tombstone_store)
@@ -1036,6 +1151,14 @@ class ArmigerDHTDatabaseSync:
         )
         self.db = ShardDatabase(db_path=db_path, enable_xxx=self.subscription.enable_xxx)
         self.shard_sequences: dict[str, int] = {}
+        self.anonymity_guard = AnonymityGuard(
+            ephemeral_identity=ephemeral_identity,
+            min_k_samples=min_k_samples,
+        )
+        self._outbound_bundles_shared: int = 0
+        self._outbound_packets_blocked_opt_out: int = 0
+        self._outbound_bytes_shared: int = 0
+        self._outbound_seq: int = 0
 
     def set_sync_mode(self, mode: SyncMode) -> None:
         self.subscription.sync_mode = mode
@@ -1138,10 +1261,11 @@ class ArmigerDHTDatabaseSync:
         ciphertext_sha = hashlib.sha256(ciphertext_bundle).hexdigest()
         bep46_infohash = hashlib.sha1(ciphertext_bundle).hexdigest()
 
-        # 3. Create manifest and sign with Ed25519 root private key
+        # 3. Create manifest and sign with Ed25519 + WOTS+-SHAKE256 root private key
         sk = Ed25519PrivateKey.from_private_bytes(root_privkey)
         pk = sk.public_key()
         root_pub_bytes = pk.public_bytes(Encoding.Raw, PublicFormat.Raw)
+        pq_priv, pq_pub = WOTSPlusSHAKE256.derive_keypair_from_ed25519_priv(root_privkey)
 
         manifest_dummy = DHTShardManifest(
             seq=seq,
@@ -1157,11 +1281,11 @@ class ArmigerDHTDatabaseSync:
             root_pubkey_hex=root_pub_bytes.hex(),
             ed25519_signature_hex="",
             attestations=list(attestations or []),
+            root_pq_pubkey_hex=pq_pub.hex(),
         )
 
         payload_bytes = manifest_dummy.canonical_payload()
         sig = sk.sign(payload_bytes)
-        pq_priv, pq_pub = WOTSPlusSHAKE256.derive_keypair_from_ed25519_priv(root_privkey)
         pq_sig = WOTSPlusSHAKE256.sign(pq_priv, payload_bytes)
 
         manifest = DHTShardManifest(
@@ -1203,10 +1327,12 @@ class ArmigerDHTDatabaseSync:
         if not q_ok:
             return False, f"quorum_verification_failed:{q_msg}", 0
 
-        # 3. Content-addressed verification of ciphertext
+        # 3. Content-addressed & size verification of ciphertext
         actual_sha = hashlib.sha256(ciphertext_bundle).hexdigest()
         if actual_sha.lower() != manifest.ciphertext_sha256.lower():
             return False, "ciphertext_sha256_mismatch", 0
+        if len(ciphertext_bundle) != manifest.compressed_size_bytes:
+            return False, f"compressed_size_mismatch:{len(ciphertext_bundle)}!={manifest.compressed_size_bytes}", 0
 
         # 4. Decrypt shard with AEAD
         key = ShardCryptoEngine.derive_shard_key(self.master_secret, manifest.shard_id, manifest.epoch)
@@ -1222,8 +1348,17 @@ class ArmigerDHTDatabaseSync:
         except (InvalidTag, ValueError) as exc:
             return False, f"aead_decryption_failed:{exc}", 0
 
-        # 5. Decompress records & verify Merkle root
-        records = deserialize_shard_records(plaintext)
+        # 5. Decompress records & verify Merkle root and declared counts/sizes
+        try:
+            records = deserialize_shard_records(plaintext)
+        except Exception as exc:
+            return False, f"shard_deserialization_failed:{exc}", 0
+
+        if len(records) != manifest.record_count:
+            return False, f"record_count_mismatch:{len(records)}!={manifest.record_count}", 0
+        actual_uncomp = sum(len(r.canonical_bytes()) for r in records)
+        if actual_uncomp != manifest.uncompressed_size_bytes:
+            return False, f"uncompressed_size_mismatch:{actual_uncomp}!={manifest.uncompressed_size_bytes}", 0
         reconstructed_leaves = [r.leaf_hash() for r in sorted(records, key=lambda r: r.infohash.lower())]
         reconstructed_tree = MerkleTree(reconstructed_leaves)
 
@@ -1267,6 +1402,241 @@ class ArmigerDHTDatabaseSync:
         purged = self.db.purge_blinded_hashes(self.tombstone_store)
         return True, msg, count, purged
 
+    def sharing_status(self) -> dict[str, Any]:
+        """Return runtime audit telemetry confirming opt-in status and outbound packet/bundle counters."""
+        return {
+            "opt_in_sharing_enabled": bool(self.opt_in_sharing),
+            "sync_mode": self.subscription.sync_mode.value,
+            "outbound_bundles_shared": int(self._outbound_bundles_shared),
+            "outbound_packets_blocked_opt_out": int(self._outbound_packets_blocked_opt_out),
+            "outbound_bytes_shared": int(self._outbound_bytes_shared),
+            "ephemeral_identity_enabled": bool(self.anonymity_guard.ephemeral_identity),
+            "ephemeral_pubkey_hex": self.anonymity_guard.current_pubkey_hex() if self.opt_in_sharing else None,
+            "ephemeral_rotations": int(self.anonymity_guard.rotation_count),
+            "blocked_anonymity_violations": int(self.anonymity_guard.blocked_violations_count),
+        }
+
+    def hash_catalog_key(self, normalized_key: str, *, reject_raw_pii: bool = True) -> str:
+        """Compute strictly 16-hex-char truncated BLAKE2b-64(domain='armiger-catalog-v2' || normalized_key)."""
+        return self.anonymity_guard.hash_catalog_key(normalized_key, reject_raw_pii=reject_raw_pii)
+
+    def export_signed_bundle(
+        self,
+        records: Sequence[Mapping[str, Any] | Sequence[Any]] | None = None,
+        *,
+        epoch: int | float | None = None,
+        seq: int | None = None,
+        n_samples: int = 25,
+        salt: bytes = b"armiger-catalog-v2",
+        raw_wire_override: bytes | str | Mapping[str, Any] | None = None,
+        rotate_key: bool | None = None,
+        as_dict_records: bool = True,
+    ) -> dict[str, Any] | None:
+        """Export an anonymous BEP-44 catalog record bundle with 16-hex BLAKE2b keys `[h, c, r, s, a, v, n, t]`.
+
+        Strictly returns None (0 bytes shared) when `opt_in_sharing=False`.
+        Raises `AnonymityViolationError` if any PII/canary/schema/k-anonymity invariant is violated.
+        """
+        if not self.opt_in_sharing:
+            self._outbound_packets_blocked_opt_out += 1
+            return None
+
+        self._outbound_seq += 1
+        next_seq = int(seq) if seq is not None else self._outbound_seq
+
+        if raw_wire_override is not None:
+            if isinstance(raw_wire_override, (bytes, bytearray)):
+                v_bytes = bytes(raw_wire_override)
+            elif isinstance(raw_wire_override, str):
+                v_bytes = raw_wire_override.encode("utf-8")
+            elif isinstance(raw_wire_override, Mapping):
+                v_bytes = json.dumps(dict(raw_wire_override), sort_keys=True, separators=(",", ":")).encode("utf-8")
+            else:
+                raise AnonymityViolationError("invalid_raw_wire_override")
+            signed = self.anonymity_guard.sign_wire_payload(
+                v_bytes, seq=next_seq, salt=salt, rotate_key=rotate_key
+            )
+            self._outbound_bundles_shared += 1
+            self._outbound_bytes_shared += len(v_bytes)
+            return signed
+
+        if isinstance(n_samples, bool) or not isinstance(n_samples, int) or n_samples < self.anonymity_guard.min_k_samples:
+            self.anonymity_guard.blocked_violations_count += 1
+            raise AnonymityViolationError(f"k_anonymity_violation:n_samples={n_samples}<{self.anonymity_guard.min_k_samples}")
+
+        epoch_bucket = self.anonymity_guard.bucket_timestamp(epoch)
+        sanitized_records: list[Any] = []
+        for rec in (records or []):
+            if isinstance(rec, Mapping):
+                extra = set(rec.keys()) - {
+                    "h", "key", "normalized_key", "c", "category", "r", "s", "a", "v", "n", "t"
+                }
+                if extra:
+                    self.anonymity_guard.blocked_violations_count += 1
+                    raise AnonymityViolationError(f"unexpected_catalog_record_keys:{sorted(extra)}")
+                raw_h = rec.get("h")
+                raw_key = rec.get("key") or rec.get("normalized_key")
+                if raw_h is not None:
+                    h_str = str(raw_h)
+                    is_pre = True
+                elif raw_key is not None:
+                    h_str = str(raw_key)
+                    is_pre = False
+                else:
+                    self.anonymity_guard.blocked_violations_count += 1
+                    raise AnonymityViolationError("missing_catalog_key_or_hash")
+                cat_in = rec.get("c", rec.get("category", 0))
+                c_code = self.CATEGORY_TO_CODE.get(str(cat_in).lower(), 0) if isinstance(cat_in, str) else int(cat_in)
+                r_code = int(rec.get("r", 0))
+                s_code = int(rec.get("s", 0))
+                a_code = 1 if rec.get("a", 0) else 0
+                v_code = rec.get("v", 1)
+                n_cnt = int(rec.get("n", n_samples))
+                t_ts = rec.get("t", epoch_bucket)
+                if isinstance(t_ts, int) and t_ts % self.anonymity_guard.bucket_seconds != 0:
+                    self.anonymity_guard.blocked_violations_count += 1
+                    raise AnonymityViolationError(f"record_unbucketed_timestamp:t={t_ts}")
+                built = self.anonymity_guard.build_anonymous_catalog_record(
+                    key_or_hash=h_str,
+                    category_code=c_code,
+                    res_bucket=r_code,
+                    size_bucket=s_code,
+                    adult_flag=a_code,
+                    viability_bucket=v_code,
+                    sample_count=n_cnt,
+                    timestamp=t_ts,
+                    is_prehashed=is_pre,
+                    as_dict=as_dict_records,
+                )
+                sanitized_records.append(built)
+            elif isinstance(rec, (list, tuple)) and len(rec) == 8:
+                h_val, c_val, r_val, s_val, a_val, v_val, n_val, t_val = rec
+                if isinstance(t_val, int) and t_val % self.anonymity_guard.bucket_seconds != 0:
+                    self.anonymity_guard.blocked_violations_count += 1
+                    raise AnonymityViolationError(f"record_unbucketed_timestamp:t={t_val}")
+                built = self.anonymity_guard.build_anonymous_catalog_record(
+                    key_or_hash=str(h_val),
+                    category_code=int(c_val),
+                    res_bucket=int(r_val),
+                    size_bucket=int(s_val),
+                    adult_flag=int(a_val),
+                    viability_bucket=v_val,
+                    sample_count=int(n_val),
+                    timestamp=int(t_val),
+                    is_prehashed=True,
+                    as_dict=as_dict_records,
+                )
+                sanitized_records.append(built)
+            else:
+                self.anonymity_guard.blocked_violations_count += 1
+                raise AnonymityViolationError(f"malformed_catalog_record:{rec!r}")
+
+        if not sanitized_records:
+            default_h = self.hash_catalog_key("default|2026")
+            sanitized_records.append(
+                self.anonymity_guard.build_anonymous_catalog_record(
+                    key_or_hash=default_h,
+                    category_code=0,
+                    sample_count=n_samples,
+                    timestamp=epoch_bucket,
+                    is_prehashed=True,
+                    as_dict=as_dict_records,
+                )
+            )
+
+        wire_obj = {
+            "v": 2,
+            "epoch": epoch_bucket,
+            "seq": next_seq,
+            "n_bucket": (int(n_samples) // 25) * 25,
+            "records": sanitized_records,
+        }
+        v_bytes = json.dumps(wire_obj, sort_keys=True, separators=(",", ":")).encode("utf-8")
+        signed = self.anonymity_guard.sign_wire_payload(
+            v_bytes, seq=next_seq, salt=salt, rotate_key=rotate_key
+        )
+        self._outbound_bundles_shared += 1
+        self._outbound_bytes_shared += len(v_bytes)
+        return signed
+
+    def export_signed_delta_bundle(self, *args: Any, **kwargs: Any) -> dict[str, Any] | None:
+        """Alias for `export_signed_bundle`."""
+        return self.export_signed_bundle(*args, **kwargs)
+
+    def ingest_signed_bundle(
+        self,
+        signed_bundle: Mapping[str, Any],
+    ) -> tuple[bool, str, dict[str, Any] | None]:
+        """Verify Ed25519 signature and AnonymityGuard schema of an inbound catalog bundle."""
+        if self.subscription.sync_mode == SyncMode.OFF:
+            return False, "sync_mode_off", None
+
+        try:
+            v_raw = signed_bundle["v"]
+            v_bytes = v_raw if isinstance(v_raw, (bytes, bytearray)) else str(v_raw).encode("utf-8")
+            seq = int(signed_bundle["seq"])
+            salt = signed_bundle.get("salt", b"armiger-catalog-v2")
+            if isinstance(salt, str):
+                salt = salt.encode("utf-8")
+            pub_raw = signed_bundle.get("k") or signed_bundle.get("pubkey_hex")
+            pub_bytes = bytes.fromhex(pub_raw) if isinstance(pub_raw, str) else bytes(pub_raw)
+            sig_raw = signed_bundle.get("sig") or signed_bundle.get("sig_hex")
+            sig_bytes = bytes.fromhex(sig_raw) if isinstance(sig_raw, str) else bytes(sig_raw)
+        except Exception as exc:
+            return False, f"malformed_bundle_envelope:{exc}", None
+
+        try:
+            vk = Ed25519PublicKey.from_public_bytes(pub_bytes)
+            vk.verify(sig_bytes, _bep44_canonical_sign_buffer(v=bytes(v_bytes), seq=seq, salt=bytes(salt)))
+        except Exception as exc:
+            return False, f"invalid_ed25519_signature:{exc}", None
+
+        try:
+            parsed = self.anonymity_guard.inspect_wire_payload(bytes(v_bytes))
+        except AnonymityViolationError as exc:
+            return False, f"anonymity_firewall_rejected:{exc}", None
+
+        return True, "verified_and_ingested", parsed
+
+    def ingest_signed_delta_bundle(
+        self,
+        signed_bundle: Mapping[str, Any],
+    ) -> tuple[bool, str, dict[str, Any] | None]:
+        """Alias for `ingest_signed_bundle`."""
+        return self.ingest_signed_bundle(signed_bundle)
+
+    async def publish_to_dht(
+        self,
+        swarm: Any,
+        bundle: Mapping[str, Any] | None = None,
+        **kwargs: Any,
+    ) -> tuple[bool, str, int]:
+        """Publish an anonymous signed catalog bundle to a UDP BEP-44 swarm. Blocked when `opt_in_sharing=False`."""
+        if not self.opt_in_sharing:
+            self._outbound_packets_blocked_opt_out += 1
+            return False, "opt_in_sharing_disabled", 0
+
+        eff_bundle = dict(bundle) if bundle is not None else self.export_signed_bundle(**kwargs)
+        if eff_bundle is None:
+            self._outbound_packets_blocked_opt_out += 1
+            return False, "opt_in_sharing_disabled", 0
+
+        v_bytes = eff_bundle["v"] if isinstance(eff_bundle["v"], bytes) else str(eff_bundle["v"]).encode("utf-8")
+        self.anonymity_guard.inspect_wire_payload(v_bytes)
+
+        priv_bytes = eff_bundle.get("privkey_bytes") or self.anonymity_guard.current_privkey_bytes()
+        salt_bytes = eff_bundle.get("salt", b"armiger-catalog-v2")
+        if isinstance(salt_bytes, str):
+            salt_bytes = salt_bytes.encode("utf-8")
+        responses = await swarm.put_mutable(
+            privkey_bytes=priv_bytes,
+            salt=salt_bytes,
+            v=v_bytes,
+            seq=int(eff_bundle["seq"]),
+        )
+        ok_count = sum(1 for r in responses if r.get(b"y") == b"r")
+        return ok_count > 0, "published_anonymous_bep44", ok_count
+
     def close(self) -> None:
         """Close local SQLite database connection."""
         if hasattr(self, "db") and self.db is not None:
@@ -1289,7 +1659,7 @@ def create_mock_quorum_attestations(
     timestamp: int | None = None,
 ) -> list[QuorumAttestation]:
     """Generate cryptographically valid Hybrid Ed25519 + WOTS+-SHAKE256 QuorumAttestations from distinct ASNs."""
-    ts = timestamp or int(time.time())
+    ts = int(time.time()) if timestamp is None else int(timestamp)
     attestations: list[QuorumAttestation] = []
     for asn in distinct_asns:
         priv, pub = generate_ed25519_keypair()
@@ -1311,3 +1681,6 @@ def create_mock_quorum_attestations(
             pq_signature_hex=pq_sig.hex(),
         ))
     return attestations
+
+
+ArmigerDHTDBSync = ArmigerDHTDatabaseSync

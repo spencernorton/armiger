@@ -1,0 +1,98 @@
+{
+  "all_proofs_passed": true,
+  "elapsed_seconds": 0.6,
+  "proof_1_opt_in_default_zero_egress": {
+    "all_components_default_opt_in_false": true,
+    "component_opt_in_flags": {
+      "ArmigerArrWebhookService": false,
+      "ArmigerDHTDBSync": false,
+      "ArmigerDHTRSIEngine": false,
+      "ArmigerPipeline": false,
+      "ArmigerUltraPipeline": false,
+      "ArmigerWaypointAdapter": false,
+      "BitmagnetArmigerBridge": false,
+      "MovieWebhookAdapter": false,
+      "SeriesWebhookAdapter": false
+    },
+    "inbound_readonly_verification_passed": true,
+    "outbound_attempts_blocked_by_opt_out": 2600,
+    "outbound_bundles_shared": 0,
+    "outbound_bytes_shared": 0,
+    "passed": true,
+    "proof": "Proof 1: Opt-In Default Zero-Egress Proof",
+    "synthetic_events_processed": 100,
+    "udp_put_packets_emitted": 0
+  },
+  "proof_2_wire_canary_pii_firewall": {
+    "block_rate_pct": 100.0,
+    "canaries_blocked_or_stripped_before_wire": 500,
+    "canary_substrings_on_udp_wire": 0,
+    "categories_tested": {
+      "filesystem_path": 50,
+      "hostname_or_fqdn": 50,
+      "ipv4_or_cidr": 50,
+      "magnet_or_tracker_url": 50,
+      "passkey_or_api_key": 50,
+      "raw_40hex_infohash": 50,
+      "raw_release_title": 50,
+      "tailscale_or_ipv6": 50,
+      "unaggregated_or_schema_violation": 50,
+      "unbucketed_ts_or_external_id": 50
+    },
+    "legitimate_udp_put_datagrams_inspected": 48,
+    "passed": true,
+    "proof": "Proof 2: Wire-Level Canary & PII Firewall Proof",
+    "total_adversarial_canaries_injected": 500,
+    "wire_leak_rate_pct": 0.0
+  },
+  "proof_3_unlinkability_and_dp_convergence": {
+    "coarse_hour_timestamp_bucketing_rate_pct": 100.0,
+    "cross_epoch_key_reuse_count": 0,
+    "cross_epoch_linkability_baseline_pct": 8.33,
+    "ece_reduction_pct": 83.1,
+    "epoch_convergence_trace": [
+      {
+        "armiger_ultra_f1": 0.961,
+        "bucketed_utc": 1792353600,
+        "calibration_ece": 0.04253,
+        "epoch_index": 1
+      },
+      {
+        "armiger_ultra_f1": 0.97339,
+        "bucketed_utc": 1792353600,
+        "calibration_ece": 0.02533,
+        "epoch_index": 2
+      },
+      {
+        "armiger_ultra_f1": 0.97761,
+        "bucketed_utc": 1792357200,
+        "calibration_ece": 0.01845,
+        "epoch_index": 3
+      },
+      {
+        "armiger_ultra_f1": 0.97941,
+        "bucketed_utc": 1792360800,
+        "calibration_ece": 0.01523,
+        "epoch_index": 4
+      },
+      {
+        "armiger_ultra_f1": 0.98004,
+        "bucketed_utc": 1792364400,
+        "calibration_ece": 0.01368,
+        "epoch_index": 5
+      }
+    ],
+    "epochs_run": 5,
+    "final_armiger_ultra_f1": 0.98004,
+    "final_calibration_ece": 0.01368,
+    "initial_armiger_ultra_f1": 0.93427,
+    "initial_calibration_ece": 0.08094,
+    "membership_inference_empirical_accuracy": 0.59,
+    "passed": true,
+    "proof": "Proof 3: Unlinkability & DP Convergence Proof",
+    "swarm_nodes": 12,
+    "total_node_epoch_publications": 60,
+    "unique_ephemeral_ed25519_pubkeys": 60
+  },
+  "suite": "Armiger Distributed Anonymous & Opt-In-By-Default Weight/Data Sharing Proof"
+}
