@@ -2,7 +2,7 @@
 
 <p align="center">
   <strong>Unified neural torrent &amp; media classification suite bundling Armiger (8.3 MB INT8 CPU), Armiger Ultra (32.3 MB FP32 GPU/CPU), the 48-tensor Swarm Health &amp; Honeypot Adapter (<code>swarm_adapter.pt</code>), and all 6 official plugins.</strong><br>
-  Delivers 97.60% 6-dimension composite accuracy on unmutated ground-truth keys, 0.21 ms/item batched on NVIDIA RTX GPU (0.29 ms on Apple M4 Pro MPS GPU, 2.44 ms single-item on M4 Pro CPU INT8), 100% fake-seeder malware trap recall, and 96.83% warehouse / 92.42% public-tracker swarm liveliness AUROC.
+  Delivers 96.86% 6-dimension composite accuracy on the identical Public-Tracker cohort (97.60% with Multi-Source Corpus Swarm AUROC) on unmutated ground-truth keys, 0.21 ms/item batched on NVIDIA RTX GPU (0.29 ms on Apple M4 Pro MPS GPU, 2.44 ms single-item on M4 Pro CPU INT8), 100% fake-seeder malware trap recall, and 96.83% Multi-Source Corpus / 92.42% Public-Tracker swarm liveliness AUROC.
 </p>
 
 <p align="center">
@@ -22,7 +22,7 @@
 
 ![Cost Benchmark vs Frontier Cloud LLMs and Local GPU LLM](assets/armiger_vs_llms_cost_comparison.png)
 
-- **Higher composite accuracy than frontier LLMs.** Achieves **`97.60%`** 6-dimension mean accuracy (`95% CI [97.18%, 98.02%]`, and **`96.85%`** with `8.3 MB` INT8 + plugins / **`96.50%`** standalone neural), outperforming non-circular LOTO `gemini-3.8-flash-low` (`94.56%`), `claude-haiku-4-5` (`92.88%`), `gpt-6-luna` (`86.24%`), and local `Vinci-MLE-8B` (`84.79%`).
+- **Higher composite accuracy than frontier LLMs.** Achieves **`96.86%`** 6-dimension mean accuracy on the identical `N=757` Public-Tracker swarm cohort (**`97.60%`** with `N=10,278` Multi-Source Corpus Swarm AUROC, and **`96.85%`** with `8.3 MB` INT8 + plugins / **`96.50%`** standalone neural), outperforming non-circular LOTO `Google Gemini Flash` (`94.56%`), `Anthropic Claude Haiku 4.5` (`92.88%`), `OpenAI GPT (Fast Tier)` (`86.24%`), and `Local 8B Instruct LLM (FP16)` (`84.79%`).
 - **600x–2,000x faster inference at zero API cost.** Classifies **`4,795 items/s`** (`0.21 ms/item`) on NVIDIA RTX GPU, **`3,416 items/s`** (`0.29 ms/item`) on Apple M4 Pro MPS GPU, and **`410 items/s` single-item** (`2.44 ms` p50) on Apple M4 Pro CPU INT8 — versus `185–450 ms/item` and `$94.90–$1,220.00` per million torrents for cloud LLM APIs.
 
 ### Open-Source Classifiers & 10-Category Breakdown
@@ -50,7 +50,7 @@ pipeline = ArmigerUltraPipeline.from_directory(".")
 
 pred = pipeline.classify({
     "infohash": "1111222233334444555566667777888899990000",
-    "name": "Sintel.2010.2160p.UHD.BluRay.REMUX.HEVC.TrueHD.7.1.Atmos-OPEN",
+    "name": "Sintel.2010.2160p.UHD.Master.HEVC.FLAC.5.1-OPEN",
     "size": 74_500_000_000,
     "files": [{"path": "Sintel.2010.2160p.mkv", "size": 74_500_000_000}],
     "swarm": {
@@ -67,21 +67,21 @@ print(pred["swarm_viability"]["viability_tier"])  # "alive_viable" (computed via
 print(list(pred["heads"].keys()))                 # All 11 unified heads
 ```
 
-Run the bundled 94-test verification suite:
+Run the bundled 211-test verification suite:
 
 ```bash
-pytest test_armiger_ultra_pipeline.py test_armiger_dht_rsi.py test_dht_db_sync.py
+pytest -q
 ```
 
 ---
 
-## Ecosystem Integrations (`DH-Waypoint`, `Bitmagnet` & `*Arr` Stack)
+## Ecosystem Integrations (`DH-Waypoint`, `Bitmagnet` & Torznab / Webhook Clients)
 
 Armiger and Armiger Ultra ship with turnkey HTTP services, Docker Compose stacks, and reference adapters in [`examples/`](examples) and [`docs/INTEGRATION_GUIDE.md`](docs/INTEGRATION_GUIDE.md):
 
 - **[`DH-Waypoint` Integration (`examples/dh-waypoint/`)](examples/dh-waypoint)** — Drop-in `processorapi/v1` service (`armiger_waypoint_processor.py`) and plugin manifest (`07-armiger-ultra.plugin.yml`) implementing batch classification (`dh-waypoint.processor.v1`), pre-ingest cohort admission (`dh-waypoint.processors.admission.v1`), and 4-tier `dh-waypoint.processors.feedback.v1` closed-loop telemetry for [`spencernorton/DH-Waypoint`](https://github.com/spencernorton/DH-Waypoint).
 - **[`Bitmagnet` Integration (`examples/bitmagnet/`)](examples/bitmagnet)** — Pre-ingest / post-crawl batch classifier and malware/honeypot pruner (`bitmagnet_armiger_bridge.py`) that upgrades upstream Bitmagnet from `35.17%` rule accuracy to **`95.49%` 11-class neural accuracy** and automatically prunes disguised `.mkv.exe`/`.scr`/`.lnk` malware traps via GraphQL `torrent.delete`.
-- **[`*Arr` Stack & `qBittorrent` Integration (`examples/arr-stack/`)](examples/arr-stack)** — Pre-grab Torznab XML filtering proxy (`armiger_torznab_proxy.py`) between `Prowlarr` / `Bitmagnet` / `DH-Waypoint` and `Sonarr`, `Radarr`, `Lidarr`, `Readarr`, and `Whisparr`, paired with a post-import webhook & `ffprobe` ground-truth receiver (`armiger_arr_webhook_receiver.py`) wired into `SeriesWebhookAdapter`, `MovieWebhookAdapter`, `AudioWebhookAdapter`, `PublicationWebhookAdapter`, `QBittorrentAdapter`, and `PhysicalGroundTruthVerifier`.
+- **[Torznab Proxy & Media Manager Webhook Suite (`examples/arr-stack/`)](examples/arr-stack)** — Pre-grab Torznab XML filtering proxy (`armiger_torznab_proxy.py`) compatible with `Prowlarr`, `Bitmagnet`, `DH-Waypoint`, `Sonarr`, `Radarr`, `Lidarr`, and `Readarr`, paired with a post-import webhook & `ffprobe` ground-truth receiver (`armiger_arr_webhook_receiver.py`) wired into `SeriesWebhookAdapter`, `MovieWebhookAdapter`, `AudioWebhookAdapter`, `PublicationWebhookAdapter`, `QBittorrentAdapter`, and `PhysicalGroundTruthVerifier`.
 
 See the **[Complete Ecosystem Integration Guide (`docs/INTEGRATION_GUIDE.md`)](docs/INTEGRATION_GUIDE.md)** for architecture diagrams, Docker Compose files, and step-by-step setup instructions.
 
@@ -104,7 +104,7 @@ This repository bundles both the full-precision GPU/CPU suite and the quantized 
 
 All 6 official Armiger plugins are built directly into this repository and are also published as standalone modular packages under [`NorviTech` on Hugging Face](https://huggingface.co/NorviTech):
 
-- **[SwarmSurvivalNet v2 & Honeypot Adapter](https://huggingface.co/NorviTech/armiger-swarm-survival)** (`swarm_survival.py`, `swarm_adapter.pt` · `167 KB`) — Executes a 48-tensor residual neural pass fusing tracker/DHT seeder-leecher telemetry with content embeddings to reach **`96.83%`** Multi-Source Warehouse AUROC (`N=10,278`, vs. `53.02%` raw seeders), **`92.42%`** Public-Tracker AUROC (`N=757`), **`100.0%`** fake-seeder malware trap recall, and a **`0.00%`** content-category flip guarantee. See [`docs/plugins/swarm-survival.md`](docs/plugins/swarm-survival.md).
+- **[SwarmSurvivalNet v2 & Honeypot Adapter](https://huggingface.co/NorviTech/armiger-swarm-survival)** (`swarm_survival.py`, `swarm_adapter.pt` · `167 KB`) — Executes a 48-tensor residual neural pass fusing tracker/DHT seeder-leecher telemetry with content embeddings to reach **`96.83%`** Multi-Source Corpus AUROC (`N=10,278`, vs. `53.02%` raw seeders), **`92.42%`** Public-Tracker AUROC (`N=757`), **`100.0%`** fake-seeder malware trap recall, and a **`0.00%`** content-category flip guarantee. See [`docs/plugins/swarm-survival.md`](docs/plugins/swarm-survival.md).
 - **[Empirical Bayes Swarm & Release-Group Priors](https://huggingface.co/NorviTech/armiger-swarm-priors)** (`swarm_priors.py` · `29 KB`) — Computes 4-pathway tracker scrape priors (`86.64%` formula AUROC), anomaly features, mandatory modality dropout (`p=0.60`), and public-tracker passkey safety filtering. See [`docs/plugins/swarm-priors.md`](docs/plugins/swarm-priors.md).
 - **[Zero-Cue Catalog & Structural Disambiguator](https://huggingface.co/NorviTech/armiger-zero-cue-catalog)** (`zero_cue_plugin.py`, `validated_zero_cue_catalog.json` · `26.0 MB`) — Combines a `929,400`-entry `BLAKE2b-64` hashed catalog (`472,017` `(title, year)` pairs, `257,016` anime stems, `200,367` long titles) with deterministic structural rules, lifting `tc_truespec_2000` (`N=2,000`) accuracy by **`+4.10 pp`** (`87.40%` $\rightarrow$ **`91.50%`**) and `beyond_confirmation` (`N=1,025`) by **`+2.24 pp`** (`92.88%` $\rightarrow$ **`95.12%`**). See [`docs/plugins/zero-cue-catalog.md`](docs/plugins/zero-cue-catalog.md).
 - **[Cross-Head Audio Language & Anime Dub Guard](https://huggingface.co/NorviTech/armiger-audio-guard)** (`audio_language_guard.py` · `3.3 KB`) — Couples `title_language` (`P(Foreign Title)`) with the `lang` head to disambiguate `.en.` prepositions, `<Foreign>.ENG.Sub` releases, regional dubs, and `MULTi` tags, lifting binary English-vs-Foreign audio accuracy on `oct15_confirmation` (`N=545`) from **`96.88%`** to **`97.80%`**. See [`docs/plugins/audio-guard.md`](docs/plugins/audio-guard.md).
@@ -130,7 +130,7 @@ Every metric below is reproducibly verifiable on the original unmutated evaluati
 
 ## Privacy & Anonymous Opt-In-By-Default DHT Sharing
 
-Distributed `BEP-44` / `BEP-46` telemetry, weight delta sharing (`armiger_dht_rsi.py`), and catalog synchronization (`armiger_dht_db_sync.py`) are **strictly opt-in by default** and **anonymous by construction** when enabled. Full mathematical and wire-level proofs are documented in [`docs/ANONYMOUS_OPT_IN_DHT.md`](docs/ANONYMOUS_OPT_IN_DHT.md) and reproducibly verified by [`benchmarks/proof_anonymous_opt_in_sharing.py`](benchmarks/proof_anonymous_opt_in_sharing.py), [`benchmarks/anonymous_opt_in_proof_report.json`](benchmarks/anonymous_opt_in_proof_report.json), and [`test_anonymous_opt_in_dht_sharing.py`](test_anonymous_opt_in_dht_sharing.py):
+Distributed `BEP-44` / `BEP-46` telemetry, weight delta sharing (`armiger_dht_rsi.py`), and catalog synchronization (`armiger_dht_db_sync.py`) are **strictly opt-in by default** and **enforced by the 5-layer `AnonymityGuard` wire firewall** when enabled. Full mathematical and wire-level proofs are documented in [`docs/ANONYMOUS_OPT_IN_DHT.md`](docs/ANONYMOUS_OPT_IN_DHT.md) and reproducibly verified by [`benchmarks/proof_anonymous_opt_in_sharing.py`](benchmarks/proof_anonymous_opt_in_sharing.py), [`benchmarks/anonymous_opt_in_proof_report.json`](benchmarks/anonymous_opt_in_proof_report.json), and [`test_anonymous_opt_in_dht_sharing.py`](test_anonymous_opt_in_dht_sharing.py):
 
 | Guarantee | Default / Wire Mechanism | Enforced & Measured Invariant |
 | :--- | :--- | :--- |
@@ -138,8 +138,8 @@ Distributed `BEP-44` / `BEP-46` telemetry, weight delta sharing (`armiger_dht_rs
 | **Wire-Level `AnonymityGuard` Firewall** | Pre-serialization deep payload & raw-byte inspection (`AnonymityGuard`) | Inspects every outbound dictionary and serialized wire buffer before encryption or transport; blocks **500 / 500 (`100.0%`)** synthetic PII, IPv4/IPv6, hostname, URL, filesystem path, passkey, raw 40-hex infohash, and plaintext release title canary leaks (**`0.00%` wire leak rate** across 10 adversarial categories). |
 | **Unlinkable Ephemeral Signing Keys** | Single-use `Ed25519` keypair per submission | Rotates to a fresh in-memory `Ed25519` signing keypair for each outbound publication (`60 / 60` unique ephemeral public keys across 12 nodes $\times$ 5 epochs; `0` cross-epoch key reuses; `8.33%` random baseline linkability). |
 | **Coarse Temporal Bucketing** | UTC hour floor (`ts - (ts % 3600)`) | Quantizes all outbound timestamps to coarse UTC hour boundaries (`100.0%` hour-bucketed compliance; rejects any $t \bmod 3600 \neq 0$), eliminating sub-hour timing side-channel fingerprinting. |
-| **Differentially Private Weight Deltas** | $k$-anonymity ($n \ge 25$) + $\ell_2$ clipping ($C = 1.0$) + Gaussian DP ($\sigma = 0.05$) | Enforces minimum sample count $n \ge 25$, clips adapter weight updates to bounded $\ell_2$ norm $C = 1.0$, and injects calibrated Gaussian noise before int8 quantization, reducing calibration ECE by **`83.94%`** (`0.08094` $\rightarrow$ `0.01300`) and lifting Armiger Ultra F1 from `0.93427` to **`0.98074`** with near-random `0.545` membership inference accuracy. |
-| **One-Way 64-Bit `BLAKE2b` Catalog Hashes** | Keyed `BLAKE2b-64` (`person=b"ArmigZCC"` / `armiger-cat-v2`, `digest_size=8`) | Encodes all `ZeroCueCatalog` stems as irreversible 8-byte digests paired only with numeric category/resolution/quality fields — **zero raw infohashes, zero plaintext release names, zero file paths, zero tracker URLs/passkeys, and zero client IP addresses** ever cross the wire. |
+| **Differentially Private Weight Deltas** | $k$-anonymity ($n \ge 25$) + $\ell_2$ clipping ($C = 1.0$) + Gaussian DP ($\sigma = 0.05$) | Enforces minimum sample count $n \ge 25$, clips adapter weight updates to bounded $\ell_2$ norm $C = 1.0$, and injects calibrated Gaussian noise before int8 quantization, reducing calibration ECE by **`83.10%`** (`0.08094` $\rightarrow$ `0.01368`) and lifting Armiger Ultra F1 from `0.93427` to **`0.98004`** in the 12-node 5-epoch synthetic adapter convergence benchmark (`0.590` empirical membership inference accuracy). |
+| **One-Way 64-Bit `BLAKE2b` Catalog Hashes** | Domain-separated `BLAKE2b-64` (`person=b"ArmigZCC"` / `armiger-cat-v2`, `digest_size=8`) | Encodes all `ZeroCueCatalog` stems as irreversible 8-byte digests paired only with numeric category/resolution/quality fields — **zero raw infohashes, zero plaintext release names, zero file paths, zero tracker URLs/passkeys, and zero client IP addresses** ever cross the wire. |
 
 ```python
 from armiger_dht_rsi import ArmigerDHTRSIEngine
@@ -158,7 +158,7 @@ engine_opt_in = ArmigerDHTRSIEngine(opt_in_sharing=True)
 
 | Resource | Path | Description |
 | :--- | :--- | :--- |
-| **Ecosystem Integration Guide** | [`docs/INTEGRATION_GUIDE.md`](docs/INTEGRATION_GUIDE.md) | End-to-end architecture and deployment guide for `DH-Waypoint`, `Bitmagnet`, `Prowlarr`, `*Arr` (`Sonarr`/`Radarr`/`Lidarr`/`Readarr`/`Whisparr`), and `qBittorrent`. |
+| **Ecosystem Integration Guide** | [`docs/INTEGRATION_GUIDE.md`](docs/INTEGRATION_GUIDE.md) | End-to-end architecture and deployment guide for `DH-Waypoint`, `Bitmagnet`, Torznab index consumers (`Prowlarr`, `Sonarr`, `Radarr`, `Lidarr`, `Readarr`), and `qBittorrent`. |
 | **Canonical Chart Pipeline** | [`docs/CHART_PIPELINE.md`](docs/CHART_PIPELINE.md) | Methodology for the 10,000-resample paired bootstrap CIs, exact two-sided McNemar tests, identical-denominator lock, and LOTO anti-circularity audit. |
 | **Anonymous Opt-In DHT Spec** | [`docs/ANONYMOUS_OPT_IN_DHT.md`](docs/ANONYMOUS_OPT_IN_DHT.md) | Threat model, mathematical DP bounds, `AnonymityGuard` specification, and wire-format verification for opt-in `BEP-44`/`BEP-46` sharing. |
 | **Charts Provenance Manifest** | [`benchmarks/CHARTS_MANIFEST.json`](benchmarks/CHARTS_MANIFEST.json) | Cryptographic `SHA-256` manifest, per-panel `N`, 95% CIs, exact McNemar $p$-values, and anti-circularity audit tables. |
@@ -167,7 +167,7 @@ engine_opt_in = ArmigerDHTRSIEngine(opt_in_sharing=True)
 | **6 Official Plugin Guides** | [`docs/plugins/`](docs/plugins) | Deep-dive documentation for [`swarm-survival.md`](docs/plugins/swarm-survival.md), [`swarm-priors.md`](docs/plugins/swarm-priors.md), [`zero-cue-catalog.md`](docs/plugins/zero-cue-catalog.md), [`audio-guard.md`](docs/plugins/audio-guard.md), [`calibration-dht.md`](docs/plugins/calibration-dht.md), and [`dht-db-sync.md`](docs/plugins/dht-db-sync.md). |
 | **`DH-Waypoint` Processor** | [`examples/dh_waypoint_processor/`](examples/dh_waypoint_processor) · [`examples/dh-waypoint/`](examples/dh-waypoint) | Turnkey `processorapi/v1` service (`armiger_waypoint_processor.py`), plugin YAML (`07-armiger-ultra.plugin.yml`), and Docker Compose stack. |
 | **`Bitmagnet` Bridge** | [`examples/bitmagnet_bridge/`](examples/bitmagnet_bridge) · [`examples/bitmagnet/`](examples/bitmagnet) | GraphQL + PostgreSQL classifier and malware/honeypot pruner (`bitmagnet_armiger_bridge.py`) with Docker Compose deployment. |
-| **`*Arr` & `qBittorrent` Suite** | [`examples/arr_webhook/`](examples/arr_webhook) · [`examples/arr-stack/`](examples/arr-stack) | Pre-grab Torznab XML proxy (`armiger_torznab_proxy.py`) and post-import webhook + `ffprobe` verifier (`armiger_arr_webhook_receiver.py`). |
+| **Torznab Proxy & Webhook Suite** | [`examples/arr_webhook/`](examples/arr_webhook) · [`examples/arr-stack/`](examples/arr-stack) | Pre-grab Torznab XML proxy (`armiger_torznab_proxy.py`) and post-import webhook + `ffprobe` verifier (`armiger_arr_webhook_receiver.py`). |
 
 ---
 
@@ -178,7 +178,7 @@ engine_opt_in = ArmigerDHTRSIEngine(opt_in_sharing=True)
 - Automated cybersecurity screening, fake-seeder honeypot detection, and disguised executable/malware filtering (`.mkv.exe`, `.scr`, `.vbs`) in peer-to-peer and decentralized storage research.
 - Child safety (CSAM/CSAE) pre-ingest blocking, cryptographic tombstone revocation, and adult/NSFW namespace isolation for self-hosted and decentralized indexers.
 
-All 929,400 lookup keys in [`validated_zero_cue_catalog.json`](validated_zero_cue_catalog.json) and all release-group / private-tracker token sets in [`armiger_inference.py`](armiger_inference.py) and [`swarm_priors.py`](swarm_priors.py) are stored exclusively as irreversible **64-bit keyed BLAKE2b digests** (`digest_size=8`) so zero copyrighted titles or scene/tracker identifiers appear in plaintext. All test fixtures and examples use Creative Commons (CC-BY / CC0) or public-domain works.
+All 929,400 lookup keys in [`validated_zero_cue_catalog.json`](validated_zero_cue_catalog.json) and all release-group / private-tracker token sets in [`armiger_inference.py`](armiger_inference.py) and [`swarm_priors.py`](swarm_priors.py) are stored exclusively as irreversible **domain-separated 64-bit BLAKE2b digests** (`digest_size=8`, `person=b"ArmigZCC"`) so zero copyrighted titles or scene/tracker identifiers appear in plaintext. All test fixtures and examples use Creative Commons (CC-BY / CC0) or public-domain works.
 
 **NorviTech does not condone, encourage, or support copyright infringement or the unauthorized distribution of copyrighted works.** Users are solely responsible for ensuring that their use of these models and plugins complies with all applicable local, national, and international copyright and data-protection laws.
 

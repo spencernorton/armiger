@@ -5,12 +5,12 @@ services:
     restart: unless-stopped
     working_dir: /app
     ports:
-      - "8097:8097"
+      - "127.0.0.1:8097:8097"
     environment:
       ARMIGER_MODEL_DIR: /app
       ARMIGER_VARIANT: "${ARMIGER_VARIANT:-int8}"
       UPSTREAM_TORZNAB_URL: "${UPSTREAM_TORZNAB_URL:-http://prowlarr:9696/1/api}"
-      ARMIGER_PROXY_HOST: "localhost"
+      ARMIGER_PROXY_HOST: "0.0.0.0"
       ARMIGER_PROXY_PORT: "8097"
       ARMIGER_REQUIRE_ENGLISH_AUDIO: "${ARMIGER_REQUIRE_ENGLISH_AUDIO:-false}"
       ARMIGER_ALLOW_ENGLISH_SUBS: "${ARMIGER_ALLOW_ENGLISH_SUBS:-true}"
@@ -29,11 +29,11 @@ services:
     restart: unless-stopped
     working_dir: /app
     ports:
-      - "8098:8098"
+      - "127.0.0.1:8098:8098"
     environment:
       ARMIGER_MODEL_DIR: /app
       ARMIGER_VARIANT: "int8"
-      ARMIGER_WEBHOOK_HOST: "localhost"
+      ARMIGER_WEBHOOK_HOST: "0.0.0.0"
       ARMIGER_WEBHOOK_PORT: "8098"
       ARMIGER_RUN_FFPROBE: "true"
       ARMIGER_DHT_RSI_MODE: "${ARMIGER_DHT_RSI_MODE:-pull_only}"

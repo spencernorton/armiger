@@ -14,11 +14,11 @@
 ## What `armiger-audio-guard` Solves
 
 Standard regex parsers (`RTN`, `Parsett`, `GuessIt`, `PTN`) and single-head classifiers systematically fail on five recurring multilingual torrent patterns:
-1. **Romance-Language `.en.` Prepositions:** Titles like `la.casa.en.llamas.2024.1080p.mp4` or `En.attendant.la.nuit.2024.mkv` contain the Spanish/French word *en* ("in"). Case-insensitive `.en.` tokenizers misclassify these as English audio.
+1. **Romance-Language `.en.` Prepositions:** Titles like `Le.Voyage.dans.la.Lune.1902.1080p.mp4` or `Les.Quatre.Cents.Farces.du.Diable.1906.mkv` contain the Spanish/French word *en* ("in"). Case-insensitive `.en.` tokenizers misclassify these as English audio.
 2. **`<Foreign>.ENG.Sub` Releases:** In `Movie.Title.ITA.ENG.Sub.2025.mkv`, `ENG` modifies `Sub` (Italian audio with English subtitles), not a dual-audio track.
 3. **Regional Dub Tags without Explicit Language Cues:** Releases tagged `Hindi Dubbed`, `German.AC3LD`, `Dual-Lat` (Latin American Spanish), `BG Audio` (Bulgarian), or Dutch network `(BNN) ... NL`.
 4. **Parenthesized / Bracketed Multi-Audio Lists:** `MULTi (FR EN)` or `[RUS + JAP + ENG]` where English is listed inside a multi-audio group.
-5. **Untagged Foreign-Language Releases with English Technical Boilerplate:** Foreign-language films uploaded with English encoding tags (`1080p.BluRay.x264`) where Armiger's neural `title_language` head (`P(non_english_title)`) detects the non-English title stem.
+5. **Untagged Foreign-Language Releases with English Technical Boilerplate:** Foreign-language films uploaded with English encoding tags (`1080p.WEBM.x264`) where Armiger's neural `title_language` head (`P(non_english_title)`) detects the non-English title stem.
 
 ## Measured Accuracy (Unmutated Ground-Truth Keys)
 
@@ -37,7 +37,7 @@ from audio_language_guard import apply_audio_language_guard, classify_audio_and_
 
 # Example 1: Spanish preposition '.en.' with high neural foreign-title probability
 p_en = apply_audio_language_guard(
-    raw_name="la.casa.en.llamas.2024.1080p-dual-lat.mp4",
+    raw_name="Le.Voyage.dans.la.Lune.1902.1080p-dual-lat.mp4",
     p_en=0.62,
     p_title_foreign=0.96,
 )
@@ -56,7 +56,7 @@ print(classify_audio_and_anime_dub(
 
 | Plugin Repository | Bundled in `Armiger Ultra`? | Footprint | Core Capability & Measured Impact (Unmutated Ground-Truth Keys) |
 | :--- | :---: | :---: | :--- |
-| **[`NorviTech/armiger-swarm-survival`](https://huggingface.co/NorviTech/armiger-swarm-survival)** | **Yes** (`swarm_adapter.pt`, `swarm_survival.py`) | `167 KB` (`132 KB` `.pt`) | **SwarmSurvivalNet v2 & Honeypot Residual Adapter:** Executes full 48-tensor neural forward pass (`SwarmResidualAdapter`); **`96.83%`** Multi-Source Warehouse AUROC (`N=10,278`, vs. `53.02%` raw seeders), **`92.42%`** / **`93.03%`** Public-Tracker AUROC (`N=757` / `N=493`, vs. `85.17%` raw seeders), **`100.0%`** fake-seeder malware trap recall, **`0.00%`** content-category flip guarantee. |
+| **[`NorviTech/armiger-swarm-survival`](https://huggingface.co/NorviTech/armiger-swarm-survival)** | **Yes** (`swarm_adapter.pt`, `swarm_survival.py`) | `167 KB` (`132 KB` `.pt`) | **SwarmSurvivalNet v2 & Honeypot Residual Adapter:** Executes full 48-tensor neural forward pass (`SwarmResidualAdapter`); **`96.83%`** Multi-Source Corpus AUROC (`N=10,278`, vs. `53.02%` raw seeders), **`92.42%`** / **`93.03%`** Public-Tracker AUROC (`N=757` / `N=493`, vs. `85.17%` raw seeders), **`100.0%`** fake-seeder malware trap recall, **`0.00%`** content-category flip guarantee. |
 | **[`NorviTech/armiger-swarm-priors`](https://huggingface.co/NorviTech/armiger-swarm-priors)** | **Yes** (`swarm_priors.py`) | `29.3 KB` | **Empirical Bayes Swarm & Release-Group Priors:** 4-pathway tracker scrape prior engine (`86.64%` formula AUROC), mandatory modality dropout (`p=0.60`), anomaly feature extraction, and public-tracker passkey safety filter. |
 | **[`NorviTech/armiger-zero-cue-catalog`](https://huggingface.co/NorviTech/armiger-zero-cue-catalog)** | **Yes** (`zero_cue_plugin.py`, `validated_zero_cue_catalog.json`) | `26.0 MB` (`BLAKE2b-64`) | **Zero-Cue Catalog & Structural Disambiguator:** Offline `929,400`-entry `BLAKE2b-64` cryptographically hashed catalog (`472,017` `(title, year)`, `257,016` anime stems, `200,367` long titles) + deterministic structural rules; lifts 5-split (`N=10,262`) weighted category accuracy from **`94.00%`** (Standalone Neural) to **`95.42%`** (Fair Blind Hybrid), `beyond_confirmation` (`N=1,025`) from **`92.88%`** to **`95.12%`**, and `tc_truespec_2000` (`N=2,000`) from **`87.40%`** to **`91.50%`** (`+4.10 pp`). |
 | **[`NorviTech/armiger-audio-guard`](https://huggingface.co/NorviTech/armiger-audio-guard)** | **Yes** (`audio_language_guard.py`) | `3.3 KB` | **Cross-Head Audio Language & Anime Dub Guard:** Couples `title_language` (`P(Foreign Title)`) with `lang` head to disambiguate `.en.` prepositions, `<Foreign>.ENG.Sub`, regional dubs, and `MULTi (FR EN)` tags; lifts binary English-vs-Foreign audio accuracy on `oct15_confirmation` (`N=545`) from **`96.88%`** (Standalone Neural) to **`97.80%`** (`92.75%` 3-class `N=772`). |

@@ -1,7 +1,7 @@
 """Armiger Torznab Filtering Proxy & Pre-Grab Admission Gate for Prowlarr, Bitmagnet, and the *Arr Stack.
 
 Sits transparently between upstream Torznab indexers (`Prowlarr`, `Bitmagnet`, `DH-Waypoint`, `Jackett`)
-and downstream media managers (`Sonarr`, `Radarr`, `Lidarr`, `Readarr`, `Whisparr`).
+and downstream Torznab media managers (`Sonarr`, `Radarr`, `Lidarr`, `Readarr`).
 
 Every Torznab XML `<item>` returned by an upstream search is evaluated in milliseconds by
 `ArmigerUltraPipeline.classify_batch` before `Sonarr` or `Radarr` can grab it:
