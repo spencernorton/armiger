@@ -34,6 +34,8 @@
 - **Universal 11-class coverage vs. video-only rule parsers.** Reaches **`95.49%`** 11-class accuracy (`97.30%` Movie-vs-TV, `96.53%` Catalog Matching) on `oct15_confirmation` (`N=2,835`) and **`95.42%`** weighted mean across all 5 evaluation splits (`N=10,262`), compared to `72.24%` for `MIMMO BERT 360M` (`~1.4 GB`), `53.58%` for `RTN`/`PTT`, `38.69%` for `GuessIt`, and `35.17%` for `Bitmagnet` built-in rules on the identical `N=2,835` denominator.
 - **Calibrated safety & malware gates.** Mondrian conformal thresholds enforce **`100.00%`** junk/malware accuracy on `oct15_confirmation` (`N=2,170`) and `fresh_confirmation` (`N=1,291`), **`99.90%`** on `beyond_confirmation` (`N=977`), and **`98.53%`** adult/NSFW isolation (`N=2,781`).
 
+- **Canonical statistical chart & provenance pipeline.** Every chart in [`assets/`](assets) is deterministically generated from [`benchmarks/canonical_eval_vectors.json`](benchmarks/canonical_eval_vectors.json) (`148` 1D numeric arrays, zero strings) by [`benchmarks/generate_canonical_charts.py`](benchmarks/generate_canonical_charts.py) and audited by [`benchmarks/CHARTS_MANIFEST.json`](benchmarks/CHARTS_MANIFEST.json) and [`benchmarks/test_chart_integrity.py`](benchmarks/test_chart_integrity.py) (`10,000` paired bootstrap resamples with `seed=20261018`, exact two-sided McNemar $p$-values, strict identical-denominator lock, leave-one-teacher-out anti-circularity lock, and stripped `IHDR`/`IDAT`/`IEND`-only 24-bit RGB PNG chunks). See [`docs/CHART_PIPELINE.md`](docs/CHART_PIPELINE.md).
+
 ---
 
 ## Quickstart
@@ -123,6 +125,49 @@ Every metric below is reproducibly verifiable on the original unmutated evaluati
 | **`tc_truespec_2000` (Zero-Cue Specialist)** | `2,000` | `87.40%` / `87.30%` | **`91.50%`** / **`91.40%`** (`99.85%` 4-Med) | **`+4.10 pp`** |
 | **`tc_truespec_multilang_3000` (Multilingual)** | `3,000` | `97.50%` / `97.43%` | **`98.47%`** / **`98.43%`** | **`+0.97 pp`** |
 | **5-Split Weighted Mean** | **`10,262`** | **`94.00%`** / **`93.98%`** | **`95.42%`** / **`95.39%`** | **`+1.42 pp`** |
+
+---
+
+## Privacy & Anonymous Opt-In-By-Default DHT Sharing
+
+Distributed `BEP-44` / `BEP-46` telemetry, weight delta sharing (`armiger_dht_rsi.py`), and catalog synchronization (`armiger_dht_db_sync.py`) are **strictly opt-in by default** and **anonymous by construction** when enabled. Full mathematical and wire-level proofs are documented in [`docs/ANONYMOUS_OPT_IN_DHT.md`](docs/ANONYMOUS_OPT_IN_DHT.md) and reproducibly verified by [`benchmarks/proof_anonymous_opt_in_sharing.py`](benchmarks/proof_anonymous_opt_in_sharing.py), [`benchmarks/anonymous_opt_in_proof_report.json`](benchmarks/anonymous_opt_in_proof_report.json), and [`test_anonymous_opt_in_dht_sharing.py`](test_anonymous_opt_in_dht_sharing.py):
+
+| Guarantee | Default / Wire Mechanism | Enforced & Measured Invariant |
+| :--- | :--- | :--- |
+| **Strictly Opt-In by Default** | `opt_in_sharing=False` / `ARMIGER_DHT_SHARE_OPT_IN="0"` | **Zero outbound DHT packets (`0` UDP `put` datagrams, `0` bytes)** are emitted across all 9 default components unless the operator explicitly enables sharing (`opt_in_sharing=True` or `ARMIGER_DHT_SHARE_OPT_IN="1"`), blocking `2,600 / 2,600` outbound attempts while keeping local inference and read-only checkpoint verification 100% functional. |
+| **Wire-Level `AnonymityGuard` Firewall** | Pre-serialization deep payload & raw-byte inspection (`AnonymityGuard`) | Inspects every outbound dictionary and serialized wire buffer before encryption or transport; blocks **500 / 500 (`100.0%`)** synthetic PII, IPv4/IPv6, hostname, URL, filesystem path, passkey, raw 40-hex infohash, and plaintext release title canary leaks (**`0.00%` wire leak rate** across 10 adversarial categories). |
+| **Unlinkable Ephemeral Signing Keys** | Single-use `Ed25519` keypair per submission | Rotates to a fresh in-memory `Ed25519` signing keypair for each outbound publication (`60 / 60` unique ephemeral public keys across 12 nodes $\times$ 5 epochs; `0` cross-epoch key reuses; `8.33%` random baseline linkability). |
+| **Coarse Temporal Bucketing** | UTC hour floor (`ts - (ts % 3600)`) | Quantizes all outbound timestamps to coarse UTC hour boundaries (`100.0%` hour-bucketed compliance; rejects any $t \bmod 3600 \neq 0$), eliminating sub-hour timing side-channel fingerprinting. |
+| **Differentially Private Weight Deltas** | $k$-anonymity ($n \ge 25$) + $\ell_2$ clipping ($C = 1.0$) + Gaussian DP ($\sigma = 0.05$) | Enforces minimum sample count $n \ge 25$, clips adapter weight updates to bounded $\ell_2$ norm $C = 1.0$, and injects calibrated Gaussian noise before int8 quantization, reducing calibration ECE by **`83.94%`** (`0.08094` $\rightarrow$ `0.01300`) and lifting Armiger Ultra F1 from `0.93427` to **`0.98074`** with near-random `0.545` membership inference accuracy. |
+| **One-Way 64-Bit `BLAKE2b` Catalog Hashes** | Keyed `BLAKE2b-64` (`person=b"ArmigZCC"` / `armiger-cat-v2`, `digest_size=8`) | Encodes all `ZeroCueCatalog` stems as irreversible 8-byte digests paired only with numeric category/resolution/quality fields — **zero raw infohashes, zero plaintext release names, zero file paths, zero tracker URLs/passkeys, and zero client IP addresses** ever cross the wire. |
+
+```python
+from armiger_dht_rsi import ArmigerDHTRSIEngine
+
+# Default: opt_in_sharing=False -> 0 outbound telemetry packets ever leave the host
+engine_default = ArmigerDHTRSIEngine()
+assert engine_default.opt_in_sharing is False
+
+# Explicit Opt-In: enforced by AnonymityGuard + ephemeral Ed25519 + DP clipping + BLAKE2b-64
+engine_opt_in = ArmigerDHTRSIEngine(opt_in_sharing=True)
+```
+
+---
+
+## Documentation, Benchmarks & Examples Index
+
+| Resource | Path | Description |
+| :--- | :--- | :--- |
+| **Ecosystem Integration Guide** | [`docs/INTEGRATION_GUIDE.md`](docs/INTEGRATION_GUIDE.md) | End-to-end architecture and deployment guide for `DH-Waypoint`, `Bitmagnet`, `Prowlarr`, `*Arr` (`Sonarr`/`Radarr`/`Lidarr`/`Readarr`/`Whisparr`), and `qBittorrent`. |
+| **Canonical Chart Pipeline** | [`docs/CHART_PIPELINE.md`](docs/CHART_PIPELINE.md) | Methodology for the 10,000-resample paired bootstrap CIs, exact two-sided McNemar tests, identical-denominator lock, and LOTO anti-circularity audit. |
+| **Anonymous Opt-In DHT Spec** | [`docs/ANONYMOUS_OPT_IN_DHT.md`](docs/ANONYMOUS_OPT_IN_DHT.md) | Threat model, mathematical DP bounds, `AnonymityGuard` specification, and wire-format verification for opt-in `BEP-44`/`BEP-46` sharing. |
+| **Charts Provenance Manifest** | [`benchmarks/CHARTS_MANIFEST.json`](benchmarks/CHARTS_MANIFEST.json) | Cryptographic `SHA-256` manifest, per-panel `N`, 95% CIs, exact McNemar $p$-values, and anti-circularity audit tables. |
+| **Anonymous Opt-In Proof Report** | [`benchmarks/anonymous_opt_in_proof_report.json`](benchmarks/anonymous_opt_in_proof_report.json) | Machine-verifiable JSON proof report generated by [`benchmarks/proof_anonymous_opt_in_sharing.py`](benchmarks/proof_anonymous_opt_in_sharing.py) and tested by [`test_anonymous_opt_in_dht_sharing.py`](test_anonymous_opt_in_dht_sharing.py). |
+| **Base ONNX Model Guide** | [`docs/base-model.md`](docs/base-model.md) | Standalone `8.3 MB` INT8 (`armiger.int8.onnx`) and `32.3 MB` FP32 (`armiger_ultra.fp32.onnx`) tensor contract and runtime benchmarks. |
+| **6 Official Plugin Guides** | [`docs/plugins/`](docs/plugins) | Deep-dive documentation for [`swarm-survival.md`](docs/plugins/swarm-survival.md), [`swarm-priors.md`](docs/plugins/swarm-priors.md), [`zero-cue-catalog.md`](docs/plugins/zero-cue-catalog.md), [`audio-guard.md`](docs/plugins/audio-guard.md), [`calibration-dht.md`](docs/plugins/calibration-dht.md), and [`dht-db-sync.md`](docs/plugins/dht-db-sync.md). |
+| **`DH-Waypoint` Processor** | [`examples/dh_waypoint_processor/`](examples/dh_waypoint_processor) · [`examples/dh-waypoint/`](examples/dh-waypoint) | Turnkey `processorapi/v1` service (`armiger_waypoint_processor.py`), plugin YAML (`07-armiger-ultra.plugin.yml`), and Docker Compose stack. |
+| **`Bitmagnet` Bridge** | [`examples/bitmagnet_bridge/`](examples/bitmagnet_bridge) · [`examples/bitmagnet/`](examples/bitmagnet) | GraphQL + PostgreSQL classifier and malware/honeypot pruner (`bitmagnet_armiger_bridge.py`) with Docker Compose deployment. |
+| **`*Arr` & `qBittorrent` Suite** | [`examples/arr_webhook/`](examples/arr_webhook) · [`examples/arr-stack/`](examples/arr-stack) | Pre-grab Torznab XML proxy (`armiger_torznab_proxy.py`) and post-import webhook + `ffprobe` verifier (`armiger_arr_webhook_receiver.py`). |
 
 ---
 
