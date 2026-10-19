@@ -39,7 +39,7 @@ clf = ArmigerONNXClassifier(
 )
 
 pred = clf.predict({
-    "name": "Sintel.2010.1080p.BluRay.x264-OPEN",
+    "name": "Sintel.2010.1080p.WEBM.AV1-OPEN",
     "size": 4_500_000_000,
     "files": [{"path": "Sintel.2010.1080p.mkv", "size": 4_500_000_000}],
 })

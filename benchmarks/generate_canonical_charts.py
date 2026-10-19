@@ -64,13 +64,9 @@ C_VINCI = "#A855F7"
 C_ERR = "#E2E8F0"
 
 TEACHER_MODELS = {
-    "gpt-6-luna",
-    "gemini-3.8-flash-low",
-    "muse-spark-1.3",
-    "claude-haiku-4-5",
-    "OpenAI GPT (gpt-6-luna)",
-    "Google Gemini (gemini-3.8-flash-low)",
-    "Anthropic Claude (claude-haiku-4-5)",
+    "OpenAI GPT (Fast Tier)",
+    "Google Gemini Flash",
+    "Anthropic Claude Haiku 4.5",
 }
 
 
@@ -241,9 +237,11 @@ def compute_paired_panel_stats(
             point_scores[m] = float(np.sum(v10_int2) * 100.0 / (2.0 * n_pos * n_neg))
         w_pos = rng.multinomial(n_pos, np.full(n_pos, 1.0 / n_pos), size=n_boot).astype(np.float64)
         w_neg = rng.multinomial(n_neg, np.full(n_neg, 1.0 / n_neg), size=n_boot).astype(np.float64)
-        boot_scores = 0.5 * (
+        pt_vec = np.array([point_scores[m] for m in model_names], dtype=np.float64)[None, :]
+        boot_scores = (
             (w_pos @ placement_int2[:, pos_idx].T) * (100.0 / (2.0 * n_pos * n_neg))
             + (w_neg @ placement_int2[:, neg_idx].T) * (100.0 / (2.0 * n_pos * n_neg))
+            - pt_vec
         )
         item_correctness = {m: placement_unit[idx] for idx, m in enumerate(model_names)}
     else:
@@ -421,21 +419,21 @@ def build_all_charts_and_manifest(
     # --------------------------------------------------------------------------
     anti_circ_checks = [
         assert_non_circular_teacher_eval(
-            "OpenAI GPT (gpt-6-luna)",
+            "OpenAI GPT (Fast Tier)",
             eval_mode="leave_one_teacher_out",
             self_vote_weight=0.0,
             noncirc_vec=d["beyond_cat11_corr_gpt_noncirc"],
             circ_vec=d["beyond_cat11_corr_gpt_circ"],
         ),
         assert_non_circular_teacher_eval(
-            "Google Gemini (gemini-3.8-flash-low)",
+            "Google Gemini Flash",
             eval_mode="leave_one_teacher_out",
             self_vote_weight=0.0,
             noncirc_vec=d["beyond_cat11_corr_gemini_noncirc"],
             circ_vec=d["beyond_cat11_corr_gemini_circ"],
         ),
         assert_non_circular_teacher_eval(
-            "Anthropic Claude (claude-haiku-4-5)",
+            "Anthropic Claude Haiku 4.5",
             eval_mode="independent_ground_truth",
             self_vote_weight=0.0,
         ),
@@ -447,10 +445,10 @@ def build_all_charts_and_manifest(
     llm_order = [
         "Armiger Ultra (Fair Hybrid)",
         "Armiger (8.3 MB INT8 + Plugins)",
-        "Google Gemini (gemini-3.8-flash-low)",
-        "Anthropic Claude (claude-haiku-4-5)",
-        "OpenAI GPT (gpt-6-luna)",
-        "Local GPU LLM (Vinci-MLE-8B-1.0)",
+        "Google Gemini Flash",
+        "Anthropic Claude Haiku 4.5",
+        "OpenAI GPT (Fast Tier)",
+        "Local 8B Instruct LLM (FP16)",
     ]
     ref_llm = "Armiger Ultra (Fair Hybrid)"
 
@@ -559,7 +557,7 @@ def build_all_charts_and_manifest(
         y_true=d["swarm_whse_y_true"],
     )
 
-    # Composite 6-dimension mean across 2A..2F (with Ultra using its 96.83% Warehouse / 92.42% Public swarm head)
+    # Composite 6-dimension mean across 2A..2F on strict identical cohorts (2F = Public N=757 for all models)
     composite_stats: Dict[str, Any] = {}
     for m in llm_order:
         s_2a = p2a_stats["models"][m]
@@ -567,25 +565,29 @@ def build_all_charts_and_manifest(
         s_2c = p2c_stats["models"][m]
         s_2d = p2d_stats["models"][m]
         s_2e = p2e_stats["models"][m]
-        s_2f = p2f_whse_stats["models"][m] if m == ref_llm else p2f_pub_stats["models"][m]
-        pts = [s["point_pct"] for s in (s_2a, s_2b, s_2c, s_2d, s_2e, s_2f)]
-        los = [s["ci95_lo"] for s in (s_2a, s_2b, s_2c, s_2d, s_2e, s_2f)]
-        his = [s["ci95_hi"] for s in (s_2a, s_2b, s_2c, s_2d, s_2e, s_2f)]
+        s_2f_pub = p2f_pub_stats["models"][m]
+        pts = [s["point_pct"] for s in (s_2a, s_2b, s_2c, s_2d, s_2e, s_2f_pub)]
+        los = [s["ci95_lo"] for s in (s_2a, s_2b, s_2c, s_2d, s_2e, s_2f_pub)]
+        his = [s["ci95_hi"] for s in (s_2a, s_2b, s_2c, s_2d, s_2e, s_2f_pub)]
         pt_mean = float(np.mean(pts))
         half_w = float(np.sqrt(np.sum([(h - l) ** 2 for l, h in zip(los, his)])) / (2.0 * 6.0))
-        composite_stats[m] = {
+        entry: Dict[str, Any] = {
             "point_pct": round(pt_mean, 2),
             "ci95_lo": round(pt_mean - half_w, 2),
             "ci95_hi": round(pt_mean + half_w, 2),
         }
+        if m == ref_llm:
+            pts_whse = pts[:-1] + [p2f_whse_stats["models"][m]["point_pct"]]
+            entry["point_with_corpus_swarm_pct"] = round(float(np.mean(pts_whse)), 2)
+        composite_stats[m] = entry
 
     models_cost = [
         "Armiger (8.3 MB M4 Pro CPU INT8)",
         "Armiger Ultra (M4 Pro / RTX GPU FP32)",
-        "Local GPU LLM (Vinci-MLE-8B-1.0)",
-        "Cheap Google (gemini-3.8-flash-low)",
-        "Cheap OpenAI GPT (gpt-6-luna)",
-        "Cheap Anthropic (claude-haiku-4-5)",
+        "Local 8B Instruct LLM (FP16)",
+        "Google Gemini Flash",
+        "Cheap OpenAI GPT (Fast Tier)",
+        "Anthropic Claude Haiku 4.5",
     ]
     colors_cost = [C_INT8, C_ULTRA, C_VINCI, C_GEMINI, C_GPT, C_CLAUDE]
     batched_cost = [0.002, 0.004, 1.85, 94.90, 127.30, 712.00]
@@ -619,8 +621,8 @@ def build_all_charts_and_manifest(
         edges_llm = [C_ULTRA_EDGE, C_INT8_EDGE, "none", "none", "none", "none"]
         vals_left = [composite_stats[m]["point_pct"] for m in llm_order]
         labels_left = [
-            f"{vals_left[0]:.2f}% (0.21 ms RTX / 0.29 ms MPS | $0.00 API)",
-            f"{vals_left[1]:.2f}% (2.44 ms M4 Pro CPU INT8 | $0.00 API)",
+            f"{vals_left[0]:.2f}% Pub-6D | 97.60% w/ Corpus Swarm (0.21 ms RTX)",
+            f"{vals_left[1]:.2f}% Pub-6D (2.44 ms M4 Pro CPU INT8 | $0.00 API)",
             f"{vals_left[2]:.2f}% (~450 ms | Non-Circular LOTO N=1,025)",
             f"{vals_left[3]:.2f}% (~310 ms | $712.00-$1,220.00 / 1M)",
             f"{vals_left[4]:.2f}% (~365 ms | Non-Circular LOTO N=1,025)",
@@ -713,17 +715,17 @@ def build_all_charts_and_manifest(
                 (40, 162), [40, 60, 80, 100],
             ),
             (
-                1, 4, "2F. Swarm Liveliness AUROC %",
-                None,
+                1, 4, "2F. Swarm Liveliness AUROC (Identical N=757)",
+                p2f_pub_stats,
                 [
-                    "96.83% Whse (92.42% Pub)",
+                    "92.42% Pub (96.83% Corpus N=10.3k)",
                     "92.42% Pub (86.64% Priors)",
                     "89.20% Pub (N=757)",
                     "89.76% Pub (N=757)",
                     "89.82% Pub (N=757)",
                     "66.32% Pub (N=757)",
                 ],
-                (55, 152), [60, 70, 80, 90, 100],
+                (55, 155), [60, 70, 80, 90, 100],
             ),
         ]
 
@@ -754,10 +756,10 @@ def build_all_charts_and_manifest(
         legend_handles = [
             Patch(facecolor=C_ULTRA, edgecolor=C_ULTRA_EDGE, label="Armiger Ultra (Fair Hybrid)"),
             Patch(facecolor=C_INT8, edgecolor=C_INT8_EDGE, label="Armiger (8.3 MB INT8 + Plugins)"),
-            Patch(facecolor=C_GEMINI, label="Google Gemini (gemini-3.8-flash-low, LOTO Non-Circular)"),
-            Patch(facecolor=C_CLAUDE, label="Anthropic Claude (claude-haiku-4-5)"),
-            Patch(facecolor=C_GPT, label="OpenAI GPT (gpt-6-luna, LOTO Non-Circular)"),
-            Patch(facecolor=C_VINCI, label="Local GPU LLM (Vinci-MLE-8B-1.0)"),
+            Patch(facecolor=C_GEMINI, label="Google Gemini Flash (LOTO Non-Circular)"),
+            Patch(facecolor=C_CLAUDE, label="Anthropic Claude Haiku 4.5"),
+            Patch(facecolor=C_GPT, label="OpenAI GPT (Fast Tier, LOTO Non-Circular)"),
+            Patch(facecolor=C_VINCI, label="Local 8B Instruct LLM (FP16)"),
         ]
         fig1.legend(
             handles=legend_handles, loc="lower center", bbox_to_anchor=(0.5, 0.015),
@@ -784,10 +786,10 @@ def build_all_charts_and_manifest(
         models_cost = [
             "Armiger (8.3 MB M4 Pro CPU INT8)",
             "Armiger Ultra (M4 Pro / RTX GPU FP32)",
-            "Local GPU LLM (Vinci-MLE-8B-1.0)",
-            "Cheap Google (gemini-3.8-flash-low)",
-            "Cheap OpenAI GPT (gpt-6-luna)",
-            "Cheap Anthropic (claude-haiku-4-5)",
+            "Local 8B Instruct LLM (FP16)",
+            "Google Gemini Flash",
+            "Cheap OpenAI GPT (Fast Tier)",
+            "Anthropic Claude Haiku 4.5",
         ]
         colors_cost = [C_INT8, C_ULTRA, C_VINCI, C_GEMINI, C_GPT, C_CLAUDE]
         batched_cost = [0.002, 0.004, 1.85, 94.90, 127.30, 712.00]
@@ -974,14 +976,15 @@ def build_all_charts_and_manifest(
     c3_p6a_stats = compute_paired_panel_stats(
         "chart3_6a_oct15_junk2170",
         {
-            "Armiger Ultra": (d["oct15_junk_pred_ultra"] == y_oct_jk).astype(np.float32),
-            "Armiger INT8": (d["oct15_junk_pred_int8"] == y_oct_jk).astype(np.float32),
-            "Bitmagnet": (d["oct15_junk_pred_bitmagnet"] == y_oct_jk).astype(np.float32),
-            "RTN Filter": (d["oct15_junk_pred_rtn"] == y_oct_jk).astype(np.float32),
+            "Armiger Ultra": d["oct15_junk_pred_ultra"],
+            "Armiger INT8": d["oct15_junk_pred_int8"],
+            "Bitmagnet": d["oct15_junk_pred_bitmagnet"],
+            "RTN Filter": d["oct15_junk_pred_rtn"],
         },
         ref_model="Armiger Ultra",
         expected_n=2170,
-        metric_type="mean",
+        metric_type="balanced",
+        y_true=y_oct_jk,
     )
 
     oct_cat_spec = [
@@ -1220,13 +1223,19 @@ def build_all_charts_and_manifest(
         style_ax(ax6a)
         ax6a.axhspan(-0.5, 1.5, color=BG_HIGHLIGHT, alpha=0.75, zorder=1)
         m6a = ["Armiger Ultra", "Armiger INT8", "Bitmagnet", "RTN Filter", "Other 6 Tools"]
-        v6a = [100.00, 100.00, 54.60, 50.38, None]
+        v6a = [
+            c3_p6a_stats["models"]["Armiger Ultra"]["point_pct"],
+            c3_p6a_stats["models"]["Armiger INT8"]["point_pct"],
+            c3_p6a_stats["models"]["Bitmagnet"]["point_pct"],
+            c3_p6a_stats["models"]["RTN Filter"]["point_pct"],
+            None,
+        ]
         c6a = [C_ULTRA, C_INT8, "#94A3B8", "#F59E0B", "#21262D"]
         l6a = [
-            "100.00% (2,170/2,170 oct15)",
-            "100.00% (99.90% Acc beyond N=977)",
-            "54.60% Bal (0% Recall on oct15)",
-            "50.38% Bal (0% Recall on oct15)",
+            f"{v6a[0]:.2f}% Bal (98.41% beyond N=977)",
+            f"{v6a[1]:.2f}% Bal (98.41% beyond N=977)",
+            f"{v6a[2]:.2f}% Bal (0% Recall, 100% Spec)",
+            f"{v6a[3]:.2f}% Bal (0% Recall, 98.57% Spec)",
             "N/A (No Junk Head)",
         ]
         for idx, (v, lbl) in enumerate(zip(v6a, l6a)):
@@ -1243,23 +1252,22 @@ def build_all_charts_and_manifest(
         ax6a.set_xticks([50, 60, 70, 80, 90, 100])
         ax6a.set_title("6A. Junk / Malware Detection (oct15 N=2,170 & beyond N=977)", fontsize=10, fontweight="bold", color=TEXT_MAIN, pad=7)
 
-        # Panel 6B: Swarm Liveliness AUROC
+        # Panel 6B: Swarm Liveliness AUROC (Identical N=10,278 Multi-Source Corpus)
         ax6b = fig3.add_subplot(gs3[6, 3])
         style_ax(ax6b)
         ax6b.axhspan(-0.5, 1.5, color=BG_HIGHLIGHT, alpha=0.75, zorder=1)
         m6b = ["Armiger Ultra", "Armiger Priors", "Seeder Count", "All 8 Tools"]
-        s6b = [
-            p2f_whse_stats["models"]["Armiger Ultra (Fair Hybrid)"],
-            p2f_whse_stats["models"]["Armiger 4-Way Priors"],
-            p2f_pub_stats["models"]["Armiger Ultra (Fair Hybrid)"],  # replaced below for seeder
+        v6b = [
+            p2f_whse_stats["models"]["Armiger Ultra (Fair Hybrid)"]["point_pct"],
+            p2f_whse_stats["models"]["Armiger 4-Way Priors"]["point_pct"],
+            p2f_whse_stats["models"]["Raw Seeder Count"]["point_pct"],
             None,
         ]
-        v6b = [96.83, 86.64, 85.17, None]
         c6b = [C_ULTRA, C_INT8, "#64748B", "#21262D"]
         l6b = [
-            "96.83% Whse (92.42% Pub N=757)",
-            "86.64% AUROC (4-Way Priors)",
-            "85.17% Public / 53.02% Whse",
+            f"{v6b[0]:.2f}% Corpus (92.42% Pub N=757)",
+            f"{v6b[1]:.2f}% Corpus (4-Way Priors)",
+            f"{v6b[2]:.2f}% Corpus (85.17% Pub N=757)",
             "N/A (No Swarm Head)",
         ]
         for idx, (v, lbl) in enumerate(zip(v6b, l6b)):
@@ -1274,7 +1282,7 @@ def build_all_charts_and_manifest(
         ax6b.invert_yaxis()
         ax6b.set_xlim(48, 144)
         ax6b.set_xticks([50, 60, 70, 80, 90, 100])
-        ax6b.set_xlabel("Public Tracker (N=757: 92.42%, N=493: 93.03%) & Warehouse (N=10,278: 96.83%)", fontsize=8.2, color=TEXT_SUB, labelpad=6)
+        ax6b.set_xlabel("Multi-Source Corpus (Identical N=10,278) & Public Tracker (N=757: 92.42%)", fontsize=8.2, color=TEXT_SUB, labelpad=6)
         ax6b.set_title("6B. Swarm Liveliness AUROC % (swarm_adapter.pt)", fontsize=10, fontweight="bold", color=TEXT_MAIN, pad=7)
 
         sha_chart3 = save_clean_rgb_png(fig3, assets_dir / "armiger_vs_torrent_classifiers_6dims.png")
@@ -1285,7 +1293,7 @@ def build_all_charts_and_manifest(
         fig4, (ax4_l, ax4_r) = plt.subplots(1, 2, figsize=(22.5, 11.2), gridspec_kw={"wspace": 0.22})
         fig4.subplots_adjust(top=0.84, bottom=0.16, left=0.11, right=0.98)
         fig4.suptitle(
-            "Categorical Accuracy Breakdown Across All 10 Media & Software Categories",
+            "Per-Category Recall Breakdown Across All 10 Known Media & Software Categories",
             fontsize=17, fontweight="bold", color=TEXT_MAIN, y=0.965,
         )
         fig4.text(
@@ -1342,8 +1350,8 @@ def build_all_charts_and_manifest(
         ax4_l.set_ylim(len(cats_oct_labels) - 0.35, -0.6)
         ax4_l.set_xlim(0, 128)
         ax4_l.set_xticks([0, 20, 40, 60, 80, 100])
-        ax4_l.set_xlabel("Category Accuracy (%) — Identical N = 2,835 Ground-Truth Mask", fontsize=9.8, color=TEXT_SUB, labelpad=8)
-        ax4_l.set_title("1. Per-Category Accuracy vs. Open-Source Classifiers\n(oct15_confirmation, Identical N = 2,835)", fontsize=11.5, fontweight="bold", color=TEXT_MAIN, pad=10)
+        ax4_l.set_xlabel("Per-Class Recall (%) — Identical N = 2,835 Ground-Truth Mask", fontsize=9.8, color=TEXT_SUB, labelpad=8)
+        ax4_l.set_title("1. Per-Category Recall vs. Open-Source Classifiers\n(oct15_confirmation, Identical N = 2,835)", fontsize=11.5, fontweight="bold", color=TEXT_MAIN, pad=10)
         for idx in range(len(cats_oct_labels)):
             ax4_l.text(oct_ultra[idx] + 1.0, idx - 1.1 * h, f"{oct_ultra[idx]:.1f}%", va="center", ha="left", fontsize=8.0, fontweight="bold", color=C_ULTRA_EDGE)
             ax4_l.text(oct_mimmo[idx] + 1.0, idx + 0.5 * h, f"{oct_mimmo[idx]:.1f}%", va="center", ha="left", fontsize=7.6, color="#CBD5E1")
@@ -1390,15 +1398,15 @@ def build_all_charts_and_manifest(
         style_ax(ax4_r)
         ax4_r.barh(y_c - 1.5 * h, bc_ultra, height=h, color=C_ULTRA, label="Armiger Ultra Fair Hybrid (95.12% Non-Circular)", zorder=3)
         ax4_r.barh(y_c - 0.5 * h, bc_int8, height=h, color=C_INT8, label="Armiger INT8 + ZeroCue (95.12% Non-Circular, 92.88% Raw)", zorder=3)
-        ax4_r.barh(y_c + 0.5 * h, bc_gpt, height=h, color=C_GPT, label="OpenAI GPT gpt-6-luna (95.12% Non-Circ | 96.59% Circ)", zorder=3)
-        ax4_r.barh(y_c + 1.5 * h, bc_gem, height=h, color=C_GEMINI, label="Google Gemini 3.8-flash-low (93.80% Non-Circ | 95.61% Circ)", zorder=3)
+        ax4_r.barh(y_c + 0.5 * h, bc_gpt, height=h, color=C_GPT, label="OpenAI GPT Fast Tier (95.12% Non-Circ | 96.59% Circ)", zorder=3)
+        ax4_r.barh(y_c + 1.5 * h, bc_gem, height=h, color=C_GEMINI, label="Google Gemini Flash (93.80% Non-Circ | 95.61% Circ)", zorder=3)
         ax4_r.set_yticks(y_c)
         ax4_r.set_yticklabels(cats_bc_labels, fontsize=10, fontweight="bold", color=TEXT_MAIN)
         ax4_r.set_ylim(len(cats_bc_labels) - 0.35, -0.6)
         ax4_r.set_xlim(0, 128)
         ax4_r.set_xticks([0, 20, 40, 60, 80, 100])
-        ax4_r.set_xlabel("Category Accuracy (%) — Leave-One-Teacher-Out Non-Circular Reference", fontsize=9.8, color=TEXT_SUB, labelpad=8)
-        ax4_r.set_title("2. Per-Category Accuracy vs. Frontier Cloud LLMs\n(beyond_confirmation, Identical N = 1,025, LOTO Non-Circular)", fontsize=11.5, fontweight="bold", color=TEXT_MAIN, pad=10)
+        ax4_r.set_xlabel("Per-Class Recall (%) — Leave-One-Teacher-Out Non-Circular Reference", fontsize=9.8, color=TEXT_SUB, labelpad=8)
+        ax4_r.set_title("2. Per-Category Recall vs. Cloud LLMs\n(beyond_confirmation, Identical N = 1,025, LOTO Non-Circular)", fontsize=11.5, fontweight="bold", color=TEXT_MAIN, pad=10)
         for idx in range(len(cats_bc_labels)):
             ax4_r.text(bc_ultra[idx] + 1.0, idx - 1.1 * h, f"{bc_ultra[idx]:.1f}%", va="center", ha="left", fontsize=8.0, fontweight="bold", color=C_ULTRA_EDGE)
             ax4_r.text(bc_gpt[idx] + 1.0, idx + 0.5 * h, f"{bc_gpt[idx]:.1f}%", va="center", ha="left", fontsize=7.6, color=C_GPT)

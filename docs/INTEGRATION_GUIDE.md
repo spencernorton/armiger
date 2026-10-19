@@ -3,13 +3,13 @@
 This guide provides step-by-step instructions, turnkey Docker Compose stacks, and reference HTTP adapters for integrating **Armiger** (`8.3 MB INT8 CPU`) and **Armiger Ultra** (`32.3 MB FP32 GPU/CPU` + 6 official plugins) with:
 
 1. **[Part A — Integrating with `DH-Waypoint`](#part-a--integrating-armiger-with-dh-waypoint)** (`https://github.com/spencernorton/DH-Waypoint`):
-   - Native `dh-waypoint.processor.v1` batch classification (`POST /v1/classify`)
+   - Native `dh-waypoint.processor.v1` processor contract (`GET /v1/manifest`, `GET /v1/status`, `POST /v1/process`, and batch `POST /v1/classify`)
    - Pre-ingest `dh-waypoint.processors.admission.v1` cohort admission gate (`POST /v1/admit`)
    - Closed-loop 4-tier `dh-waypoint.processors.feedback.v1` outcome telemetry (`POST /v1/feedback`)
 2. **[Part B — Integrating with `Bitmagnet`](#part-b--integrating-armiger-with-bitmagnet)**:
    - Pre-ingest / post-crawl batch classifier & malware/honeypot pruner (`examples/bitmagnet/bitmagnet_armiger_bridge.py`)
    - GraphQL `torrentDelete` / content enrichment bridge & Torznab proxy enrichment
-3. **[Part C — Integrating with the `*Arr` Stack (`Prowlarr`, `Sonarr`, `Radarr`, `Lidarr`, `Readarr`, `Whisparr`) & `qBittorrent`](#part-c--integrating-armiger-with-the-arr-stack--qbittorrent)**:
+3. **[Part C — Integrating with Torznab Index Consumers (`Prowlarr`, `Sonarr`, `Radarr`, `Lidarr`, `Readarr`) & `qBittorrent`](#part-c--integrating-armiger-with-torznab-index-consumers--qbittorrent)**:
    - Pre-grab Torznab filtering proxy (`examples/arr-stack/armiger_torznab_proxy.py`) blocking disguised `.exe`/`.scr`/`.lnk` malware, fake-seeder honeypot traps, dead swarms, and unrequested foreign-language audio tracks before grab
    - Post-import webhook & `ffprobe` physical ground-truth receiver (`examples/arr-stack/armiger_arr_webhook_receiver.py`) wired into `SeriesWebhookAdapter`, `MovieWebhookAdapter`, `AudioWebhookAdapter`, `PublicationWebhookAdapter`, `QBittorrentAdapter`, and `PhysicalGroundTruthVerifier` for local conformal calibration and opt-in anonymous `BEP-44`/`BEP-46` RSI knowledge sharing
 
@@ -26,7 +26,7 @@ flowchart LR
     end
 
     subgraph ArmigerSuite["Armiger / Armiger Ultra"]
-        PROC["Armiger Waypoint Processor<br/>(/v1/classify, /v1/admit, /v1/feedback)"]
+        PROC["Armiger Waypoint Processor<br/>(/v1/manifest, /v1/process, /v1/classify, /v1/admit, /v1/feedback)"]
         BMBR["Bitmagnet Armiger Bridge<br/>(/v1/bitmagnet/classify)"]
         TPROXY["Armiger Torznab Proxy<br/>(Port 8097 Admission Gate)"]
         WHOOK["Armiger Webhook & ffprobe Receiver<br/>(Port 8098 Ground Truth + BEP-44 RSI)"]
@@ -140,7 +140,7 @@ curl -sS -X POST http://localhost:8096/v1/bitmagnet/classify \
     "torrents": [
       {
         "infoHash": "1111222233334444555566667777888899990000",
-        "name": "Sintel.2010.2160p.UHD.BluRay.REMUX.HEVC.TrueHD.7.1.Atmos-OPEN",
+        "name": "Sintel.2010.2160p.UHD.Master.HEVC.FLAC.5.1-OPEN",
         "size": 74500000000,
         "seeders": 320,
         "leechers": 18,
@@ -148,23 +148,23 @@ curl -sS -X POST http://localhost:8096/v1/bitmagnet/classify \
       },
       {
         "infoHash": "aaaa22223333444455556666777788889999bbbb",
-        "name": "Big.Buck.Bunny.2008.1080p.BluRay.mkv.exe",
+        "name": "Big.Buck.Bunny.2008.1080p.WEBM.mkv.exe",
         "size": 15400000,
         "seeders": 4500,
         "leechers": 12,
-        "files": [{"path": "Big.Buck.Bunny.2008.1080p.BluRay.mkv.exe", "size": 15400000}]
+        "files": [{"path": "Big.Buck.Bunny.2008.1080p.WEBM.mkv.exe", "size": 15400000}]
       }
     ]
   }'
 ```
 
-The bridge classifies the first item as `contentType: "movie"` (`viabilityTier: "alive_viable"`) and flags the second item (`Big.Buck.Bunny.2008.1080p.BluRay.mkv.exe`) for immediate deletion via `graphqlDeleteMutation`.
+The bridge classifies the first item as `contentType: "movie"` (`viabilityTier: "alive_viable"`) and flags the second item (`Big.Buck.Bunny.2008.1080p.WEBM.mkv.exe`) for immediate deletion via `graphqlDeleteMutation`.
 
 ---
 
-## Part C — Integrating Armiger with the `*Arr` Stack & `qBittorrent`
+## Part C — Integrating Armiger with Torznab Index Consumers & `qBittorrent`
 
-Armiger integrates with `Prowlarr`, `Sonarr`, `Radarr`, `Lidarr`, `Readarr`, `Whisparr`, and `qBittorrent` at **two stages**:
+Armiger integrates with standard Torznab XML/RSS index consumers (`Prowlarr`, `Sonarr`, `Radarr`, `Lidarr`, `Readarr`) and BitTorrent clients (`qBittorrent`, `Transmission`) at **two stages**:
 1. **Stage 1 — Pre-Grab Torznab Filtering Proxy (`port 8097`):** Blocks malware masquerades, fake-seeder honeypots, dead swarms, and unrequested foreign-language audio releases *before* any `*Arr` app grabs them.
 2. **Stage 2 — Post-Import Webhook & `ffprobe` Ground-Truth Receiver (`port 8098`):** Verifies completed downloads and `ffprobe` media streams to calibrate local Mondrian thresholds and optionally contribute differential-privacy blinded telemetry to the `BEP-44`/`BEP-46` RSI network.
 
@@ -177,7 +177,7 @@ export UPSTREAM_TORZNAB_URL="http://dh-waypoint:3333/torznab"
 docker compose -f examples/arr-stack/docker-compose.yml up -d
 ```
 
-#### Configuring in `Prowlarr`, `Sonarr`, `Radarr`, `Lidarr`, `Readarr`, or `Whisparr`:
+#### Configuring in `Prowlarr`, `Sonarr`, `Radarr`, `Lidarr`, or `Readarr`:
 1. Open **Settings -> Indexers -> + -> Torznab (Custom)**.
 2. Set **URL** to `http://armiger-torznab-proxy:8097` (instead of pointing directly at `http://bitmagnet:3333/torznab` or `http://dh-waypoint:3333/torznab`).
 3. Every Torznab search query (`?t=search`, `?t=tvsearch`, `?t=movie`, `?t=music`, `?t=book`) is transparently forwarded upstream, batch-scored by `ArmigerUltraPipeline`, stripped of unsafe/honeypot/dead/wrong-language items, and annotated with custom `<torznab:attr>` tags:
@@ -258,7 +258,7 @@ ok, reason, record = pipeline.ingest_rsi_feedback(
         "eventType": "Download",
         "movie": {"title": "Sintel", "year": 2010, "tmdbId": 45745},
         "release": {
-            "releaseTitle": "Sintel.2010.2160p.UHD.BluRay.REMUX.HEVC.TrueHD.7.1.Atmos-OPEN",
+            "releaseTitle": "Sintel.2010.2160p.UHD.Master.HEVC.FLAC.5.1-OPEN",
             "size": 24_800_000_000,
         },
         "movieFile": {

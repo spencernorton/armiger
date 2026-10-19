@@ -10,7 +10,7 @@
   },
   "anti_circularity_audit": [
     {
-      "model_name": "OpenAI GPT (gpt-6-luna)",
+      "model_name": "OpenAI GPT (Fast Tier)",
       "is_teacher": true,
       "eval_mode": "leave_one_teacher_out",
       "self_vote_weight": 0.0,
@@ -19,7 +19,7 @@
       "circularity_inflation_pp": 1.46
     },
     {
-      "model_name": "Google Gemini (gemini-3.8-flash-low)",
+      "model_name": "Google Gemini Flash",
       "is_teacher": true,
       "eval_mode": "leave_one_teacher_out",
       "self_vote_weight": 0.0,
@@ -28,7 +28,7 @@
       "circularity_inflation_pp": 1.8
     },
     {
-      "model_name": "Anthropic Claude (claude-haiku-4-5)",
+      "model_name": "Anthropic Claude Haiku 4.5",
       "is_teacher": true,
       "eval_mode": "independent_ground_truth",
       "self_vote_weight": 0.0
@@ -36,48 +36,49 @@
   ],
   "provenance_sha256": {
     "canonical_eval_vectors.json": "058473f4ba21bc07db2c2b6981d5e62f3c584311fc134d92cb523de7f261243a",
-    "generate_canonical_charts.py": "dfe6262c4815ec8fa0ab47569b80faebe7a4d29fb85824c4cc05c1b921e32270",
-    "assets/armiger_vs_llms_overall_and_6dims.png": "2367dbf6ae84cc2f75b0b13f377f7053f8f0e63ebe56cf42e1093b26aa18c082",
-    "assets/armiger_vs_llms_cost_comparison.png": "ff33da1aa78dc14be919d34d5914db5efabe8c30d1698bda378962a3c92c5dbc",
-    "assets/armiger_vs_torrent_classifiers_6dims.png": "a4ebfcb1565ed94c830846845ecf16e46061424180ea01a5852b8d4d1e614a6a",
-    "assets/armiger_categorical_breakdown.png": "b137523c9ef1e5e26463f06db2ca477b9acfbae83a3f07869d74c8ce915a4513",
+    "generate_canonical_charts.py": "e6d73c7197057fbb7cea3dee7f11599e6ce50039f692eada2d0ebae61ec774c4",
+    "assets/armiger_vs_llms_overall_and_6dims.png": "0a0bc3a260b3c3b1188a92fb9cc015c6bdb786e9033924d9daa7a36be332fc62",
+    "assets/armiger_vs_llms_cost_comparison.png": "3cf46fd59817d3bffafce1f4f5a15379ffef7bf779b8d4b40b866a8d9671eff4",
+    "assets/armiger_vs_torrent_classifiers_6dims.png": "e6be359c5cc980b4fe30810d4f2f5b8b202bd3fca6f2a4a33ae0727c5de2f010",
+    "assets/armiger_categorical_breakdown.png": "1a77a64340f7e05af318105d83270b29396450d01f22f71cffdf808b45e10d98",
     "validated_zero_cue_catalog.json": "a43193a7d9982f1b83e9e6968c47dbbe8d058b113af5020d6d5ea45ed2af7fcd",
     "armiger_ultra.fp32.onnx": "24c65e1af1be68c923bfdf774afb862c54b66a30f40c4b65cf5961929f149d48",
     "armiger.int8.onnx": "c750e034aace4ff28c0eb1e1112b28f744a5770abd78618127258f283e54e4da"
   },
   "charts": {
     "armiger_vs_llms_overall_and_6dims.png": {
-      "sha256": "2367dbf6ae84cc2f75b0b13f377f7053f8f0e63ebe56cf42e1093b26aa18c082",
+      "sha256": "0a0bc3a260b3c3b1188a92fb9cc015c6bdb786e9033924d9daa7a36be332fc62",
       "composite_6dim_mean": {
         "Armiger Ultra (Fair Hybrid)": {
-          "point_pct": 97.6,
-          "ci95_lo": 97.18,
-          "ci95_hi": 98.02
+          "point_pct": 96.86,
+          "ci95_lo": 96.35,
+          "ci95_hi": 97.38,
+          "point_with_corpus_swarm_pct": 97.6
         },
         "Armiger (8.3 MB INT8 + Plugins)": {
           "point_pct": 96.85,
-          "ci95_lo": 96.4,
-          "ci95_hi": 97.3
+          "ci95_lo": 96.33,
+          "ci95_hi": 97.36
         },
-        "Google Gemini (gemini-3.8-flash-low)": {
+        "Google Gemini Flash": {
           "point_pct": 94.56,
-          "ci95_lo": 93.97,
-          "ci95_hi": 95.15
+          "ci95_lo": 93.88,
+          "ci95_hi": 95.23
         },
-        "Anthropic Claude (claude-haiku-4-5)": {
+        "Anthropic Claude Haiku 4.5": {
           "point_pct": 92.88,
-          "ci95_lo": 92.1,
-          "ci95_hi": 93.66
+          "ci95_lo": 92.04,
+          "ci95_hi": 93.72
         },
-        "OpenAI GPT (gpt-6-luna)": {
+        "OpenAI GPT (Fast Tier)": {
           "point_pct": 86.24,
-          "ci95_lo": 85.64,
-          "ci95_hi": 86.83
+          "ci95_lo": 85.56,
+          "ci95_hi": 86.91
         },
-        "Local GPU LLM (Vinci-MLE-8B-1.0)": {
+        "Local 8B Instruct LLM (FP16)": {
           "point_pct": 84.79,
-          "ci95_lo": 83.8,
-          "ci95_hi": 85.79
+          "ci95_lo": 83.65,
+          "ci95_hi": 85.94
         }
       },
       "panel_2a_category_11class": {
@@ -106,7 +107,7 @@
             "delta_ci95_hi": 0.0,
             "p_value_vs_ref": 1.0
           },
-          "Google Gemini (gemini-3.8-flash-low)": {
+          "Google Gemini Flash": {
             "n": 1025,
             "point_pct": 93.8,
             "ci95_lo": 92.39,
@@ -116,7 +117,7 @@
             "delta_ci95_hi": 2.93,
             "p_value_vs_ref": 0.1073516
           },
-          "Anthropic Claude (claude-haiku-4-5)": {
+          "Anthropic Claude Haiku 4.5": {
             "n": 1025,
             "point_pct": 93.76,
             "ci95_lo": 92.2,
@@ -126,7 +127,7 @@
             "delta_ci95_hi": 2.15,
             "p_value_vs_ref": 0.0001220703
           },
-          "OpenAI GPT (gpt-6-luna)": {
+          "OpenAI GPT (Fast Tier)": {
             "n": 1025,
             "point_pct": 95.12,
             "ci95_lo": 93.85,
@@ -136,7 +137,7 @@
             "delta_ci95_hi": 1.41,
             "p_value_vs_ref": 0.5715867
           },
-          "Local GPU LLM (Vinci-MLE-8B-1.0)": {
+          "Local 8B Instruct LLM (FP16)": {
             "n": 1025,
             "point_pct": 80.78,
             "ci95_lo": 78.34,
@@ -174,7 +175,7 @@
             "delta_ci95_hi": 0.98,
             "p_value_vs_ref": 1.0
           },
-          "Google Gemini (gemini-3.8-flash-low)": {
+          "Google Gemini Flash": {
             "n": 1025,
             "point_pct": 90.88,
             "ci95_lo": 89.17,
@@ -184,7 +185,7 @@
             "delta_ci95_hi": 7.32,
             "p_value_vs_ref": 3.767158e-09
           },
-          "Anthropic Claude (claude-haiku-4-5)": {
+          "Anthropic Claude Haiku 4.5": {
             "n": 1025,
             "point_pct": 86.15,
             "ci95_lo": 84.0,
@@ -194,7 +195,7 @@
             "delta_ci95_hi": 12.1,
             "p_value_vs_ref": 4.930381e-32
           },
-          "OpenAI GPT (gpt-6-luna)": {
+          "OpenAI GPT (Fast Tier)": {
             "n": 1025,
             "point_pct": 89.07,
             "ci95_lo": 87.17,
@@ -204,7 +205,7 @@
             "delta_ci95_hi": 9.32,
             "p_value_vs_ref": 2.797646e-13
           },
-          "Local GPU LLM (Vinci-MLE-8B-1.0)": {
+          "Local 8B Instruct LLM (FP16)": {
             "n": 1025,
             "point_pct": 77.85,
             "ci95_lo": 75.32,
@@ -242,7 +243,7 @@
             "delta_ci95_hi": 0.0,
             "p_value_vs_ref": 1.0
           },
-          "Google Gemini (gemini-3.8-flash-low)": {
+          "Google Gemini Flash": {
             "n": 229,
             "point_pct": 98.69,
             "ci95_lo": 96.94,
@@ -252,7 +253,7 @@
             "delta_ci95_hi": 2.18,
             "p_value_vs_ref": 1.0
           },
-          "Anthropic Claude (claude-haiku-4-5)": {
+          "Anthropic Claude Haiku 4.5": {
             "n": 229,
             "point_pct": 95.63,
             "ci95_lo": 92.58,
@@ -262,7 +263,7 @@
             "delta_ci95_hi": 6.11,
             "p_value_vs_ref": 0.0078125
           },
-          "OpenAI GPT (gpt-6-luna)": {
+          "OpenAI GPT (Fast Tier)": {
             "n": 229,
             "point_pct": 97.82,
             "ci95_lo": 95.63,
@@ -272,7 +273,7 @@
             "delta_ci95_hi": 3.06,
             "p_value_vs_ref": 0.25
           },
-          "Local GPU LLM (Vinci-MLE-8B-1.0)": {
+          "Local 8B Instruct LLM (FP16)": {
             "n": 229,
             "point_pct": 93.45,
             "ci95_lo": 89.96,
@@ -310,7 +311,7 @@
             "delta_ci95_hi": 0.0,
             "p_value_vs_ref": 1.0
           },
-          "Google Gemini (gemini-3.8-flash-low)": {
+          "Google Gemini Flash": {
             "n": 636,
             "point_pct": 95.6,
             "ci95_lo": 93.87,
@@ -320,7 +321,7 @@
             "delta_ci95_hi": 5.03,
             "p_value_vs_ref": 4.923344e-05
           },
-          "Anthropic Claude (claude-haiku-4-5)": {
+          "Anthropic Claude Haiku 4.5": {
             "n": 636,
             "point_pct": 98.9,
             "ci95_lo": 97.96,
@@ -330,7 +331,7 @@
             "delta_ci95_hi": 0.0,
             "p_value_vs_ref": 1.0
           },
-          "OpenAI GPT (gpt-6-luna)": {
+          "OpenAI GPT (Fast Tier)": {
             "n": 636,
             "point_pct": 95.6,
             "ci95_lo": 93.87,
@@ -340,7 +341,7 @@
             "delta_ci95_hi": 5.03,
             "p_value_vs_ref": 4.923344e-05
           },
-          "Local GPU LLM (Vinci-MLE-8B-1.0)": {
+          "Local 8B Instruct LLM (FP16)": {
             "n": 636,
             "point_pct": 92.45,
             "ci95_lo": 90.25,
@@ -378,7 +379,7 @@
             "delta_ci95_hi": 0.0,
             "p_value_vs_ref": 1.0
           },
-          "Google Gemini (gemini-3.8-flash-low)": {
+          "Google Gemini Flash": {
             "n": 977,
             "point_pct": 99.18,
             "ci95_lo": 97.53,
@@ -388,7 +389,7 @@
             "delta_ci95_hi": 2.36,
             "p_value_vs_ref": 1.0
           },
-          "Anthropic Claude (claude-haiku-4-5)": {
+          "Anthropic Claude Haiku 4.5": {
             "n": 977,
             "point_pct": 93.09,
             "ci95_lo": 90.56,
@@ -398,7 +399,7 @@
             "delta_ci95_hi": 9.0,
             "p_value_vs_ref": 8.046381e-29
           },
-          "OpenAI GPT (gpt-6-luna)": {
+          "OpenAI GPT (Fast Tier)": {
             "n": 977,
             "point_pct": 50.0,
             "ci95_lo": 50.0,
@@ -408,7 +409,7 @@
             "delta_ci95_hi": 50.0,
             "p_value_vs_ref": 1.084202e-19
           },
-          "Local GPU LLM (Vinci-MLE-8B-1.0)": {
+          "Local 8B Instruct LLM (FP16)": {
             "n": 977,
             "point_pct": 97.91,
             "ci95_lo": 95.5,
@@ -429,8 +430,8 @@
           "Armiger Ultra (Fair Hybrid)": {
             "n": 757,
             "point_pct": 92.42,
-            "ci95_lo": 91.48,
-            "ci95_hi": 93.28,
+            "ci95_lo": 90.55,
+            "ci95_hi": 94.13,
             "delta_vs_ref_pct": 0.0,
             "delta_ci95_lo": 0.0,
             "delta_ci95_hi": 0.0,
@@ -439,51 +440,51 @@
           "Armiger (8.3 MB INT8 + Plugins)": {
             "n": 757,
             "point_pct": 92.42,
-            "ci95_lo": 91.48,
-            "ci95_hi": 93.28,
+            "ci95_lo": 90.55,
+            "ci95_hi": 94.13,
             "delta_vs_ref_pct": 0.0,
             "delta_ci95_lo": 0.0,
             "delta_ci95_hi": 0.0,
             "p_value_vs_ref": 1.0
           },
-          "Google Gemini (gemini-3.8-flash-low)": {
+          "Google Gemini Flash": {
             "n": 757,
             "point_pct": 89.2,
-            "ci95_lo": 88.05,
-            "ci95_hi": 90.31,
+            "ci95_lo": 86.89,
+            "ci95_hi": 91.42,
             "delta_vs_ref_pct": 3.22,
-            "delta_ci95_lo": 1.77,
-            "delta_ci95_hi": 4.66,
+            "delta_ci95_lo": 0.32,
+            "delta_ci95_hi": 6.1,
             "p_value_vs_ref": 2.227484e-06
           },
-          "Anthropic Claude (claude-haiku-4-5)": {
+          "Anthropic Claude Haiku 4.5": {
             "n": 757,
             "point_pct": 89.76,
-            "ci95_lo": 88.64,
-            "ci95_hi": 90.85,
+            "ci95_lo": 87.53,
+            "ci95_hi": 91.94,
             "delta_vs_ref_pct": 2.66,
-            "delta_ci95_lo": 1.25,
-            "delta_ci95_hi": 4.06,
+            "delta_ci95_lo": -0.16,
+            "delta_ci95_hi": 5.47,
             "p_value_vs_ref": 4.115658e-10
           },
-          "OpenAI GPT (gpt-6-luna)": {
+          "OpenAI GPT (Fast Tier)": {
             "n": 757,
             "point_pct": 89.82,
-            "ci95_lo": 88.67,
-            "ci95_hi": 90.88,
+            "ci95_lo": 87.51,
+            "ci95_hi": 91.93,
             "delta_vs_ref_pct": 2.6,
-            "delta_ci95_lo": 1.17,
-            "delta_ci95_hi": 4.03,
+            "delta_ci95_lo": -0.26,
+            "delta_ci95_hi": 5.47,
             "p_value_vs_ref": 6.473227e-07
           },
-          "Local GPU LLM (Vinci-MLE-8B-1.0)": {
+          "Local 8B Instruct LLM (FP16)": {
             "n": 757,
             "point_pct": 66.32,
-            "ci95_lo": 64.33,
-            "ci95_hi": 68.24,
+            "ci95_lo": 62.34,
+            "ci95_hi": 70.17,
             "delta_vs_ref_pct": 26.1,
-            "delta_ci95_lo": 23.91,
-            "delta_ci95_hi": 28.35,
+            "delta_ci95_lo": 21.73,
+            "delta_ci95_hi": 30.6,
             "p_value_vs_ref": 1.035307e-81
           }
         }
@@ -497,8 +498,8 @@
           "Armiger Ultra (Fair Hybrid)": {
             "n": 10278,
             "point_pct": 96.83,
-            "ci95_lo": 96.68,
-            "ci95_hi": 96.98,
+            "ci95_lo": 96.52,
+            "ci95_hi": 97.12,
             "delta_vs_ref_pct": 0.0,
             "delta_ci95_lo": 0.0,
             "delta_ci95_hi": 0.0,
@@ -507,35 +508,35 @@
           "Armiger 4-Way Priors": {
             "n": 10278,
             "point_pct": 86.64,
-            "ci95_lo": 86.27,
-            "ci95_hi": 87.0,
+            "ci95_lo": 85.91,
+            "ci95_hi": 87.36,
             "delta_vs_ref_pct": 10.19,
-            "delta_ci95_lo": 9.79,
-            "delta_ci95_hi": 10.59,
+            "delta_ci95_lo": 9.39,
+            "delta_ci95_hi": 10.99,
             "p_value_vs_ref": 0.0
           },
           "Raw Seeder Count": {
             "n": 10278,
             "point_pct": 53.02,
-            "ci95_lo": 52.45,
-            "ci95_hi": 53.62,
+            "ci95_lo": 51.88,
+            "ci95_hi": 54.22,
             "delta_vs_ref_pct": 43.81,
-            "delta_ci95_lo": 43.19,
-            "delta_ci95_hi": 44.4,
+            "delta_ci95_lo": 42.57,
+            "delta_ci95_hi": 45.0,
             "p_value_vs_ref": 0.0
           }
         }
       }
     },
     "armiger_vs_llms_cost_comparison.png": {
-      "sha256": "ff33da1aa78dc14be919d34d5914db5efabe8c30d1698bda378962a3c92c5dbc",
+      "sha256": "3cf46fd59817d3bffafce1f4f5a15379ffef7bf779b8d4b40b866a8d9671eff4",
       "models": [
         "Armiger (8.3 MB M4 Pro CPU INT8)",
         "Armiger Ultra (M4 Pro / RTX GPU FP32)",
-        "Local GPU LLM (Vinci-MLE-8B-1.0)",
-        "Cheap Google (gemini-3.8-flash-low)",
-        "Cheap OpenAI GPT (gpt-6-luna)",
-        "Cheap Anthropic (claude-haiku-4-5)"
+        "Local 8B Instruct LLM (FP16)",
+        "Google Gemini Flash",
+        "Cheap OpenAI GPT (Fast Tier)",
+        "Anthropic Claude Haiku 4.5"
       ],
       "batched_usd_per_1m": [
         0.002,
@@ -555,7 +556,7 @@
       ]
     },
     "armiger_vs_torrent_classifiers_6dims.png": {
-      "sha256": "a4ebfcb1565ed94c830846845ecf16e46061424180ea01a5852b8d4d1e614a6a",
+      "sha256": "e6be359c5cc980b4fe30810d4f2f5b8b202bd3fca6f2a4a33ae0727c5de2f010",
       "panel_1_category_11class_oct15": {
         "panel_name": "chart3_1_oct15_cat11",
         "n": 2835,
@@ -1135,7 +1136,7 @@
       "panel_6a_junk_oct15": {
         "panel_name": "chart3_6a_oct15_junk2170",
         "n": 2170,
-        "metric_type": "mean",
+        "metric_type": "balanced",
         "reference_model": "Armiger Ultra",
         "models": {
           "Armiger Ultra": {
@@ -1160,29 +1161,29 @@
           },
           "Bitmagnet": {
             "n": 2170,
-            "point_pct": 99.95,
-            "ci95_lo": 99.86,
-            "ci95_hi": 100.0,
-            "delta_vs_ref_pct": 0.05,
-            "delta_ci95_lo": 0.0,
-            "delta_ci95_hi": 0.14,
+            "point_pct": 50.0,
+            "ci95_lo": 50.0,
+            "ci95_hi": 50.0,
+            "delta_vs_ref_pct": 50.0,
+            "delta_ci95_lo": 50.0,
+            "delta_ci95_hi": 50.0,
             "p_value_vs_ref": 1.0
           },
           "RTN Filter": {
             "n": 2170,
-            "point_pct": 98.53,
-            "ci95_lo": 98.02,
-            "ci95_hi": 99.03,
-            "delta_vs_ref_pct": 1.47,
-            "delta_ci95_lo": 0.97,
-            "delta_ci95_hi": 1.98,
+            "point_pct": 49.29,
+            "ci95_lo": 49.03,
+            "ci95_hi": 49.52,
+            "delta_vs_ref_pct": 50.71,
+            "delta_ci95_lo": 50.48,
+            "delta_ci95_hi": 50.97,
             "p_value_vs_ref": 4.656613e-10
           }
         }
       }
     },
     "armiger_categorical_breakdown.png": {
-      "sha256": "b137523c9ef1e5e26463f06db2ca477b9acfbae83a3f07869d74c8ce915a4513",
+      "sha256": "1a77a64340f7e05af318105d83270b29396450d01f22f71cffdf808b45e10d98",
       "left_oct15_confirmation_n2835": {
         "Audiobook": {
           "n": 95,

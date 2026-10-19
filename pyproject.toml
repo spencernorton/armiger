@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "armiger"
 version = "2.1.0"
-description = "Armiger & Armiger Ultra: 6.1M-parameter multi-head neural torrent metadata classifier, Mondrian safety gates, and 6-plugin SDK"
+description = "Armiger & Armiger Ultra: 8.1M-parameter multi-head neural torrent metadata classifier, Mondrian safety gates, and 6-plugin SDK"
 readme = "README.md"
 license = {text = "Apache-2.0"}
 requires-python = ">=3.10"

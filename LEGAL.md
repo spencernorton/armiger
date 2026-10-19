@@ -19,9 +19,9 @@ Armiger **does not** host, index, link to, download, distribute, or provide acce
 
 1. **Zero Copyrighted Content or Plaintext Titles:**
    - Neither the model weights (`armiger.int8.onnx`, `armiger_ultra.fp32.onnx`, `armiger_ultra.pt`, `swarm_adapter.pt`) nor the Zero-Cue Catalog (`validated_zero_cue_catalog.json`) contain or redistribute copyrighted media files or plaintext title strings.
-   - All lookup keys in `validated_zero_cue_catalog.json` and all release-tag token tables in `armiger_inference.py` and `swarm_priors.py` are stored as irreversible, one-way **64-bit keyed BLAKE2b cryptographic hashes** (`digest_size=8`).
+   - All lookup keys in `validated_zero_cue_catalog.json` and all release-tag token tables in `armiger_inference.py` and `swarm_priors.py` are stored as irreversible, one-way **domain-separated 64-bit BLAKE2b cryptographic hashes** (`digest_size=8`, `person=b"ArmigZCC"`).
 2. **Creative Commons & Public-Domain Test Fixtures:**
-   - Every test fixture, code example, and documentation sample in this repository exclusively uses open-source software distributions (e.g., Ubuntu ISOs), public-domain literature (*Project Gutenberg*, *LibriVox*), Creative Commons Zero recordings (*Open Goldberg Variations*), or Creative Commons Attribution open movies and comics (*Blender Studio Open Movies*, *Pepper&Carrot*).
+   - Every test fixture, code example, and documentation sample in this repository exclusively uses open-source software distributions (e.g., Ubuntu ISOs), public-domain literature and early cinema (*Project Gutenberg*, *LibriVox* US public-domain recordings, Georges Méliès 1902/1906 films), Creative Commons Zero recordings (*Open Goldberg Variations*), or Creative Commons Attribution open movies and comics (*Blender Studio Open Movies*, *Pepper&Carrot*).
 3. **No Circumvention or Infringement:**
    - Armiger does not bypass technological protection measures (DRM), access private trackers, or facilitate copyright infringement. Users are solely responsible for ensuring that their deployment of Armiger complies with applicable copyright laws in their jurisdiction (including 17 U.S.C. § 512 and EU Directive 2019/790).
 

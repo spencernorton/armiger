@@ -6,18 +6,18 @@
   "artifacts": {
     "armiger_cpu_int8_onnx": {
       "file": "armiger.int8.onnx",
-      "size_bytes": 8276448,
-      "sha256": "655ea5c70ca43432439c4b215ecebea46b0a624cd5ea5689456ea0cc7d423a5f"
+      "size_bytes": 8283542,
+      "sha256": "c750e034aace4ff28c0eb1e1112b28f744a5770abd78618127258f283e54e4da"
     },
     "armiger_ultra_fp32_onnx": {
       "file": "armiger_ultra.fp32.onnx",
-      "size_bytes": 32262576,
-      "sha256": "3c43fd365f870d45e6b8e62c8cb770f8476ad7f21ff89042369082460a769c36"
+      "size_bytes": 32287709,
+      "sha256": "24c65e1af1be68c923bfdf774afb862c54b66a30f40c4b65cf5961929f149d48"
     },
     "armiger_ultra_pytorch": {
       "file": "armiger_ultra.pt",
-      "size_bytes": 32205583,
-      "sha256": "81d80224235dcab8f3eb7c439a3f1d40a55cad7678e1990f27881351713ede79"
+      "size_bytes": 32235023,
+      "sha256": "368af70847ddf46a5abf05ae9f44253d37b146a734e42fd5f28ad60e21724e19"
     },
     "swarm_health_adapter": {
       "file": "swarm_adapter.pt",
@@ -181,5 +181,6 @@
       "armiger_ultra_pipeline.py": "92c379a3e6c1dfd50312011264c407462e85daef11ec2ee203cc6963395be293",
       "test_armiger_ultra_pipeline.py": "b309d0edf87a189f41e95c18511fd26b0d748f981d93f1a0782cd8163015e18d"
     }
-  }
+  },
+  "parameter_count": 8050139
 }

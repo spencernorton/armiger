@@ -69,13 +69,13 @@ def test_anti_circularity_lock_enforced():
     d = _load_vectors(BENCH_DIR / "canonical_eval_vectors.json")
 
     with pytest.raises(AssertionError, match="Anti-Circularity Lock violated"):
-        assert_non_circular_teacher_eval("OpenAI GPT (gpt-6-luna)", eval_mode="circular_majority", self_vote_weight=0.333)
+        assert_non_circular_teacher_eval("OpenAI GPT (Fast Tier)", eval_mode="circular_majority", self_vote_weight=0.333)
 
     with pytest.raises(AssertionError, match="Anti-Circularity Lock violated"):
-        assert_non_circular_teacher_eval("Google Gemini (gemini-3.8-flash-low)", eval_mode="leave_one_teacher_out", self_vote_weight=0.5)
+        assert_non_circular_teacher_eval("Google Gemini Flash", eval_mode="leave_one_teacher_out", self_vote_weight=0.5)
 
     gpt_audit = assert_non_circular_teacher_eval(
-        "OpenAI GPT (gpt-6-luna)",
+        "OpenAI GPT (Fast Tier)",
         eval_mode="leave_one_teacher_out",
         self_vote_weight=0.0,
         noncirc_vec=d["beyond_cat11_corr_gpt_noncirc"],
@@ -86,7 +86,7 @@ def test_anti_circularity_lock_enforced():
     assert gpt_audit["circularity_inflation_pp"] > 1.0
 
     gem_audit = assert_non_circular_teacher_eval(
-        "Google Gemini (gemini-3.8-flash-low)",
+        "Google Gemini Flash",
         eval_mode="leave_one_teacher_out",
         self_vote_weight=0.0,
         noncirc_vec=d["beyond_cat11_corr_gemini_noncirc"],
@@ -117,7 +117,7 @@ def test_paired_bootstrap_and_mcnemar_reproducibility():
         "Armiger Ultra": (d["oct15_aud545_pred_ultra"] == d["oct15_aud545_y_en"]).astype(np.float32),
         "Armiger INT8": (d["oct15_aud545_pred_int8_hyb"] == d["oct15_aud545_y_en"]).astype(np.float32),
         "GuessIt": (d["oct15_aud545_pred_guessit"] == d["oct15_aud545_y_en"]).astype(np.float32),
-        "GPT-6-Luna": (d["oct15_aud545_pred_gpt"] == d["oct15_aud545_y_en"]).astype(np.float32),
+        "OpenAI GPT (Fast Tier)": (d["oct15_aud545_pred_gpt"] == d["oct15_aud545_y_en"]).astype(np.float32),
     }
     res1 = compute_paired_panel_stats("test_aud545", vecs, ref_model="Armiger Ultra", expected_n=545)
     res2 = compute_paired_panel_stats("test_aud545", vecs, ref_model="Armiger Ultra", expected_n=545)
@@ -128,8 +128,8 @@ def test_paired_bootstrap_and_mcnemar_reproducibility():
         assert 0.0 <= st["p_value_vs_ref"] <= 1.0
     assert res1["models"]["Armiger Ultra"]["point_pct"] == 97.80
     assert res1["models"]["GuessIt"]["point_pct"] == 94.86
-    assert res1["models"]["GPT-6-Luna"]["point_pct"] == 94.68
-    assert res1["models"]["GPT-6-Luna"]["p_value_vs_ref"] < 0.01
+    assert res1["models"]["OpenAI GPT (Fast Tier)"]["point_pct"] == 94.68
+    assert res1["models"]["OpenAI GPT (Fast Tier)"]["p_value_vs_ref"] < 0.01
 
 
 def test_manifest_sha256_and_png_chunks(tmp_path: pathlib.Path):

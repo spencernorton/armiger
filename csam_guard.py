@@ -848,9 +848,13 @@ class WOTSPlusSHAKE256:
         return digits
 
     @classmethod
-    @functools.lru_cache(maxsize=256)
     def generate_keypair(cls, seed: Optional[bytes] = None) -> Tuple[bytes, bytes]:
         raw = seed if seed is not None else os.urandom(64)
+        return cls._generate_keypair_from_seed(raw)
+
+    @classmethod
+    @functools.lru_cache(maxsize=256)
+    def _generate_keypair_from_seed(cls, raw: bytes) -> Tuple[bytes, bytes]:
         if len(raw) == 32:
             raw = hashlib.shake_256(b"armiger-wots-keygen-v1:" + raw).digest(64)
         elif len(raw) != 64:

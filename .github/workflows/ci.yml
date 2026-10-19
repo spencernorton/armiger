@@ -20,5 +20,5 @@ jobs:
           python3 -m pip install --upgrade pip
           python3 -m pip install numpy onnxruntime cryptography pytest
           python3 -m pip install torch --index-url https://download.pytorch.org/whl/cpu
-      - name: Run full 91-test verification suite
+      - name: Run full 211-test verification suite
         run: python3 -m pytest -v

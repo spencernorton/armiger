@@ -1,6 +1,6 @@
 # Armiger Distributed Anonymous & Opt-In-By-Default DHT Sharing
 
-This document specifies the cryptographic, differential-privacy, and wire-level firewall architecture governing distributed weight, calibration, and catalog metadata sharing in **Armiger** and **Armiger Ultra** (`armiger_dht_rsi.py`, `armiger_dht_db_sync.py`, `armiger_ultra_pipeline.py`), along with the machine-verifiable results from the live 12-node UDP BEP-44 proof suite (`benchmarks/proof_anonymous_opt_in_sharing.py`).
+This document specifies the cryptographic, differential-privacy, and wire-level firewall architecture governing distributed weight, calibration, and catalog metadata sharing in **Armiger** and **Armiger Ultra** (`armiger_dht_rsi.py`, `armiger_dht_db_sync.py`, `armiger_ultra_pipeline.py`), along with the machine-verifiable results from the 12-node local UDP BEP-44 proof & synthetic DP convergence suite (`benchmarks/proof_anonymous_opt_in_sharing.py`).
 
 ---
 
@@ -61,7 +61,7 @@ Whenever an operator explicitly opts in (`opt_in_sharing=True` or `ARMIGER_DHT_S
 
 ---
 
-## 3. Live 12-Node UDP BEP-44 Verification Summary
+## 3. 12-Node Local UDP BEP-44 & Synthetic DP Convergence Verification Summary
 
 Reproduce all three proofs locally with:
 
@@ -74,4 +74,4 @@ pytest test_anonymous_opt_in_dht_sharing.py
 | :--- | :--- | :--- | :--- |
 | **Proof 1: Default Zero-Egress** | 9 default components, 100 synthetic webhook/catalog events | `opt_in_sharing=False` on 9/9; `0` bundles & `0` UDP `put` packets emitted (`2,600` outbound attempts blocked) | **PASS** |
 | **Proof 2: Wire Canary Firewall** | 500 adversarial PII/canary payloads across 10 categories on 12-node UDP swarm | `500 / 500` (`100.0%`) blocked before wire; `0 / 500` (`0.0%`) canary substrings in raw UDP datagrams | **PASS** |
-| **Proof 3: Unlinkability & DP Convergence** | 12-node UDP swarm over 5 epochs (60 publications) | `60 / 60` unique ephemeral Ed25519 keys (`8.33%` random linkability); `100%` hour-bucketed timestamps; MIA accuracy `0.545`; ECE `0.08094 -> 0.01300` (`-83.94%`); Ultra F1 `0.93427 -> 0.98074` | **PASS** |
+| **Proof 3: Unlinkability & Synthetic DP Convergence** | 12-node local UDP swarm over 5 epochs (60 publications, synthetic adapter + temperature convergence) | `60 / 60` unique ephemeral Ed25519 keys (`8.33%` random linkability); `100%` hour-bucketed timestamps; MIA empirical accuracy `0.590`; ECE `0.08094 -> 0.01368` (`-83.10%`); Ultra F1 `0.93427 -> 0.98004` | **PASS** |

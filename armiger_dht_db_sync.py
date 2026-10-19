@@ -219,6 +219,10 @@ class QuorumAttestation:
             "timestamp": int(self.timestamp),
         }
 
+    def signing_payload(self, manifest_digest: bytes) -> bytes:
+        meta = json.dumps(self.canonical_dict(), sort_keys=True, separators=(",", ":")).encode("utf-8")
+        return hashlib.sha256(b"armiger-attestation-v2:" + manifest_digest + b":" + meta).digest()
+
 
 @dataclasses.dataclass(frozen=True)
 class DHTShardManifest:
@@ -1090,9 +1094,15 @@ class QuorumVerifier:
             if isinstance(att.asn, bool) or not isinstance(att.asn, int) or att.asn <= 0:
                 continue
 
+            bound_digest = att.signing_payload(manifest_digest)
+            sig_msg_used = bound_digest
             try:
                 node_vk = Ed25519PublicKey.from_public_bytes(bytes.fromhex(norm_pk))
-                node_vk.verify(bytes.fromhex(norm_sig), manifest_digest)
+                try:
+                    node_vk.verify(bytes.fromhex(norm_sig), bound_digest)
+                except InvalidSignature:
+                    node_vk.verify(bytes.fromhex(norm_sig), manifest_digest)
+                    sig_msg_used = manifest_digest
             except (InvalidSignature, ValueError):
                 continue
 
@@ -1100,7 +1110,10 @@ class QuorumVerifier:
                 try:
                     node_pq_pk = bytes.fromhex(att.pq_pubkey_hex.strip().lower())
                     node_pq_sig = bytes.fromhex(att.pq_signature_hex.strip())
-                    if not WOTSPlusSHAKE256.verify(node_pq_pk, manifest_digest, node_pq_sig):
+                    if not (
+                        WOTSPlusSHAKE256.verify(node_pq_pk, sig_msg_used, node_pq_sig)
+                        or WOTSPlusSHAKE256.verify(node_pq_pk, manifest_digest, node_pq_sig)
+                    ):
                         continue
                 except ValueError:
                     continue
@@ -1664,11 +1677,20 @@ def create_mock_quorum_attestations(
     for asn in distinct_asns:
         priv, pub = generate_ed25519_keypair()
         sk = Ed25519PrivateKey.from_private_bytes(priv)
-        sig = sk.sign(manifest_digest)
-        pq_priv, pq_pub = WOTSPlusSHAKE256.derive_keypair_from_ed25519_priv(priv)
-        pq_sig = WOTSPlusSHAKE256.sign(pq_priv, manifest_digest)
         node_id = hashlib.sha1(pub + f"asn{asn}".encode()).hexdigest()
         ip_digest = hashlib.sha256(f"192.0.2.{asn % 250}".encode()).hexdigest()
+        temp_att = QuorumAttestation(
+            node_id=node_id,
+            asn=int(asn),
+            ip_digest=ip_digest,
+            pubkey_hex=pub.hex(),
+            signature_hex="",
+            timestamp=ts,
+        )
+        bound_msg = temp_att.signing_payload(manifest_digest)
+        sig = sk.sign(bound_msg)
+        pq_priv, pq_pub = WOTSPlusSHAKE256.derive_keypair_from_ed25519_priv(priv)
+        pq_sig = WOTSPlusSHAKE256.sign(pq_priv, bound_msg)
 
         attestations.append(QuorumAttestation(
             node_id=node_id,
