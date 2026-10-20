@@ -1018,12 +1018,22 @@ class TestPhase2CatalogRedTeamAndBenchmarks(unittest.TestCase):
                 attestations = []
                 for asn, (n_priv, n_pub) in zip(distinct_asns, reusable_node_keys):
                     sk = Ed25519PrivateKey.from_private_bytes(n_priv)
-                    sig = sk.sign(digest)
+                    node_id_val = hashlib.sha1(n_pub + f"asn{asn}".encode()).hexdigest()
+                    ip_dig_val = hashlib.sha256(f"198.51.100.{asn % 250}".encode()).hexdigest()
+                    tmp_att = QuorumAttestation(
+                        node_id=node_id_val,
+                        asn=asn,
+                        ip_digest=ip_dig_val,
+                        pubkey_hex=n_pub.hex(),
+                        signature_hex="",
+                        timestamp=manifest.timestamp,
+                    )
+                    sig = sk.sign(tmp_att.signing_payload(digest))
                     attestations.append(
                         QuorumAttestation(
-                            node_id=hashlib.sha1(n_pub + f"asn{asn}".encode()).hexdigest(),
+                            node_id=node_id_val,
                             asn=asn,
-                            ip_digest=hashlib.sha256(f"198.51.100.{asn % 250}".encode()).hexdigest(),
+                            ip_digest=ip_dig_val,
                             pubkey_hex=n_pub.hex(),
                             signature_hex=sig.hex(),
                             timestamp=manifest.timestamp,

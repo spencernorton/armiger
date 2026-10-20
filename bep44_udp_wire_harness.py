@@ -636,7 +636,7 @@ class LocalKademliaSwarm:
         shard_id: str,
     ) -> Tuple[bool, str, int]:
         """Fetch a shard pointer via BEP-44 UDP, retrieve its BEP-46 envelope via UDP, and apply it."""
-        from armiger_dht_db_sync import DHTShardManifest, QuorumAttestation
+        from armiger_dht_db_sync import DHTShardManifest, QuorumAttestation, decompress_payload, decompress_payload
 
         salt = shard_id.strip().lower().encode("utf-8")
         item = await self.get_mutable(pubkey_bytes=root_pubkey_bytes, salt=salt)
@@ -646,7 +646,7 @@ class LocalKademliaSwarm:
         envelope = await self.get_bep46_bundle(ptr["ih"], expected_sha256_hex=ptr["sha256"])
         if envelope is None:
             return False, "bep46_bundle_not_found_or_corrupted", 0
-        unpacked = json.loads(zlib.decompress(envelope).decode("utf-8"))
+        unpacked = json.loads(decompress_payload(envelope).decode("utf-8"))
         m_dict = unpacked["manifest"]
         atts = tuple(QuorumAttestation(**a) for a in m_dict.pop("attestations", []))
         manifest = DHTShardManifest(**m_dict, attestations=atts)

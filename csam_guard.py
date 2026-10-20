@@ -1213,11 +1213,42 @@ class WOTSPlusSHAKE256:
         pk = hashlib.shake_256(pub_seed + b"".join(ends)).digest(32)
         return raw, pk
 
+    _ED25519_TO_WOTS_PUBS: dict[str, set[str]] = {}
+    _WOTS_TO_ED25519_PUB: dict[str, str] = {}
+
+    @classmethod
+    def _register_binding(cls, ed_pub_hex: str, wots_pub_hex: str) -> None:
+        ed_norm = ed_pub_hex.strip().lower()
+        pq_norm = wots_pub_hex.strip().lower()
+        cls._ED25519_TO_WOTS_PUBS.setdefault(ed_norm, set()).add(pq_norm)
+        cls._WOTS_TO_ED25519_PUB[pq_norm] = ed_norm
+
+    @classmethod
+    def is_bound_to_ed25519_pub(cls, ed_pub_hex: str, wots_pub_hex: str) -> bool:
+        return wots_pub_hex.strip().lower() in cls._ED25519_TO_WOTS_PUBS.get(ed_pub_hex.strip().lower(), set())
+
+    @classmethod
+    def get_bound_wots_pubs(cls, ed_pub_hex: str) -> set[str]:
+        return set(cls._ED25519_TO_WOTS_PUBS.get(ed_pub_hex.strip().lower(), set()))
+
     @classmethod
     def derive_keypair_from_ed25519_priv(cls, ed25519_priv_bytes: bytes, seq: int = 0) -> Tuple[bytes, bytes]:
         ctx = b"armiger-hybrid-ed25519-wots-v1:" + ed25519_priv_bytes + (f":seq:{int(seq)}".encode("utf-8") if seq else b"")
         seed64 = hashlib.shake_256(ctx).digest(64)
-        return cls.generate_keypair(seed64)
+        raw, pk = cls.generate_keypair(seed64)
+        try:
+            from cryptography.hazmat.primitives.serialization import Encoding, PublicFormat
+            ed_pub = Ed25519PrivateKey.from_private_bytes(ed25519_priv_bytes).public_key().public_bytes(
+                Encoding.Raw, PublicFormat.Raw
+            ).hex()
+            cls._register_binding(ed_pub, pk.hex())
+            if seq != 0:
+                ctx0 = b"armiger-hybrid-ed25519-wots-v1:" + ed25519_priv_bytes
+                _, pk0 = cls.generate_keypair(hashlib.shake_256(ctx0).digest(64))
+                cls._register_binding(ed_pub, pk0.hex())
+        except Exception:
+            pass
+        return raw, pk
 
     @classmethod
     def sign(cls, priv_seed: bytes, message: bytes) -> bytes:
@@ -1277,11 +1308,13 @@ class SignedTombstoneList:
 
     def canonical_payload(self) -> bytes:
         """Deterministic, sorted JSON bytes for Hybrid Ed25519 + WOTS+-SHAKE256 signature verification."""
+        norm_reasons = {str(k).lower(): v for k, v in (self.reasons or {}).items()}
+        norm_tombstones = sorted({str(t).lower() for t in self.tombstones})
         body = {
-            "reasons": {k: self.reasons.get(k, "CSAM_ABUSE") for k in sorted(self.tombstones)},
+            "reasons": {k: norm_reasons.get(k, "CSAM_ABUSE") for k in norm_tombstones},
             "seq": int(self.seq),
             "timestamp": int(self.timestamp),
-            "tombstones": sorted([t.lower() for t in self.tombstones]),
+            "tombstones": norm_tombstones,
         }
         return json.dumps(body, sort_keys=True, separators=(",", ":")).encode("utf-8")
 
@@ -1289,12 +1322,18 @@ class SignedTombstoneList:
 class TombstoneStore:
     """Maintains active blinded tombstone revocation set and verifies Hybrid Ed25519 + WOTS+-SHAKE256 updates."""
 
+    MAX_SEQ_JUMP = 1024
+    MAX_PAST_AGE_SECONDS = 7 * 86400
+    MAX_FUTURE_DRIFT_SECONDS = 300
+
     def __init__(
         self,
         trusted_root_pubkeys_hex: Sequence[str] | None = None,
         initial_seq: int = 0,
         trusted_root_pq_pubkeys_hex: Sequence[str] | None = None,
     ) -> None:
+        if isinstance(initial_seq, bool) or not isinstance(initial_seq, int) or initial_seq < 0:
+            raise TypeError("initial_seq must be a non-negative integer")
         self.trusted_pubkeys = [
             bytes.fromhex(k.strip().lower())
             for k in (trusted_root_pubkeys_hex or [])
@@ -1328,8 +1367,22 @@ class TombstoneStore:
 
         Returns (success: bool, message: str, new_tombstones_count: int).
         """
+        if isinstance(manifest.seq, bool) or not isinstance(manifest.seq, int) or manifest.seq <= 0:
+            return False, "invalid_tombstone_seq_type", 0
+        if isinstance(manifest.timestamp, bool) or not isinstance(manifest.timestamp, int) or manifest.timestamp <= 0:
+            return False, "invalid_tombstone_timestamp_type", 0
         if manifest.seq <= self.current_seq:
             return False, f"stale_or_replayed_tombstone_seq:{manifest.seq}<={self.current_seq}", 0
+        if manifest.seq > (2**63 - 1) or manifest.seq > self.current_seq + self.MAX_SEQ_JUMP:
+            return False, f"excessive_or_overflow_tombstone_seq_jump:{manifest.seq}", 0
+
+        now_ts = int(time.time())
+        if (manifest.timestamp - now_ts) > self.MAX_FUTURE_DRIFT_SECONDS or (now_ts - manifest.timestamp) > self.MAX_PAST_AGE_SECONDS:
+            return False, f"stale_or_future_tombstone_timestamp:{manifest.timestamp}", 0
+
+        for hex_field in (manifest.signature_hex, manifest.pq_pubkey_hex, manifest.pq_signature_hex):
+            if hex_field and hex_field != hex_field.lower():
+                return False, "non_canonical_uppercase_hex_in_tombstone_manifest", 0
 
         payload = manifest.canonical_payload()
         try:
@@ -1339,6 +1392,7 @@ class TombstoneStore:
 
         # 1. Classical Ed25519 signature verification against trusted roots
         verified = False
+        matched_ed_pub_hex = ""
         if not self.trusted_pubkeys:
             return False, "no_trusted_root_keys_configured", 0
 
@@ -1347,6 +1401,7 @@ class TombstoneStore:
                 vk = Ed25519PublicKey.from_public_bytes(pub_bytes)
                 vk.verify(sig_bytes, payload)
                 verified = True
+                matched_ed_pub_hex = pub_bytes.hex()
                 break
             except (InvalidSignature, ValueError):
                 continue
@@ -1361,14 +1416,27 @@ class TombstoneStore:
             except ValueError:
                 return False, "pq_wots_signature_verification_failed", 0
 
-            candidate_pq_pubs: List[bytes] = []
-            if self.trusted_pq_pubkeys:
-                candidate_pq_pubs.extend(self.trusted_pq_pubkeys)
-            elif manifest.pq_pubkey_hex:
+            candidate_pq_pubs: List[bytes] = list(self.trusted_pq_pubkeys)
+            for bound_hex in WOTSPlusSHAKE256.get_bound_wots_pubs(matched_ed_pub_hex):
+                b_pq = bytes.fromhex(bound_hex)
+                if b_pq not in candidate_pq_pubs:
+                    if not self.trusted_pq_pubkeys or any(
+                        WOTSPlusSHAKE256.is_bound_to_ed25519_pub(matched_ed_pub_hex, t_pq.hex())
+                        for t_pq in self.trusted_pq_pubkeys
+                    ):
+                        candidate_pq_pubs.append(b_pq)
+
+            if manifest.pq_pubkey_hex:
                 try:
-                    candidate_pq_pubs.append(bytes.fromhex(manifest.pq_pubkey_hex.strip().lower()))
+                    man_pq_bytes = bytes.fromhex(manifest.pq_pubkey_hex.strip().lower())
                 except ValueError:
                     return False, "pq_wots_signature_verification_failed", 0
+                if man_pq_bytes not in candidate_pq_pubs:
+                    return False, "untrusted_pq_root_pubkey", 0
+                candidate_pq_pubs = [man_pq_bytes]
+
+            if not candidate_pq_pubs:
+                return False, "untrusted_pq_root_pubkey", 0
 
             pq_verified = any(
                 WOTSPlusSHAKE256.verify(pq_pub, payload, pq_sig_bytes)
@@ -1378,13 +1446,14 @@ class TombstoneStore:
                 return False, "pq_wots_signature_verification_failed", 0
 
         # Monotonic update
-        self.current_seq = manifest.seq
+        self.current_seq = int(manifest.seq)
+        norm_reasons = {str(k).lower(): v for k, v in (manifest.reasons or {}).items()}
         new_count = 0
         for thash in manifest.tombstones:
             clean_hash = thash.lower()
             if clean_hash not in self.blinded_hashes:
                 self.blinded_hashes.add(clean_hash)
-                self.reasons[clean_hash] = manifest.reasons.get(clean_hash, "CSAM_ABUSE")
+                self.reasons[clean_hash] = norm_reasons.get(clean_hash, "CSAM_ABUSE")
                 new_count += 1
 
         return True, "verified_and_applied", new_count
@@ -1428,7 +1497,7 @@ def sign_tombstone_list(
     payload = dummy.canonical_payload()
     sk = Ed25519PrivateKey.from_private_bytes(private_key_bytes)
     sig = sk.sign(payload)
-    pq_priv, pq_pub = WOTSPlusSHAKE256.derive_keypair_from_ed25519_priv(private_key_bytes, seq=seq)
+    pq_priv, pq_pub = WOTSPlusSHAKE256.derive_keypair_from_ed25519_priv(private_key_bytes, seq=0)
     pq_sig = WOTSPlusSHAKE256.sign(pq_priv, payload)
 
     return SignedTombstoneList(

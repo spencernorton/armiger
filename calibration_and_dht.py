@@ -10,10 +10,12 @@ Provides:
 from __future__ import annotations
 
 import dataclasses
+import functools
 import hashlib
 import json
 import math
 import pathlib
+import time
 from typing import Any
 
 
@@ -75,14 +77,15 @@ class ArmigerCalibrator:
             t_raw = h_val.get("temperature", h_val.get("temperature_T", 1.0))
             if isinstance(t_raw, bool) or not isinstance(t_raw, (int, float)) or not math.isfinite(float(t_raw)) or float(t_raw) <= 0.0:
                 raise ValueError(f"invalid temperature for head {h_name}")
-            entry: dict[str, Any] = {"temperature": float(t_raw)}
+            t_clamped = min(max(float(t_raw), 0.25), 2.5)
+            entry: dict[str, Any] = {"temperature": t_clamped}
             if "logit_bias" in h_val and h_val["logit_bias"] is not None:
                 if not isinstance(h_val["logit_bias"], list) or any(
                     isinstance(x, bool) or not isinstance(x, (int, float)) or not math.isfinite(float(x))
                     for x in h_val["logit_bias"]
                 ):
                     raise ValueError(f"invalid logit_bias for head {h_name}")
-                entry["logit_bias"] = [float(x) for x in h_val["logit_bias"]]
+                entry["logit_bias"] = [min(max(float(x), -1.5), 1.5) for x in h_val["logit_bias"]]
             parsed_heads[h_name] = entry
         self.heads = parsed_heads
 
@@ -122,6 +125,9 @@ class ArmigerCalibrator:
         }
 
     def calibrate_head(self, head_name: str, raw_logits: list[float]) -> list[float]:
+        if not raw_logits or any(isinstance(x, bool) or not isinstance(x, (int, float)) or not math.isfinite(float(x)) for x in raw_logits):
+            n = max(len(raw_logits), 2)
+            return [0.0] * (n - 1) + [1.0]
         hcfg = self.heads.get(head_name, {})
         temp = float(hcfg.get("temperature", 1.0))
         bias = hcfg.get("logit_bias")
@@ -214,11 +220,33 @@ class ArmigerDHTUpdater:
     ) -> None:
         if mode not in ("off", "opt_in_verify", "federated_quorum"):
             raise ValueError(f"Unsupported DHT update mode: {mode}")
+        self._min_quorum_is_bool = isinstance(min_quorum, bool)
+        self._seq_is_bool = isinstance(current_seq, bool)
         self.root_pubkey_hex = root_pubkey_hex.lower()
         self.root_pq_pubkey_hex = root_pq_pubkey_hex.lower()
         self.current_seq = int(current_seq)
         self.min_quorum = int(min_quorum)
         self.mode = mode
+
+    @staticmethod
+    @functools.lru_cache(maxsize=512)
+    def _verify_ed25519_cached(pub_bytes: bytes, payload: bytes, sig_bytes: bytes) -> bool:
+        from cryptography.exceptions import InvalidSignature
+        from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
+        try:
+            Ed25519PublicKey.from_public_bytes(pub_bytes).verify(sig_bytes, payload)
+            return True
+        except (InvalidSignature, ValueError):
+            return False
+
+    @staticmethod
+    @functools.lru_cache(maxsize=512)
+    def _verify_wots_cached(pq_pub_bytes: bytes, payload: bytes, pq_sig_bytes: bytes) -> bool:
+        try:
+            from armiger.csam_guard import WOTSPlusSHAKE256
+        except ImportError:
+            from csam_guard import WOTSPlusSHAKE256
+        return bool(WOTSPlusSHAKE256.verify(pq_pub_bytes, payload, pq_sig_bytes))
 
     def verify_bundle(
         self,
@@ -229,15 +257,30 @@ class ArmigerDHTUpdater:
         """Verify monotonic sequence, quorum threshold, SHA-256 digest, and Hybrid Ed25519 + WOTS+-SHAKE256 signature."""
         if self.mode == "off":
             return False, "dht_updates_disabled"
+        if signature_verifier is not None:
+            return False, "custom_signature_verifier_disallowed"
+        if self._min_quorum_is_bool or self._seq_is_bool or isinstance(manifest.quorum_attestations, bool):
+            return False, "invalid_quorum_bool_type"
         if isinstance(manifest.seq, bool) or not isinstance(manifest.seq, int) or manifest.seq <= 0:
             return False, "invalid_manifest_seq_type"
         if isinstance(manifest.timestamp, bool) or not isinstance(manifest.timestamp, int) or manifest.timestamp <= 0:
             return False, "invalid_manifest_timestamp_type"
         if manifest.seq <= self.current_seq:
             return False, f"stale_or_replayed_seq:{manifest.seq}<={self.current_seq}"
+        if manifest.seq > (2**63 - 1) or manifest.seq > self.current_seq + 1024:
+            return False, f"seq_jump_exceeds_max_window:{manifest.seq}"
+        now_ts = int(time.time())
+        if (manifest.timestamp - now_ts) > 300 or (now_ts - manifest.timestamp) > 14 * 86400:
+            return False, f"manifest_timestamp_out_of_bounds:{manifest.timestamp}"
         if self.min_quorum <= 0 or manifest.quorum_attestations < self.min_quorum:
             return False, f"insufficient_quorum:{manifest.quorum_attestations}<{self.min_quorum}"
-        if manifest.bundle_sha256 != manifest.bundle_sha256.lower() or manifest.infohash != manifest.infohash.lower():
+        if (
+            manifest.bundle_sha256 != manifest.bundle_sha256.lower()
+            or manifest.infohash != manifest.infohash.lower()
+            or manifest.ed25519_signature_hex != manifest.ed25519_signature_hex.lower()
+            or manifest.pq_pubkey_hex != manifest.pq_pubkey_hex.lower()
+            or manifest.pq_signature_hex != manifest.pq_signature_hex.lower()
+        ):
             return False, "non_canonical_uppercase_hex_in_manifest"
 
         actual_sha = hashlib.sha256(bundle_bytes).hexdigest()
@@ -251,38 +294,30 @@ class ArmigerDHTUpdater:
         except ValueError:
             return False, "ed25519_signature_invalid_hex"
 
-        if signature_verifier is not None:
-            ok = bool(signature_verifier(pub_bytes, payload, sig_bytes))
-            if not ok:
-                return False, "ed25519_signature_invalid"
-        else:
-            from cryptography.exceptions import InvalidSignature
-            from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
-            try:
-                Ed25519PublicKey.from_public_bytes(pub_bytes).verify(sig_bytes, payload)
-            except (InvalidSignature, ValueError):
-                return False, "ed25519_signature_invalid"
+        if not self._verify_ed25519_cached(pub_bytes, payload, sig_bytes):
+            return False, "ed25519_signature_invalid"
 
-        if self.root_pq_pubkey_hex or manifest.pq_signature_hex or manifest.pq_pubkey_hex:
-            if not self.root_pq_pubkey_hex:
+        if not self.root_pq_pubkey_hex:
+            if manifest.pq_pubkey_hex or manifest.pq_signature_hex:
                 return False, "untrusted_pq_pubkey_when_root_pq_unset"
-            if manifest.pq_pubkey_hex and manifest.pq_pubkey_hex.lower() != self.root_pq_pubkey_hex:
-                return False, "pq_pubkey_mismatch_against_pinned_root"
-            try:
-                from armiger.csam_guard import WOTSPlusSHAKE256
-            except ImportError:
-                from csam_guard import WOTSPlusSHAKE256
-            try:
-                pq_ok = WOTSPlusSHAKE256.verify(
-                    bytes.fromhex(self.root_pq_pubkey_hex),
-                    payload,
-                    bytes.fromhex(manifest.pq_signature_hex),
-                )
-            except ValueError:
-                pq_ok = False
-            if not pq_ok:
-                return False, "pq_wots_signature_invalid"
+            return False, "pq_signature_and_pinned_root_required"
 
+        if manifest.pq_pubkey_hex and manifest.pq_pubkey_hex.lower() != self.root_pq_pubkey_hex:
+            return False, "pq_pubkey_mismatch_against_pinned_root"
+        if not manifest.pq_signature_hex:
+            return False, "pq_wots_signature_invalid"
+        try:
+            pq_ok = self._verify_wots_cached(
+                bytes.fromhex(self.root_pq_pubkey_hex),
+                payload,
+                bytes.fromhex(manifest.pq_signature_hex),
+            )
+        except ValueError:
+            pq_ok = False
+        if not pq_ok:
+            return False, "pq_wots_signature_invalid"
+
+        self.current_seq = int(manifest.seq)
         return True, "verified"
 
 

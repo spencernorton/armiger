@@ -572,7 +572,7 @@ def _validate_calibration_delta(delta: Any) -> Dict[str, Any]:
         raise DHTUpdateRejected(f"calibration_delta_unknown_keys:{sorted(unknown)}")
     clean: Dict[str, Any] = {"heads": {}, "mondrian_thresholds": {}}
     for head, cfg in (delta.get("heads") or {}).items():
-        if head not in NEURAL_HEAD_CLASSES:
+        if head not in NEURAL_HEAD_CLASSES and head != "span_bio":
             raise DHTUpdateRejected(f"calibration_delta_unknown_head:{head}")
         if not isinstance(cfg, dict) or set(cfg) != {"temperature"}:
             raise DHTUpdateRejected(f"calibration_delta_head_schema:{head}")
@@ -608,6 +608,12 @@ def parse_dht_update_payload(payload_bytes: bytes, bundle_format: str) -> Dict[s
         if not tensors:
             raise DHTUpdateRejected("adapter_delta_empty")
         components["swarm_adapter_safetensors_delta"] = tensors
+        return components
+    if fmt == "onnx":
+        ok_onnx, reason_onnx = SafeFormatValidator.validate(payload_bytes, "onnx")
+        if not ok_onnx:
+            raise DHTUpdateRejected(f"onnx_validation_failed:{reason_onnx}")
+        components["onnx_model_bytes"] = payload_bytes
         return components
     if fmt != "json":
         raise DHTUpdateRejected(f"unsupported_update_format:{fmt}")

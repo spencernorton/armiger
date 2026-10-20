@@ -1016,9 +1016,19 @@ class QuorumVerifier:
         if not self.trusted_roots:
             return False, "no_trusted_root_pubkeys_configured"
 
-        # 1. Monotonic sequence check
+        # 1. Monotonic sequence & timestamp freshness check
         if manifest.seq <= current_seq:
             return False, f"stale_or_downgrade_sequence:{manifest.seq}<={current_seq}"
+        if manifest.seq > (2**63 - 1) or (current_seq >= 0 and manifest.seq > current_seq + 1024):
+            return False, f"sequence_jump_exceeds_max_window:{manifest.seq}"
+        now_manifest_ts = int(time.time())
+        if (
+            isinstance(manifest.timestamp, bool)
+            or not isinstance(manifest.timestamp, int)
+            or manifest.timestamp <= 0
+            or (manifest.timestamp - now_manifest_ts) > 300
+        ):
+            return False, f"manifest_timestamp_out_of_bounds:{manifest.timestamp}"
 
         # 2. Root Ed25519 signature check
         try:
@@ -1042,7 +1052,14 @@ class QuorumVerifier:
                 pq_sig_bytes = bytes.fromhex(manifest.pq_signature_hex.strip())
             except ValueError as exc:
                 return False, f"invalid_root_pq_wots_signature:{exc}"
-            if self.trusted_pq_roots and pq_root_bytes not in self.trusted_pq_roots:
+            if self.trusted_pq_roots:
+                if pq_root_bytes not in self.trusted_pq_roots and not WOTSPlusSHAKE256.is_bound_to_ed25519_pub(
+                    manifest.root_pubkey_hex, manifest.root_pq_pubkey_hex
+                ):
+                    return False, f"untrusted_root_pq_pubkey:{manifest.root_pq_pubkey_hex}"
+            elif not WOTSPlusSHAKE256.is_bound_to_ed25519_pub(
+                manifest.root_pubkey_hex, manifest.root_pq_pubkey_hex
+            ):
                 return False, f"untrusted_root_pq_pubkey:{manifest.root_pq_pubkey_hex}"
             if not WOTSPlusSHAKE256.verify(pq_root_bytes, payload, pq_sig_bytes):
                 return False, "invalid_root_pq_wots_signature:verification_failed"
@@ -1098,11 +1115,7 @@ class QuorumVerifier:
             sig_msg_used = bound_digest
             try:
                 node_vk = Ed25519PublicKey.from_public_bytes(bytes.fromhex(norm_pk))
-                try:
-                    node_vk.verify(bytes.fromhex(norm_sig), bound_digest)
-                except InvalidSignature:
-                    node_vk.verify(bytes.fromhex(norm_sig), manifest_digest)
-                    sig_msg_used = manifest_digest
+                node_vk.verify(bytes.fromhex(norm_sig), bound_digest)
             except (InvalidSignature, ValueError):
                 continue
 

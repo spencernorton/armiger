@@ -7,6 +7,8 @@ software archives, and structured instructional materials before/after neural cl
 from __future__ import annotations
 
 import hashlib
+import hmac
+import os
 import json
 import pathlib
 import re
@@ -74,8 +76,12 @@ NOISE_CUT_RE = re.compile(
 )
 
 
-def hash_catalog_key(key: str) -> str:
-    """Compute deterministic 64-bit keyed BLAKE2b hex digest for an offline catalog lookup key."""
+def hash_catalog_key(key: str, hmac_key: bytes | str | None = None) -> str:
+    """Compute deterministic 64-bit keyed BLAKE2b / HMAC digest for an offline catalog lookup key."""
+    eff_key = hmac_key if hmac_key is not None else os.environ.get("ARMIGER_CATALOG_HMAC_KEY")
+    if eff_key:
+        k_bytes = eff_key.encode("utf-8") if isinstance(eff_key, str) else bytes(eff_key)
+        return hmac.new(k_bytes, key.encode("utf-8"), hashlib.sha256).hexdigest()[:16]
     return hashlib.blake2b(key.encode("utf-8"), digest_size=8, person=b"armiger-zc-v2").hexdigest()
 
 
@@ -86,6 +92,41 @@ def norm_title(s: str) -> str:
     s = unicodedata.normalize("NFKC", s).casefold()
     s = re.sub(r"[\W_]+", " ", s, flags=re.UNICODE)
     return " ".join(s.split())
+
+
+_AUTH_EPISODE_CUT_RE = re.compile(
+    r"(?i)(?:\bS\d{1,2}(?:E\d{1,3}|\b)|\bSeason[\s._-]*\d+\b|\bComplete[\s._-]*Series\b|\s+-\s+\d{1,3}(?:\b|\s*[\[\(]))"
+)
+
+
+def extract_authoritative_title(raw_name: str) -> tuple[str, int | None]:
+    """Extract the authoritative clean title and release year without relaxed sequel-number stripping."""
+    s = raw_name.strip()
+    if not s:
+        return "", None
+    s = re.sub(r"\.(?:mkv|mp4|avi|m2ts|ts|iso|zip|rar|tar\.bz2|epub|pdf|mp3|flac)$", "", s, flags=re.I)
+    s_no_lead = re.sub(r"^(?:\s*[\[\(][^\]\)]{1,45}[\]\)]\s*|[_\s]+)+", "", s)
+    base = s_no_lead if len(norm_title(s_no_lead)) >= 2 else s
+
+    year_matches = [m for m in YEAR_RE.finditer(base) if m.start() >= 2]
+    year = int(year_matches[0].group(0)) if year_matches else None
+
+    cut_pos = len(base)
+    if year_matches:
+        cut_pos = min(cut_pos, year_matches[0].start())
+    m_ns = NOISE_CUT_RE.search(base)
+    if m_ns and m_ns.start() >= 2:
+        cut_pos = min(cut_pos, m_ns.start())
+    m_ep = _AUTH_EPISODE_CUT_RE.search(base)
+    if m_ep and m_ep.start() >= 2:
+        cut_pos = min(cut_pos, m_ep.start())
+
+    stem = base[:cut_pos]
+    stem = re.split(r"[\[\(\|]", stem)[0]
+    clean = norm_title(stem)
+    if not clean:
+        clean = norm_title(re.split(r"[\[\(\|]", base)[0])
+    return clean, year
 
 
 def parse_clean_candidates(raw_name: str, extra_spans: list[str] | None = None) -> tuple[list[tuple[str, int | None]], int | None]:
@@ -212,6 +253,7 @@ def apply_structural_and_zero_cue_disambiguation(
     p_adult: float,
     p_anime: float,
     catalog: dict[str, Any] | None = None,
+    extra_spans: list[str] | None = None,
 ) -> tuple[int, str]:
     """Apply deterministic structural rules (Stage 1) and Zero-Cue catalog lookup (Stage 2)
     to an 11-class category probability vector from Armiger or Armiger Ultra.
@@ -253,7 +295,7 @@ def apply_structural_and_zero_cue_disambiguation(
     if catalog is not None and pred_idx in (IDX_MOVIE, IDX_TV) and not has_tv_cue and not has_movie_cue:
         if max(p[IDX_MOVIE], p[IDX_TV]) < 0.88:
             cat_hit, src_kind = lookup_zero_cue_catalog(
-                raw_name, catalog, is_anime=bool(p_anime >= 0.20)
+                raw_name, catalog, is_anime=bool(p_anime >= 0.20), extra_spans=extra_spans
             )
             if cat_hit in ("movie", "tv_show") and src_kind is not None:
                 return (IDX_MOVIE if cat_hit == "movie" else IDX_TV), f"zero_cue_{src_kind}"
@@ -278,6 +320,7 @@ class ZeroCueCatalogPlugin:
         probs_category: list[float] | Any,
         p_adult: float = 0.0,
         p_anime: float = 0.0,
+        extra_spans: list[str] | None = None,
     ) -> dict[str, Any]:
         idx, source = apply_structural_and_zero_cue_disambiguation(
             raw_name=raw_name,
@@ -285,9 +328,192 @@ class ZeroCueCatalogPlugin:
             p_adult=p_adult,
             p_anime=p_anime,
             catalog=self.catalog,
+            extra_spans=extra_spans,
         )
+        if source == "neural_backbone":
+            idx_v3, src_v3, probs_v3 = resolve_category_v3(
+                raw_name=raw_name,
+                probs_category=probs_category,
+                p_adult=p_adult,
+                p_anime=p_anime,
+                catalog=self.catalog,
+                extra_spans=extra_spans,
+            )
+            if src_v3 != "v3_neural_calibrated":
+                return {
+                    "category_index": idx_v3,
+                    "category": CATS[idx_v3],
+                    "resolution_source": src_v3,
+                    "calibrated_probs": probs_v3,
+                }
         return {
             "category_index": idx,
             "category": CATS[idx],
             "resolution_source": source,
         }
+
+
+# --- Armiger v3.0 Structural Disambiguator & Prior-Corrected Logit Calibrator ---
+
+_V3_COMIC_RE = re.compile(
+    r"(?i)(?:\.(?:cbr|cbz|cb7)$|\b(?:cbr|cbz|cb7)\b|\([0-9]{4}\)\s*\(digital\)|\bc2c\b.*\.(?:cbr|cbz|rar|zip)$)"
+)
+_V3_AUDIOBOOK_RE = re.compile(
+    r"(?i)(?:\.m4b$|\baudiobook\b|\bunabridged\b|\babridged\b)"
+)
+_V3_EBOOK_RE = re.compile(
+    r"(?i)(?:\.(?:epub|mobi|azw3)$|\b(?:epub|mobi|azw3)\b)"
+)
+_V3_GAME_STRONG_RE = re.compile(
+    r"(?i)(?:\.(?:nsp|xci|cia|3ds|vpk|wbfs)$|\b(?:fitgirl|dodi[\s._-]*repack|elamigos|kaos[\s._-]*repack|"
+    r"codex|skidrow|plaza|flt|rune|tenoke|razor1911|reloaded|cpy|empress|gog|rg[\s._-]*mechanics)\b|"
+    r"(?:^|[\s._\-\[\(])plus[\s._-]+\d+[\s._-]+trainer(?=$|[\s._\-\]\)])|\bbuild[\s._-]+\d{5,9}\b|\bps[2345]\b.*\b(?:usa|eur|jpn|pkg|iso)\b|"
+    r"\bxbox\s*360\b|\bnintendo\s+switch\b|\brpg\s+maker\b)"
+)
+_V3_COURSE_RE = re.compile(
+    r"(?i)(?:(?:^|[\s._\-\[\(])(?:udemy|coursera|pluralsight|lynda|linkedin[\s._-]*learning|skillshare|masterclass|"
+    r"the[\s._-]+great[\s._-]+courses|ttc[\s._-]+video|packt|oreilly|cbt[\s._-]+nuggets|ine[\s._-]+ccie|"
+    r"laracasts|frontend[\s._-]+masters|egghead)(?=$|[\s._\-\]\)])|"
+    r"(?:^|[\s._\-\[\(])(?:testbuch|kursbuch|arbeitsbuch|lehrbuch|übungsbuch)(?=$|[\s._\-\]\)])|"
+    r"(?:^|[\s._\-\[\(])(?:ucberkeley|mit)[\s._-]+(?:webcast|opencourseware)(?=$|[\s._\-\]\)])|"
+    r"(?:^|[\s._\-\[\(])(?:lecture[\s._-]+series|video[\s._-]+training|video[\s._-]+course|full[\s._-]+tutorial|study[\s._-]+guide|open\s*course\s*ware)(?=$|[\s._\-\]\)]))"
+)
+_V3_SOFTWARE_RE = re.compile(
+    r"(?i)(?:\b(?:macos|macosx|mac\s+os\s+x|win32|win64|x64|x86_64|multilingual|pre-activated|"
+    r"crack|keygen|patch|portable|bootable)\b.*\b(?:v?\d+\.\d+|20[12]\d)\b|"
+    r"\b(?:adobe|autodesk|jetbrains|microsoft\s+office|windows\s+(?:10|11|server)|"
+    r"vmware|parallels|ableton|fl\s+studio|native\s+instruments|kontakt|waves\s+complete)\b)"
+)
+_V3_MUSIC_RE = re.compile(
+    r"(?i)(?:\.(?:flac|alac|ape|wv|dsf|dff)$|\b(?:discography|discografia|ost|soundtrack|"
+    r"lossless|24bit|16bit|44\.1khz|96khz|192khz|cd-rip|vinyl[\s._-]*rip|web-flac|mp3[\s._-]*320)\b)"
+)
+_V3_CONCERT_OR_DOC_VIDEO_RE = re.compile(
+    r"(?i)(?:^|[\s._\-\[\(])(?:philharmoniker|symphony[\s._-]+orchestra|live[\s._-]+in[\s._-]+[a-z]+|live[\s._-]+at[\s._-]+[a-z]+)(?=$|[\s._\-\]\)]).*\b(?:1080i|1080p|720p|bluray|mkv|ts)\b"
+)
+_V3_ADULT_STUDIO_RE = re.compile(
+    r"(?i)(?:\b(?:xxx|siterip|onlyfans|manyvids|brazzers|naughtyamerica|realitykings|mofos|"
+    r"bangbros|vixen|tushy|blacked|deeper|slayed|metart|sexart|hegre|twistys|playboy|penthouse|"
+    r"jav|fc2[\s._-]*ppv|uncensored[\s._-]*leak|1pondo|caribbeancom|heyzo|pacopacomama)\b|"
+    r"\b[a-z]{2,5}-\d{3,5}\b.*\b(?:mp4|mkv|wmv|avi|1080p|720p|fhd|hd)\b)"
+)
+
+
+def _boost_and_normalize_v3(p: list[float], idx: int, min_prob: float) -> list[float]:
+    target = min(0.99, max(float(p[idx]), float(min_prob)))
+    rem_budget = max(0.0, 1.0 - target)
+    other_sum = sum(float(p[i]) for i in range(len(p)) if i != idx)
+    out: list[float] = []
+    for i in range(len(p)):
+        if i == idx:
+            out.append(round(target, 6))
+        elif other_sum > 0.0:
+            out.append(round(rem_budget * (float(p[i]) / other_sum), 6))
+        else:
+            out.append(round(rem_budget / max(1, len(p) - 1), 6))
+    diff = round(1.0 - sum(out), 6)
+    out[idx] = round(max(0.0, min(1.0, out[idx] + diff)), 6)
+    return out
+
+
+def calibrate_category_logits_v3(
+    logits_or_probs: list[float] | Any,
+    temperature: float = 0.85,
+) -> list[float]:
+    """Apply prior-shift log-odds correction and temperature scaling to 11-class category probabilities."""
+    import math
+
+    arr = [float(x) for x in logits_or_probs]
+    s = sum(arr)
+    is_prob = all(x >= 0.0 for x in arr) and (0.98 <= s <= 1.02)
+    if is_prob:
+        logits = [math.log(max(x, 1e-12)) for x in arr]
+    else:
+        logits = list(arr)
+
+    prior_boost = [0.0, 0.0, 0.0, 0.05, 0.15, 0.12, 0.15, 0.12, 0.15, 0.18, -0.35]
+    scaled = [(logits[i] + prior_boost[i]) / max(temperature, 0.1) for i in range(min(len(logits), 11))]
+    m = max(scaled)
+    exps = [math.exp(x - m) for x in scaled]
+    z = sum(exps) or 1.0
+    out = [round(x / z, 6) for x in exps]
+    if out:
+        diff = round(1.0 - sum(out), 6)
+        best_i = max(range(len(out)), key=out.__getitem__)
+        out[best_i] = round(max(0.0, min(1.0, out[best_i] + diff)), 6)
+    return out
+
+
+def resolve_category_v3(
+    raw_name: str,
+    probs_category: list[float] | Any,
+    p_adult: float = 0.0,
+    p_anime: float = 0.0,
+    catalog: dict[str, Any] | None = None,
+    extra_spans: list[str] | None = None,
+) -> tuple[int, str, list[float]]:
+    """Armiger v3.0 11-class category resolver combining calibrated neural probabilities,
+    structural/format rules, and zero-cue BLAKE2b-64 catalog lookup.
+
+    Returns `(category_index, resolution_source, calibrated_probs)`.
+    """
+    p = calibrate_category_logits_v3(probs_category)
+    s = raw_name.strip()
+
+    has_tv_cue = bool(EXPLICIT_TV_RE.search(s))
+    has_movie_cue = bool(EXPLICIT_MOVIE_PACK_RE.search(s))
+    has_video_ext_or_codec = bool(
+        re.search(
+            r"(?i)(?:\.(?:mkv|mp4|avi|m2ts|ts|wmv|mov)$|\b(?:1080p|720p|2160p|480p|bluray|web-dl|webrip|bdrip|dvdrip|x264|x265|hevc|h264|h265|xvid)\b)",
+            s,
+        )
+    )
+
+    if ADULT_SITERIP_RE.search(s) or (_V3_ADULT_STUDIO_RE.search(s) and p_adult >= 0.25):
+        return IDX_XXX, "v3_structural_adult", _boost_and_normalize_v3(p, IDX_XXX, 0.94)
+
+    if _V3_COMIC_RE.search(s) and not re.search(r"(?i)how\s+to\s+draw", s):
+        return IDX_COMIC, "v3_structural_comic", _boost_and_normalize_v3(p, IDX_COMIC, 0.92)
+
+    if _V3_AUDIOBOOK_RE.search(s):
+        return IDX_AUDIOBOOK, "v3_structural_audiobook", _boost_and_normalize_v3(p, IDX_AUDIOBOOK, 0.92)
+
+    if _V3_COURSE_RE.search(s) or COURSE_BOOK_RE.search(s):
+        return IDX_COURSE, "v3_structural_course", _boost_and_normalize_v3(p, IDX_COURSE, 0.91)
+
+    if _V3_EBOOK_RE.search(s) and not _V3_COMIC_RE.search(s) and not _V3_AUDIOBOOK_RE.search(s):
+        return IDX_EBOOK, "v3_structural_ebook", _boost_and_normalize_v3(p, IDX_EBOOK, 0.91)
+
+    if (GAME_ARCHIVE_RE.search(s) or _V3_GAME_STRONG_RE.search(s)) and p_adult < 0.70 and not has_tv_cue:
+        if not re.search(r"(?i)\b(?:ost|soundtrack|score|flac|mp3)\b", s):
+            return IDX_GAME, "v3_structural_game", _boost_and_normalize_v3(p, IDX_GAME, 0.90)
+
+    if _V3_CONCERT_OR_DOC_VIDEO_RE.search(s) and not has_tv_cue:
+        return IDX_MOVIE, "v3_structural_video_override", _boost_and_normalize_v3(p, IDX_MOVIE, 0.88)
+
+    if _V3_MUSIC_RE.search(s) and not has_video_ext_or_codec and not has_tv_cue:
+        return IDX_MUSIC, "v3_structural_music", _boost_and_normalize_v3(p, IDX_MUSIC, 0.90)
+
+    if _V3_SOFTWARE_RE.search(s) and not has_video_ext_or_codec and not has_tv_cue and p_adult < 0.50:
+        return IDX_SOFTWARE, "v3_structural_software", _boost_and_normalize_v3(p, IDX_SOFTWARE, 0.89)
+
+    if has_movie_cue and not has_tv_cue:
+        if p[IDX_MOVIE] + p[IDX_TV] > 0.40:
+            floor_m = min(0.99, max(p[IDX_MOVIE], p[IDX_TV] + 0.40, 0.85))
+            return IDX_MOVIE, "v3_structural_movie_pack", _boost_and_normalize_v3(p, IDX_MOVIE, floor_m)
+    elif has_tv_cue and not has_movie_cue:
+        if p[IDX_XXX] < 0.50 and p_adult < 0.65:
+            floor_t = min(0.99, max(p[IDX_TV], p[IDX_MOVIE] + 0.40, 0.85))
+            return IDX_TV, "v3_structural_tv_cue", _boost_and_normalize_v3(p, IDX_TV, floor_t)
+
+    pred_idx = int(max(range(len(p)), key=p.__getitem__))
+    if catalog is not None and pred_idx in (IDX_MOVIE, IDX_TV) and not has_tv_cue and not has_movie_cue:
+        if max(p[IDX_MOVIE], p[IDX_TV]) < 0.93:
+            cat_hit, src_kind = lookup_zero_cue_catalog(
+                s, catalog, is_anime=bool(p_anime >= 0.15), extra_spans=extra_spans
+            )
+            if cat_hit in ("movie", "tv_show") and src_kind is not None:
+                idx_hit = IDX_MOVIE if cat_hit == "movie" else IDX_TV
+                return idx_hit, f"v3_zero_cue_{src_kind}", _boost_and_normalize_v3(p, idx_hit, 0.90)
+
+    return pred_idx, "v3_neural_calibrated", p
