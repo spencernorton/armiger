@@ -554,6 +554,7 @@ def test_3_poisoned_weight_updates_roll_back_with_identical_predictions(make_ins
     preds0, fp0 = snapshot()
     staged_cases = {
         "calibration_junk_threshold_0.97": agg.build_update_payload(calibration_delta={"mondrian_thresholds": {"junk": 0.97}}),
+        "calibration_junk_threshold_0.85": agg.build_update_payload(calibration_delta={"mondrian_thresholds": {"junk": 0.85}}),
         "calibration_junk_temperature_6.0": agg.build_update_payload(calibration_delta={"heads": {"junk": {"temperature": 6.0}}}),
         "adapter_junk_flood_delta": agg.build_update_payload(swarm_adapter_delta=_poison_adapter_delta(instance_b)),
     }
@@ -632,3 +633,37 @@ def test_3_poisoned_weight_updates_roll_back_with_identical_predictions(make_ins
         "honest_peer_review_of_poison": {"status": review.status, "reason": review.reason},
         "legitimate_update_after_rollbacks": {"status": ok.status, "seq_after": ok.seq_after},
     }
+
+
+def test_4_scoped_telemetry_masks_and_file_count_parity(make_instance):
+    from armiger_inference import encode_torrent_features
+    import math
+
+    # 1. Verify encode_torrent_features preserves true file_count in base_stats[0] when len(files) > 64
+    files_100 = [{"path": f"disc1/track_{i:03d}.flac", "size": 25_000_000} for i in range(100)]
+    enc_implicit = encode_torrent_features({"name": "Symphony.Collection.FLAC", "size": 2_500_000_000, "files": files_100})
+    enc_explicit = encode_torrent_features({"name": "Symphony.Collection.FLAC", "size": 2_500_000_000, "files": files_100, "file_count": 100})
+    assert abs(float(enc_implicit["stats"][0]) - math.log1p(100)) < 1e-5
+    assert float(enc_implicit["stats"][0]) == float(enc_explicit["stats"][0])
+
+    # 2. Verify qBittorrent completion + ffprobe without catalog ID does NOT emit zero_cue_catalog_key
+    # or category/adult/junk/owner_scope NLL profiles into RSI telemetry bundles
+    pipe = make_instance()
+    agg = RSIUpdateAggregator(epoch=EPOCH)
+    qb_payload = _qbit_completion("Unreferenced.Film.2026.1080p.WEB-DL.H264", 4_200_000_000)
+    ok, reason, bundle = pipe.export_rsi_telemetry_bundle(
+        qb_payload,
+        adapter="qbittorrent",
+        ffprobe_output=_ffprobe(4_200_000_000),
+        epoch=EPOCH,
+        aggregator_x25519_pub=agg.x25519_pub,
+        aggregator_mlkem_ek=agg.mlkem_ek,
+    )
+    assert ok and bundle is not None, reason
+    assert agg.ingest_bundles([bundle]) == {"accepted": 1, "rejected": 0}
+    doc = agg.observations[0]
+    assert doc["record"]["category"] == "unknown"
+    assert doc["record"]["evidence_masks"]["category"] is False
+    assert doc["record"]["evidence_masks"]["lang"] is True
+    assert "zero_cue_catalog_key" not in doc
+    assert "calibration_nll_profile" not in doc

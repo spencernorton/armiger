@@ -115,6 +115,8 @@ class VerifiedObservation:
     raw_title: str
     stream_info: Dict[str, Any]
     verified_at: int
+    evidence_masks: Dict[str, bool] = dataclasses.field(default_factory=dict)
+    evidence_sources: Dict[str, str] = dataclasses.field(default_factory=dict)
 
 
 @dataclasses.dataclass
@@ -149,9 +151,10 @@ class AnonymizedTelemetryRecord:
     dp_duration_mins: Optional[float]
     verified_features: Dict[str, Any]
     timestamp: int
+    evidence_masks: Dict[str, bool] = dataclasses.field(default_factory=dict)
 
     def canonical_json_bytes(self) -> bytes:
-        data = {
+        data: Dict[str, Any] = {
             "adult": self.adult,
             "anime": self.anime,
             "blinded_hash": self.blinded_stem.blinded_hash,
@@ -168,6 +171,8 @@ class AnonymizedTelemetryRecord:
             "token_features": sorted(self.blinded_stem.token_features),
             "verified_features": {k: self.verified_features[k] for k in sorted(self.verified_features.keys())},
         }
+        if self.evidence_masks:
+            data["evidence_masks"] = {k: bool(self.evidence_masks[k]) for k in sorted(self.evidence_masks.keys())}
         return json.dumps(data, sort_keys=True, separators=(",", ":")).encode("utf-8")
 
 
@@ -661,6 +666,7 @@ class TelemetryAnonymizer:
             dp_duration_mins=dp_dur,
             verified_features=features,
             timestamp=int(time.time()),
+            evidence_masks=dict(observation.evidence_masks),
         )
 
 
@@ -1966,8 +1972,8 @@ class SeriesWebhookAdapter(_OptInAdapterBase):
             "video_codec": media_info.get("videoCodec", "h264"),
             "audio_codec": media_info.get("audioFormat", "aac"),
             "audio_channels": media_info.get("audioChannels", 2.0),
-            "audio_languages": media_info.get("audioLanguages", "eng"),
-            "subtitles": media_info.get("subtitles", ""),
+            "audio_languages": media_info.get("audioLanguages"),
+            "subtitles": media_info.get("subtitles"),
             "duration_seconds": episode_file.get("duration"),
         }
 
@@ -2015,8 +2021,8 @@ class MovieWebhookAdapter(_OptInAdapterBase):
             "video_codec": media_info.get("videoCodec", "hevc"),
             "audio_codec": media_info.get("audioFormat", "truehd"),
             "audio_channels": media_info.get("audioChannels", 7.1),
-            "audio_languages": media_info.get("audioLanguages", "eng"),
-            "subtitles": media_info.get("subtitles", ""),
+            "audio_languages": media_info.get("audioLanguages"),
+            "subtitles": media_info.get("subtitles"),
             "duration_seconds": movie_file.get("duration"),
         }
 
@@ -2294,7 +2300,7 @@ class PhysicalGroundTruthVerifier:
             or self.SUSPICIOUS_PASSWORDS.search(raw_name)
             or is_exe_media_masquerade
         ):
-            # We flag this physically as JUNK ground truth!
+            # Confirmed structural masquerade / password trap: only junk and excluded owner_scope are verified facts.
             verified_obs = VerifiedObservation(
                 category="unknown",
                 adult=False,
@@ -2311,6 +2317,26 @@ class PhysicalGroundTruthVerifier:
                 raw_title=candidate.raw_title,
                 stream_info={},
                 verified_at=int(time.time()),
+                evidence_masks={
+                    "category": False,
+                    "adult": False,
+                    "anime": False,
+                    "lang": False,
+                    "junk": True,
+                    "owner_scope": True,
+                    "english_subs": False,
+                    "title_language": False,
+                },
+                evidence_sources={
+                    "category": "unverified_on_masquerade_trap",
+                    "adult": "unverified_on_masquerade_trap",
+                    "anime": "unverified_on_masquerade_trap",
+                    "lang": "unverified_on_masquerade_trap",
+                    "junk": "observed_fact:structural_masquerade_trap",
+                    "owner_scope": "derived_policy:excluded_masquerade_trap",
+                    "english_subs": "unverified_on_masquerade_trap",
+                    "title_language": "unverified_on_masquerade_trap",
+                },
             )
             return PhysicalVerificationResult(is_verified=True, observation=verified_obs)
 
@@ -2325,7 +2351,7 @@ class PhysicalGroundTruthVerifier:
                     rejection_reason="invalid_unplayable_media_stream",
                 )
         elif candidate.stream_metadata:
-            stream_info = candidate.stream_metadata
+            stream_info = dict(candidate.stream_metadata)
 
         # Rule 4: Canonical Provenance Verification
         # For non-junk items, we require an authoritative catalog ID or verified stream match
@@ -2341,15 +2367,24 @@ class PhysicalGroundTruthVerifier:
                 rejection_reason="unverified_provenance_rejected",
             )
 
-        # Derive final verified ground-truth labels across 8 heads
-        category = self._resolve_ground_truth_category(candidate, stream_info)
-        adult = self._resolve_ground_truth_adult(candidate)
-        anime = self._resolve_ground_truth_anime(candidate)
-        lang = self._resolve_ground_truth_audio_lang(candidate, stream_info)
-        junk = False  # passed all checks
-        owner_scope = "allowed_type"
-        english_subs = self._resolve_ground_truth_english_subs(stream_info)
-        title_lang = "english_title" if self._is_english_title(candidate.raw_title) else "non_english_title"
+        # Derive scoped ground-truth labels and explicit verification masks across 8 heads.
+        # Observed facts, independent reference annotations, and unverified/unknown targets are strictly separated.
+        category, cat_mask, cat_src = self._resolve_ground_truth_category_with_evidence(candidate, stream_info)
+        adult, adult_mask, adult_src = self._resolve_ground_truth_adult_with_evidence(candidate)
+        anime, anime_mask, anime_src = self._resolve_ground_truth_anime_with_evidence(candidate)
+        lang, lang_mask, lang_src = self._resolve_ground_truth_audio_lang_with_evidence(candidate, stream_info)
+        english_subs, subs_mask, subs_src = self._resolve_ground_truth_english_subs_with_evidence(candidate, stream_info)
+        title_lang, tlang_mask, tlang_src = self._resolve_ground_truth_title_lang_with_evidence(candidate)
+        junk, junk_mask, junk_src = self._resolve_ground_truth_junk_with_evidence(candidate)
+        owner_scope, scope_mask, scope_src = self._resolve_ground_truth_owner_scope_with_evidence(
+            candidate,
+            category=category,
+            cat_mask=cat_mask,
+            adult=adult,
+            adult_mask=adult_mask,
+            junk=junk,
+            junk_mask=junk_mask,
+        )
 
         obs = VerifiedObservation(
             category=category,
@@ -2367,66 +2402,240 @@ class PhysicalGroundTruthVerifier:
             raw_title=candidate.raw_title,
             stream_info=stream_info,
             verified_at=int(time.time()),
+            evidence_masks={
+                "category": cat_mask,
+                "adult": adult_mask,
+                "anime": anime_mask,
+                "lang": lang_mask,
+                "junk": junk_mask,
+                "owner_scope": scope_mask,
+                "english_subs": subs_mask,
+                "title_language": tlang_mask,
+            },
+            evidence_sources={
+                "category": cat_src,
+                "adult": adult_src,
+                "anime": anime_src,
+                "lang": lang_src,
+                "junk": junk_src,
+                "owner_scope": scope_src,
+                "english_subs": subs_src,
+                "title_language": tlang_src,
+            },
         )
         return PhysicalVerificationResult(is_verified=True, observation=obs)
 
     @staticmethod
-    def _resolve_ground_truth_category(c: CandidateObservation, s: Dict[str, Any]) -> str:
-        if c.claimed_category in [m.value for m in MediaCategory]:
-            return c.claimed_category
-        if c.catalog_id_type == "series_catalog":
-            return "tv_show"
-        if c.catalog_id_type == "movie_catalog":
-            return "movie"
-        if c.catalog_id_type == "audio_catalog":
-            return "music"
-        if c.catalog_id_type == "isbn":
-            return "ebook"
-        return "unknown"
+    def _independent_ref(c: CandidateObservation) -> Dict[str, Any]:
+        extra = c.extra_metadata if isinstance(c.extra_metadata, Mapping) else {}
+        ref = extra.get("independent_evidence")
+        return dict(ref) if isinstance(ref, Mapping) else {}
 
-    @staticmethod
-    def _resolve_ground_truth_adult(c: CandidateObservation) -> bool:
-        t = c.raw_title.lower()
-        if c.claimed_category == "xxx":
-            return True
-        adult_keywords = {"adult_studio", "explicit_xxx", "nsfw_18plus", "adult_scene", "xxx_archive"}
-        return any(k in t for k in adult_keywords)
+    @classmethod
+    def _resolve_ground_truth_category_with_evidence(
+        cls,
+        c: CandidateObservation,
+        s: Dict[str, Any],
+    ) -> Tuple[str, bool, str]:
+        ref = cls._independent_ref(c)
+        valid_cats = {m.value for m in MediaCategory if m != MediaCategory.UNKNOWN}
+        if ref.get("category") in valid_cats:
+            return str(ref["category"]), True, "independent_reference:extra_metadata"
 
-    @staticmethod
-    def _resolve_ground_truth_anime(c: CandidateObservation) -> bool:
-        t = c.raw_title.lower()
-        if c.catalog_id_type == "anime_catalog":
-            return True
-        anime_cues = {"[openanime]", "[cc-anime]", "[opensub]", "spring", "charge", "caminandes"}
-        return any(cue in t for cue in anime_cues)
+        cat_type = str(c.catalog_id_type or "").strip()
+        cat_val = str(c.catalog_id_value or "").strip()
+        if not cat_val or cat_type in ("", "none"):
+            # Do NOT echo adapter claimed_category or filename heuristics without catalog/reference provenance.
+            return "unknown", False, "unverified_without_catalog_reference"
 
-    @staticmethod
-    def _resolve_ground_truth_audio_lang(c: CandidateObservation, s: Dict[str, Any]) -> str:
+        # If physical ffprobe output was provided, check that stream media type does not contradict catalog type.
+        ffprobe_checked = "is_valid_media" in s
+        has_video = bool(s.get("video_codec"))
+        has_audio = bool(s.get("audio_codec"))
+
+        if cat_type == "series_catalog":
+            if ffprobe_checked and not has_video:
+                return "unknown", False, "contradicted_catalog_video_missing"
+            return "tv_show", True, "independent_reference:series_catalog"
+        if cat_type == "movie_catalog":
+            if ffprobe_checked and not has_video:
+                return "unknown", False, "contradicted_catalog_video_missing"
+            return "movie", True, "independent_reference:movie_catalog"
+        if cat_type == "anime_catalog":
+            if ffprobe_checked and not has_video:
+                return "unknown", False, "contradicted_catalog_video_missing"
+            return "anime", True, "independent_reference:anime_catalog"
+        if cat_type == "audio_catalog":
+            if ffprobe_checked and (has_video or not has_audio):
+                return "unknown", False, "contradicted_catalog_audio_mismatch"
+            return "music", True, "independent_reference:audio_catalog"
+        if cat_type == "isbn":
+            fmt = str(s.get("format") or "").strip().lower()
+            if fmt in ("m4b", "mp3", "aa", "aax", "flac", "ogg", "opus") or (has_audio and not has_video):
+                return "audiobook", True, "independent_reference:isbn+audio_format"
+            if fmt in ("epub", "mobi", "azw3", "pdf", "djvu", "fb2") and not has_video:
+                return "ebook", True, "independent_reference:isbn+ebook_format"
+            return "unknown", False, "unverified_isbn_format_ambiguous"
+        return "unknown", False, "unverified_unknown_catalog_type"
+
+    @classmethod
+    def _resolve_ground_truth_category(cls, c: CandidateObservation, s: Dict[str, Any]) -> str:
+        cat, _mask, _src = cls._resolve_ground_truth_category_with_evidence(c, s)
+        return cat
+
+    @classmethod
+    def _resolve_ground_truth_adult_with_evidence(cls, c: CandidateObservation) -> Tuple[bool, bool, str]:
+        ref = cls._independent_ref(c)
+        if isinstance(ref.get("adult"), bool):
+            return bool(ref["adult"]), True, "independent_reference:adult"
+        # Never infer verified adult truth from title keywords or unverified claimed_category.
+        return False, False, "unverified_without_independent_adult_reference"
+
+    @classmethod
+    def _resolve_ground_truth_adult(cls, c: CandidateObservation) -> bool:
+        val, _mask, _src = cls._resolve_ground_truth_adult_with_evidence(c)
+        return val
+
+    @classmethod
+    def _resolve_ground_truth_anime_with_evidence(cls, c: CandidateObservation) -> Tuple[bool, bool, str]:
+        ref = cls._independent_ref(c)
+        if isinstance(ref.get("anime"), bool):
+            return bool(ref["anime"]), True, "independent_reference:anime"
+        if c.catalog_id_type == "anime_catalog" and c.catalog_id_value:
+            return True, True, "independent_reference:anime_catalog"
+        # Never infer verified anime truth from canary title words or release group tags.
+        return False, False, "unverified_without_anime_catalog_reference"
+
+    @classmethod
+    def _resolve_ground_truth_anime(cls, c: CandidateObservation) -> bool:
+        val, _mask, _src = cls._resolve_ground_truth_anime_with_evidence(c)
+        return val
+
+    _UNDETERMINED_LANG_CODES = {"", "und", "unk", "unknown", "mul", "zxx", "mis", "none"}
+    _ENGLISH_LANG_CODES = {"eng", "en", "en-us", "en-gb", "english"}
+
+    @classmethod
+    def _resolve_ground_truth_audio_lang_with_evidence(
+        cls,
+        c: CandidateObservation,
+        s: Dict[str, Any],
+    ) -> Tuple[str, bool, str]:
+        ref = cls._independent_ref(c)
+        if ref.get("lang") in ("english", "non_english", "multi_or_unknown"):
+            return str(ref["lang"]), True, "independent_reference:lang"
+
         langs = s.get("audio_languages")
-        if isinstance(langs, list) and langs:
-            primary = str(langs[0]).lower()
-            if primary in ("eng", "en", "english"):
-                return "english"
-            if len(langs) > 1:
-                return "multi_or_unknown"
-            return "non_english"
-        elif isinstance(langs, str):
-            if "eng" in langs.lower():
-                return "english"
-            return "non_english"
-        return "english"
+        raw_tokens: List[str] = []
+        if isinstance(langs, list):
+            for item in langs:
+                if item is not None:
+                    raw_tokens.extend(t for t in re.split(r"[/,;|\s]+", str(item).strip().lower()) if t)
+        elif isinstance(langs, str) and langs.strip():
+            raw_tokens.extend(t for t in re.split(r"[/,;|\s]+", langs.strip().lower()) if t)
 
-    @staticmethod
-    def _resolve_ground_truth_english_subs(s: Dict[str, Any]) -> bool:
-        sub_list = s.get("sub_languages")
-        if isinstance(sub_list, list):
-            return any("eng" in str(x).lower() for x in sub_list)
-        subs = str(s.get("subtitles", "")).lower()
-        return "eng" in subs or "english" in subs
+        if not raw_tokens:
+            # Missing audio_languages is unknown, never defaulted to 'english'.
+            return "multi_or_unknown", False, "unverified_missing_audio_languages"
+
+        if any(t in cls._UNDETERMINED_LANG_CODES for t in raw_tokens):
+            return "multi_or_unknown", False, "unverified_undetermined_audio_language_tag"
+
+        norm_langs: Set[str] = set()
+        for tok in raw_tokens:
+            norm_langs.add("english" if tok in cls._ENGLISH_LANG_CODES else f"non_en:{tok}")
+
+        if len(norm_langs) > 1:
+            return "multi_or_unknown", True, "observed_fact:multi_language_audio_streams"
+        only = next(iter(norm_langs))
+        if only == "english":
+            return "english", True, "observed_fact:english_audio_stream_tags"
+        return "non_english", True, "observed_fact:non_english_audio_stream_tags"
+
+    @classmethod
+    def _resolve_ground_truth_audio_lang(cls, c: CandidateObservation, s: Dict[str, Any]) -> str:
+        val, _mask, _src = cls._resolve_ground_truth_audio_lang_with_evidence(c, s)
+        return val
+
+    @classmethod
+    def _resolve_ground_truth_english_subs_with_evidence(
+        cls,
+        c: CandidateObservation,
+        s: Dict[str, Any],
+    ) -> Tuple[bool, bool, str]:
+        ref = cls._independent_ref(c)
+        if isinstance(ref.get("english_subs"), bool):
+            return bool(ref["english_subs"]), True, "independent_reference:english_subs"
+
+        if "sub_languages" in s and isinstance(s.get("sub_languages"), list):
+            tokens: Set[str] = set()
+            for x in s["sub_languages"]:
+                tokens.update(re.findall(r"[a-z]+", str(x).lower()))
+            has_eng = bool(tokens & {"eng", "en", "english"})
+            return has_eng, True, "observed_fact:ffprobe_subtitle_streams"
+
+        if s.get("subtitles") is not None and str(s.get("subtitles")).strip() != "":
+            tokens = set(re.findall(r"[a-z]+", str(s.get("subtitles")).lower()))
+            has_eng = bool(tokens & {"eng", "en", "english"})
+            return has_eng, True, "observed_fact:mediainfo_subtitle_tags"
+
+        return False, False, "unverified_subtitle_inventory_not_inspected"
+
+    @classmethod
+    def _resolve_ground_truth_english_subs(cls, s: Dict[str, Any]) -> bool:
+        dummy = CandidateObservation(
+            source_adapter="direct",
+            raw_title="",
+            claimed_category="unknown",
+            download_completed=True,
+            bytes_downloaded=1,
+            total_bytes=1,
+        )
+        val, _mask, _src = cls._resolve_ground_truth_english_subs_with_evidence(dummy, s)
+        return val
+
+    @classmethod
+    def _resolve_ground_truth_title_lang_with_evidence(cls, c: CandidateObservation) -> Tuple[str, bool, str]:
+        ref = cls._independent_ref(c)
+        if ref.get("title_language") in ("english_title", "non_english_title"):
+            return str(ref["title_language"]), True, "independent_reference:title_language"
+        # ASCII encodability does not independently establish English vs non-English title language.
+        fallback = "english_title" if cls._is_english_title(c.raw_title) else "non_english_title"
+        return fallback, False, "unverified_ascii_heuristic_excluded"
+
+    @classmethod
+    def _resolve_ground_truth_junk_with_evidence(cls, c: CandidateObservation) -> Tuple[bool, bool, str]:
+        ref = cls._independent_ref(c)
+        if isinstance(ref.get("junk"), bool):
+            return bool(ref["junk"]), True, "independent_reference:junk"
+        return False, False, "scoped_observation:no_masquerade_trap_detected"
+
+    @classmethod
+    def _resolve_ground_truth_owner_scope_with_evidence(
+        cls,
+        c: CandidateObservation,
+        *,
+        category: str,
+        cat_mask: bool,
+        adult: bool,
+        adult_mask: bool,
+        junk: bool,
+        junk_mask: bool,
+    ) -> Tuple[str, bool, str]:
+        ref = cls._independent_ref(c)
+        if ref.get("owner_scope") in ("allowed_type", "excluded"):
+            return str(ref["owner_scope"]), True, "independent_reference:owner_scope"
+        if junk and junk_mask:
+            return "excluded", True, "derived_policy:excluded_junk"
+        if adult and adult_mask:
+            return "excluded", True, "derived_policy:excluded_adult"
+        if cat_mask and category == "xxx":
+            return "excluded", True, "derived_policy:excluded_xxx_category"
+        if cat_mask and adult_mask and junk_mask and not junk and not adult and category != "xxx":
+            return "allowed_type", True, "derived_policy:verified_allowed_type"
+        return "allowed_type", False, "unverified_without_complete_policy_inputs"
 
     @staticmethod
     def _is_english_title(title: str) -> bool:
-        # Non-ASCII or accented title indicates non_english_title
         try:
             title.encode('ascii')
             return True

@@ -151,6 +151,7 @@ class ArmigerArrWebhookService:
             "category": record.category if record is not None else None,
             "lang": record.lang if record is not None else None,
             "junk": record.junk if record is not None else None,
+            "evidence_masks": dict(record.evidence_masks) if record is not None else None,
         }
 
 
