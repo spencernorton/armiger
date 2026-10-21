@@ -43,10 +43,15 @@ from typing import Any, Callable, Dict, List, Mapping, Optional, Sequence, Tuple
 
 import numpy as np
 
-# Ensure sibling plugin modules in the same directory are importable
+# Ensure sibling plugin modules in the same directory (and deploy/oci-dht fallback) are importable
 _THIS_DIR = Path(__file__).resolve().parent
-if str(_THIS_DIR) not in sys.path:
-    sys.path.insert(0, str(_THIS_DIR))
+_REPO_ROOT = _THIS_DIR.parent
+_OCI_DHT_DIR = _REPO_ROOT / "deploy" / "oci-dht"
+for _p in (str(_REPO_ROOT), str(_THIS_DIR)):
+    if _p not in sys.path:
+        sys.path.insert(0, _p)
+if _OCI_DHT_DIR.is_dir() and str(_OCI_DHT_DIR) not in sys.path:
+    sys.path.append(str(_OCI_DHT_DIR))
 
 # Plugin #1: SwarmSurvivalNet & Residual Adapter
 from swarm_survival import (
@@ -75,24 +80,58 @@ from swarm_priors import (
 )
 
 # Plugin #3: ZeroCueCatalog (929.4K Offline Title Lookup + Structural Disambiguator)
-from zero_cue_plugin import (
-    CATS as ZERO_CUE_CATS,
-    ZeroCueCatalogPlugin,
-    apply_structural_and_zero_cue_disambiguation,
-    hash_catalog_key,
-    lookup_zero_cue_catalog,
-    norm_title,
-    parse_clean_candidates,
-)
+try:
+    from armiger.zero_cue_plugin import (
+        CATS as ZERO_CUE_CATS,
+        ZeroCueCatalogPlugin,
+        apply_structural_and_zero_cue_disambiguation,
+        hash_catalog_key,
+        lookup_zero_cue_catalog,
+        norm_title,
+        parse_clean_candidates,
+    )
+except ImportError:
+    from zero_cue_plugin import (
+        CATS as ZERO_CUE_CATS,
+        ZeroCueCatalogPlugin,
+        apply_structural_and_zero_cue_disambiguation,
+        hash_catalog_key,
+        lookup_zero_cue_catalog,
+        norm_title,
+        parse_clean_candidates,
+    )
+
+# Plugin #3b: ByteSpanExtractor (9th-Head Constrained 7x7 BIO Viterbi Decoder & Boundary Snapping)
+try:
+    from armiger.byte_span_extractor import (
+        SPAN_BIO_CLASSES,
+        decode_bio_logits_viterbi,
+        decode_bio_tags_to_spans,
+    )
+except ImportError:
+    from byte_span_extractor import (
+        SPAN_BIO_CLASSES,
+        decode_bio_logits_viterbi,
+        decode_bio_tags_to_spans,
+    )
 
 # Plugin #4: AudioLanguageGuard (Cross-Head Audio & Anime Dub Guard)
-from audio_language_guard import (
-    SUB_SEGMENT_STRIP_RE,
-    apply_audio_language_guard,
-    apply_english_subs_guard,
-    apply_title_language_guard,
-    classify_audio_and_anime_dub,
-)
+try:
+    from armiger.audio_language_guard import (
+        SUB_SEGMENT_STRIP_RE,
+        apply_audio_language_guard,
+        apply_english_subs_guard,
+        apply_title_language_guard,
+        classify_audio_and_anime_dub,
+    )
+except ImportError:
+    from audio_language_guard import (
+        SUB_SEGMENT_STRIP_RE,
+        apply_audio_language_guard,
+        apply_english_subs_guard,
+        apply_title_language_guard,
+        classify_audio_and_anime_dub,
+    )
 
 # Plugin #5: CalibrationAndDHT + ArmigerDHTRSIEngine
 from calibration_and_dht import (
@@ -249,7 +288,7 @@ _GAME_FILE_TREE_RE = re.compile(
     r"\.(?:pk3|wad|pck|bsp|unity3d|vpk)$)"
 )
 _AUDIOBOOK_FILE_TREE_RE = re.compile(
-    r"(?i)(?:synapseml_gutenberg|_hour_\d{2}_|-\s*\d+\.(?:afpk|mp3)$|librivox)"
+    r"(?i)(?:synapseml_gutenberg|-\s*\d+\.(?:afpk|mp3)$|librivox)"
 )
 
 
@@ -371,6 +410,7 @@ class AudioLanguageGuard:
             p_en=max(p_en, p_multi),
             p_anime=p_anime,
             p_title_foreign=p_title_foreign,
+            p_eng_subs_yes=p_eng_subs,
         )
         cleaned_audio_name = SUB_SEGMENT_STRIP_RE.sub(" ", raw_name)
         if not report["is_anime"]:
@@ -804,6 +844,24 @@ class ArmigerUltraPipeline:
             scope_probs = np.asarray(self.calibrator.calibrate_head("owner_scope", raw_logits["owner_scope"][idx].tolist()), dtype=np.float64)
             title_lang_probs = np.asarray(self.calibrator.calibrate_head("title_language", raw_logits["title_language"][idx].tolist()), dtype=np.float64)
 
+            # Step 2b: 9th-Head Constrained 7x7 BIO Viterbi Decoder + Boundary Snapping (`byte_span_extractor.py`)
+            raw_title_bytes = raw_title.encode("utf-8", errors="replace")[:256]
+            span_bio_tag_ids: List[int] = []
+            if "span_bio" in raw_logits and raw_logits["span_bio"].ndim == 3:
+                span_bio_tag_ids = decode_bio_logits_viterbi(
+                    raw_logits["span_bio"][idx],
+                    raw_title_bytes,
+                ).tolist()
+            elif row_dict.get("span_bio_logits") is not None:
+                span_bio_tag_ids = decode_bio_logits_viterbi(
+                    np.asarray(row_dict["span_bio_logits"], dtype=np.float64),
+                    raw_title_bytes,
+                ).tolist()
+            elif row_dict.get("bio_tags") is not None:
+                span_bio_tag_ids = [int(t) for t in row_dict["bio_tags"]]
+            span_bio_info = decode_bio_tags_to_spans(raw_title, span_bio_tag_ids)
+            extra_spans = [str(span_bio_info["title"])] if span_bio_info.get("title") else None
+
             # Step 3: Plugin #3 (`ZeroCueCatalog`) — Structural & 929.4K Catalog Disambiguation
             # Strictly content-only (never touches `swarm`), preserving the 0% category flip guarantee
             cat_classes = NEURAL_HEAD_CLASSES["category"]
@@ -824,6 +882,8 @@ class ArmigerUltraPipeline:
                     probs_category=cat_probs.tolist(),
                     p_adult=float(adult_probs[1]),
                     p_anime=float(anime_probs[1]),
+                    extra_spans=extra_spans,
+                    files=row_dict.get("files") if isinstance(row_dict.get("files"), (list, tuple)) else None,
                 )
                 pred_category = str(zc_res["category"])
                 catalog_source = str(zc_res["resolution_source"])
@@ -839,6 +899,8 @@ class ArmigerUltraPipeline:
                     p_adult=float(adult_probs[1]),
                     p_anime=float(anime_probs[1]),
                     catalog=None,
+                    extra_spans=extra_spans,
+                    files=row_dict.get("files") if isinstance(row_dict.get("files"), (list, tuple)) else None,
                 )
                 pred_category = cat_classes[c_idx]
                 if catalog_source != "neural_backbone":
@@ -896,8 +958,15 @@ class ArmigerUltraPipeline:
             # Invariant verification: SwarmResidualAdapter must never flip content category
             assert swarm_eval["category"] == pred_category
 
-            way3_max_anom = float(np.max(way3_vec[:6])) if len(way3_vec) >= 6 else 0.0
-            trap_prob = float(max(swarm_eval["trap_score"], way3_max_anom * 0.90))
+            # Exclude zero-seed stalled-swarm indicators (`way3_vec[0:2]`) when computing honeypot trap risk
+            # unless genuine honeypot indicators (`way3_vec[2:6]` or `trap_score >= 0.45`) or neural junk are present.
+            way3_core = float(np.max(way3_vec[2:6])) if len(way3_vec) >= 6 else 0.0
+            way3_zero_seed = float(np.max(way3_vec[0:2])) if len(way3_vec) >= 2 else (float(way3_vec[0]) if len(way3_vec) >= 1 else 0.0)
+            if way3_core < 0.40 and float(swarm_eval["trap_score"]) < 0.45 and float(junk_probs[1]) < 0.40:
+                way3_max_anom = max(way3_core, way3_zero_seed * 0.25)
+            else:
+                way3_max_anom = max(way3_core, way3_zero_seed)
+            trap_prob = float(max(swarm_eval["p_honeypot_or_junk"], way3_max_anom * 0.90))
             is_honeypot = bool(swarm_eval["is_honeypot_blocked"] or trap_prob >= 0.50)
 
             # Fuse honeypot trap signal into `junk` probability without ever flipping `category`
@@ -1025,6 +1094,12 @@ class ArmigerUltraPipeline:
                 "honeypot_trap": honeypot_trap_head,
                 "csam_safety": csam_safety_head,
             }
+            if span_bio_tag_ids:
+                heads_dict["span_bio"] = {
+                    "tags": [SPAN_BIO_CLASSES[t] if 0 <= t < len(SPAN_BIO_CLASSES) else str(t) for t in span_bio_tag_ids],
+                    "tag_ids": span_bio_tag_ids,
+                    **span_bio_info,
+                }
 
             mondrian_gates = {
                 "passed_all": overall_safe,
@@ -1083,6 +1158,7 @@ class ArmigerUltraPipeline:
                     "resolution_source": catalog_source,
                 },
                 "plugin_4_audio_guard": audio_dub_report,
+                "span_bio": span_bio_info,
                 "plugin_5_calibration_dht": {
                     "calibrated": True,
                     "rsi_mode": self.rsi_engine.mode.value,

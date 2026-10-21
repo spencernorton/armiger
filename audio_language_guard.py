@@ -18,6 +18,7 @@ from __future__ import annotations
 from collections.abc import Mapping, Sequence
 import re
 from typing import Any
+import unicodedata
 
 try:
     from armiger.calibration_and_dht import safe_regex_search
@@ -46,10 +47,14 @@ _EXPLICIT_ENG_SUB_TAG_RE = re.compile(
 )
 
 _FOREIGN_ONLY_SUB_FILE_RE = re.compile(
-    r"(?i)(?:\.(?:es|spa|spanish|fr|fre|french|de|ger|german|it|ita|italian|pt|por|portuguese|"
-    r"ru|rus|russian|pl|pol|polish|nl|dut|dutch|tr|tur|turkish|ar|ara|arabic|zh|chi|chs|cht|"
-    r"ja|jpn|ko|kor|ro|rom|romanian|cs|cze|czech|hu|hun|uk|ukr)\.(?:srt|vtt|ass|ssa|sub)$|"
-    r"_(?:uk|es|fr|de|it|pt|ru|zh|ja|ko)\.(?:srt|vtt|ass|ssa|sub)$)"
+    r"(?i)(?:[\._-](?:es|spa|esp|spanish|castellano|lat|fr|fre|fra|french|vostfr|de|ger|deu|german|"
+    r"it|ita|italian|pt|por|portuguese|pt-br|pt_br|pob|ru|rus|russian|pl|pol|polish|nl|dut|nld|dutch|"
+    r"tr|tur|turkish|ar|ara|arabic|zh|chi|zho|chs|cht|cmn|chinese|ja|jpn|jap|japanese|ko|kor|korean|"
+    r"ro|rom|ron|rum|romanian|cs|cze|ces|czech|hu|hun|hungarian|uk|ukr|ukrainian|fa|fas|per|persian|farsi|"
+    r"el|gre|ell|greek|he|heb|hebrew|sv|swe|swedish|da|dan|danish|no|nor|nob|nno|norwegian|fi|fin|finnish|"
+    r"bg|bul|bulgarian|hr|hrv|croatian|sr|srp|serbian|sk|slo|slk|slovak|sl|slv|slovenian|lt|lit|lithuanian|"
+    r"lv|lav|latvian|et|est|estonian|hi|hin|hindi|vi|vie|vietnamese|th|tha|thai|id|ind|indonesian|"
+    r"ms|may|msa|malay|tl|tgl|tagalog)\.(?:srt|vtt|ass|ssa|sub)$)"
 )
 
 SUB_SEGMENT_STRIP_RE = re.compile(
@@ -170,10 +175,10 @@ def apply_audio_language_guard_v3(
     nm_nosub = SUB_SEGMENT_STRIP_RE.sub(" ", nm)
 
     has_explicit_eng_audio = bool(
-        re.search(r"(?i)\b(?:eng|english)\b", nm_nosub)
+        re.search(r"(?i)(?:^|[\[\(\.\s_-])(?:eng|english)(?=$|[\]\)\.\s_-])", nm_nosub)
         or re.search(r"[\[\(\.\s_-]EN[\]\)\.\s_-]", nm_nosub)
         or re.search(r"英语", nm_nosub)
-        or re.search(r"(?i)\bdual[\.\s_-]*audio\b", nm_nosub)
+        or re.search(r"(?i)(?:^|[\[\(\.\s_-])dual[\.\s_-]*audio(?=$|[\]\)\.\s_-])", nm_nosub)
         or safe_regex_search(custom_en_re, nm_nosub, field_name="audio_guard.explicit_en_regex")
     )
 
@@ -189,15 +194,146 @@ def apply_audio_language_guard_v3(
             return min(p_en, 0.10)
         if re.search(r"(?i)\bexkinoray\b", nm) and p_en < 0.85:
             return min(p_en, 0.10)
-        if re.search(r"[А-Яа-яЁё]{4,}", nm) and not re.search(
-            r"(?:[А-Яа-яЁё]+\s*/\s*[A-Za-z]{3,}|[A-Za-z]{3,}[^А-Яа-яЁё]*\s-\s*[А-Яа-яЁё]{4,})",
-            nm,
+        if (
+            re.search(r"[А-Яа-яЁё]{4,}", nm)
+            and (p_en < 0.85 or p_title_foreign >= 0.50)
+            and not re.search(
+                r"(?:[А-Яа-яЁё]+\s*/\s*[A-Za-z]{3,}|[A-Za-z]{3,}[^А-Яа-яЁё]*\s-\s*[А-Яа-яЁё]{4,})",
+                nm,
+            )
         ):
             return min(p_en, 0.12)
         if p_title_foreign >= foreign_title_thresh and p_en < 0.75:
             return min(p_en, 0.25)
 
     return float(p_en)
+
+
+_COMMON_EN_WORDS_SET: frozenset[str] = frozenset({
+    "the", "of", "and", "in", "to", "for", "with", "on", "at", "from", "by", "about", "into", "over", "after",
+    "under", "between", "through", "without", "before", "behind", "beyond", "against", "among", "around",
+    "adventures", "adventure", "story", "stories", "life", "lives", "world", "worlds", "history", "histories",
+    "poems", "poem", "poetry", "tales", "tale", "short", "collection", "collected", "book", "books", "volume",
+    "volumes", "complete", "works", "work", "letters", "letter", "memoirs", "memoir", "journal", "journals",
+    "diary", "diaries", "novel", "novels", "mystery", "mysteries", "murder", "murders", "detective", "island",
+    "islands", "house", "houses", "night", "nights", "secret", "secrets", "woman", "women", "man", "men",
+    "boy", "boys", "girl", "girls", "king", "kings", "queen", "queens", "prince", "princess", "war", "wars",
+    "peace", "love", "death", "time", "times", "day", "days", "year", "years", "little", "great", "old", "new",
+    "good", "bad", "black", "white", "red", "blue", "green", "golden", "silver", "dark", "light", "shadow",
+    "shadows", "lost", "last", "first", "second", "third", "three", "two", "four", "five", "seven", "ten",
+    "hundred", "thousand", "million", "uncle", "aunt", "father", "mother", "brother", "brothers", "sister",
+    "sisters", "son", "sons", "daughter", "daughters", "child", "children", "family", "friend", "friends",
+    "doctor", "captain", "master", "lord", "lady", "saint", "general", "colonel", "major", "professor",
+    "american", "british", "modern", "ancient", "early", "late", "north", "south", "east", "west", "western", "eastern", "northern",
+    "southern", "central", "city", "town", "country", "village", "castle", "palace", "tower", "garden",
+    "gardens", "forest", "woods", "river", "sea", "ocean", "mountain", "mountains", "valley", "hill", "hills",
+    "road", "street", "way", "journey", "voyage", "travels", "travel", "guide", "manual", "handbook",
+    "introduction", "principles", "elements", "theory", "practice", "science", "art", "arts", "philosophy",
+    "religion", "church", "state", "law", "laws", "government", "society", "nature", "human", "mind", "soul",
+    "spirit", "heart", "body", "health", "medicine", "magic", "witch", "ghost", "ghosts", "fairy", "fairies",
+    "dragon", "dragons", "monster", "monsters", "vampire", "empire", "kingdom", "republic", "revolution",
+    "battle", "army", "navy", "soldier", "soldiers", "hero", "heroes", "knight", "knights", "pirate", "pirates",
+    "treasure", "gold", "diamond", "diamonds", "ring", "sword", "crown", "throne", "cross", "star", "stars",
+    "sun", "moon", "earth", "heaven", "hell", "paradise", "dream", "dreams", "sleep", "winter", "summer",
+    "spring", "autumn", "morning", "evening", "midnight", "dawn", "twilight", "storm", "wind", "fire", "water",
+    "blood", "iron", "steel", "stone", "wood", "glass", "rose", "roses", "flower", "flowers", "tree", "trees",
+    "bird", "birds", "horse", "horses", "dog", "dogs", "cat", "cats", "lion", "wolf", "bear", "eagle",
+    "serpent", "snake", "fish", "whale", "ship", "train", "flight", "escape", "return", "fall", "rise",
+    "revenge", "fortune", "destiny", "fate", "chance", "truth", "honor", "glory", "power", "wealth", "poverty",
+    "crime", "punishment", "justice", "freedom", "liberty", "slavery", "marriage", "wedding", "divorce",
+    "birth", "youth", "age", "beauty", "music", "song", "songs", "dance", "play", "plays", "tragedy", "comedy",
+    "drama", "theatre", "stage", "picture", "pictures", "portrait", "painted", "veil", "mirror", "window",
+    "door", "gate", "key", "bridge", "wall", "room", "chamber", "hall", "school", "college", "university",
+    "student", "teacher", "lesson", "lessons", "study", "studies", "essay", "essays", "speech", "speeches",
+    "lecture", "lectures", "sermon", "sermons", "bible", "gospel", "psalms", "prophet", "god", "gods", "angel",
+    "angels", "devil", "demon", "sin", "virtue", "grace", "faith", "hope", "charity", "wisdom", "knowledge",
+    "folly", "madness", "passion", "desire", "fear", "terror", "horror", "wonder", "miracle", "vision",
+    "prophecy", "legend", "legends", "myth", "myths", "fable", "fables", "folklore", "ballad", "ballads",
+    "chronicle", "chronicles", "annals", "records", "account", "narrative", "sketch", "sketches", "scenes",
+    "notes", "fragments", "selected", "popular", "famous", "strange", "curious", "remarkable", "true", "real",
+    "wild", "free", "silent", "hidden", "forgotten", "broken", "golden", "sacred", "divine", "royal", "imperial",
+    "national", "public", "private", "personal", "social", "political", "economic", "military", "naval",
+    "civil", "religious", "moral", "natural", "physical", "chemical", "medical", "practical", "elementary",
+    "general", "special", "common", "universal", "eternal", "immortal", "dead", "living", "young", "brave",
+    "fair", "wise", "poor", "rich", "happy", "merry", "sad", "lonely", "proud", "humble", "gentle", "noble",
+    "wicked", "evil", "cruel", "fierce", "bold", "strange", "mysterious", "invisible", "unknown", "adventuresof",
+    "storyof", "lifeof", "historyof", "talesof", "bookof", "houseof", "worldof", "landof", "cityof",
+})
+
+_GUTENBERG_LIBRIVOX_SLUG_HINT_RE = re.compile(
+    r"(?i)(?:_librivox\b|_gutenberg\b|\b\d{4}_librivox\b|_[a-z]{2,4}_librivox\b|-\d{4,6}-(?:epub|mp3|ogg|m4b|txt)\b)"
+)
+_SLUG_METADATA_STOP_TOKENS: frozenset[str] = frozenset({
+    "librivox", "gutenberg", "audiobook", "unabridged", "abridged", "mp3", "m4b", "ogg", "flac",
+    "epub", "mobi", "azw3", "pdf", "txt", "version", "ver", "vol", "volume", "part", "pt", "ed", "edition",
+    "english", "french", "german", "deutsch", "spanish", "espanol", "italian", "italiano", "russian",
+    "portuguese", "dutch", "nederlands", "polish", "swedish", "danish", "norwegian", "finnish", "greek",
+    "latin", "chinese", "japanese", "korean", "esperanto", "catalan", "hungarian", "czech", "romanian",
+    "turkish", "arabic", "hebrew", "indian", "roman",
+})
+_SLUG_NON_ENGLISH_LANG_MARKER_RE = re.compile(
+    r"(?i)(?:^|[\W_])(?:french|german|deutsch|spanish|espanol|italian|italiano|russian|portuguese|dutch|"
+    r"nederlands|polish|swedish|danish|norwegian|finnish|greek|latin|chinese|japanese|korean|esperanto|"
+    r"catalan|hungarian|czech|romanian|turkish|arabic|hebrew)(?=$|[\W_])"
+)
+_CONCAT_ENGLISH_SLUG_RE = re.compile(r"^[a-z]{10,45}$")
+
+
+def split_and_score_title_slug(raw_name: str) -> dict[str, Any]:
+    """Segment concatenated lowercase English book/audiobook slugs (e.g. `thepaintedveil_2103_librivox`)."""
+    nm = (raw_name or "").strip()
+    is_librivox_or_gutenberg = bool(_GUTENBERG_LIBRIVOX_SLUG_HINT_RE.search(nm))
+    has_non_english_marker = bool(_SLUG_NON_ENGLISH_LANG_MARKER_RE.search(nm))
+    stem = re.sub(r"\.[A-Za-z0-9]{2,5}$", "", nm)
+    raw_tokens = [t.lower() for t in re.split(r"[\W_0-9]+", stem) if len(t) >= 2]
+    tokens = [
+        t for i, t in enumerate(raw_tokens)
+        if t not in _SLUG_METADATA_STOP_TOKENS
+        and not (is_librivox_or_gutenberg and i == len(raw_tokens) - 1 and 2 <= len(t) <= 4)
+    ]
+    segmented_words: list[str] = []
+    found_concat_slug = False
+    matched_chars = 0
+    total_chars = sum(len(t) for t in tokens)
+    for tok in tokens:
+        if tok in _COMMON_EN_WORDS_SET:
+            segmented_words.append(tok)
+            matched_chars += len(tok)
+            continue
+        if _CONCAT_ENGLISH_SLUG_RE.match(tok):
+            n = len(tok)
+            dp: list[tuple[int, list[str]] | None] = [None] * (n + 1)
+            dp[0] = (0, [])
+            for i in range(n):
+                if dp[i] is None:
+                    continue
+                cov_i, words_i = dp[i]  # type: ignore[misc]
+                for j in range(i + 2, min(n, i + 15) + 1):
+                    sub = tok[i:j]
+                    if sub in _COMMON_EN_WORDS_SET:
+                        new_cov = cov_i + (j - i)
+                        if dp[j] is None or new_cov > dp[j][0] or (new_cov == dp[j][0] and len(words_i) + 1 < len(dp[j][1])):  # type: ignore[index]
+                            dp[j] = (new_cov, words_i + [sub])
+            best_cov, best_words = 0, []
+            for state in dp:
+                if state is not None and state[0] > best_cov:
+                    best_cov, best_words = state
+            if len(best_words) >= 2 and best_cov >= max(7, int(0.75 * n)):
+                found_concat_slug = True
+                segmented_words.extend(best_words)
+                matched_chars += best_cov
+    title_cov = (matched_chars / total_chars) if total_chars > 0 else 0.0
+    is_english_slug = bool(
+        not has_non_english_marker
+        and len(segmented_words) >= 2
+        and (found_concat_slug or (is_librivox_or_gutenberg and title_cov >= 0.60))
+    )
+    return {
+        "is_english_slug": is_english_slug,
+        "is_librivox_or_gutenberg": is_librivox_or_gutenberg,
+        "found_concat_slug": found_concat_slug,
+        "segmented_words": segmented_words,
+    }
 
 
 def apply_title_language_guard(
@@ -211,12 +347,17 @@ def apply_title_language_guard(
     p_for_t = float(title_lang_probs[1]) if len(title_lang_probs) > 1 else (1.0 - p_en_t)
     nm = (raw_name or "").strip()
 
+    slug_info = split_and_score_title_slug(nm)
+    if slug_info["is_english_slug"] and not _FOREIGN_TITLE_TOKEN_RE.search(nm):
+        p_en_t = max(p_en_t, 0.88)
+        return [round(p_en_t, 6), round(1.0 - p_en_t, 6)]
+
     if _FOREIGN_TITLE_TOKEN_RE.search(nm):
         p_for_t = max(p_for_t, 0.88)
         return [round(1.0 - p_for_t, 6), round(p_for_t, 6)]
 
     p_non_en_audio = float(lang_probs[1]) if lang_probs is not None and len(lang_probs) > 1 else 0.0
-    if p_non_en_audio >= 0.72 and p_for_t >= 0.08 and not _ENGLISH_TITLE_SHIELD_RE.search(nm):
+    if p_non_en_audio >= 0.72 and p_for_t >= 0.08 and not _ENGLISH_TITLE_SHIELD_RE.search(nm) and not slug_info["is_english_slug"]:
         p_for_t = max(p_for_t, 0.78)
         return [round(1.0 - p_for_t, 6), round(p_for_t, 6)]
 
@@ -228,8 +369,9 @@ def apply_english_subs_guard(
     eng_subs_probs: Sequence[float],
 ) -> list[float]:
     """Calibrate [P(no_eng_subs), P(has_eng_subs), P(unknown)] using physical subtitle sidecars & release tags."""
-    p_no = float(eng_subs_probs[0])
-    p_yes = float(eng_subs_probs[1]) if len(eng_subs_probs) > 1 else 0.0
+    p_no = max(0.0, float(eng_subs_probs[0])) if len(eng_subs_probs) > 0 else 0.0
+    p_yes = max(0.0, float(eng_subs_probs[1])) if len(eng_subs_probs) > 1 else 0.0
+    p_unk = max(0.0, float(eng_subs_probs[2])) if len(eng_subs_probs) > 2 else 0.0
     raw_name = str(row.get("name") or row.get("title") or "")
     files = row.get("files") or []
 
@@ -265,8 +407,115 @@ def apply_english_subs_guard(
     if has_only_machine_asr:
         return [0.94, 0.05, 0.01]
 
-    tot = max(1e-6, p_no + p_yes)
-    return [round(p_no / tot, 6), round(p_yes / tot, 6), 0.0]
+    tot = p_no + p_yes + p_unk
+    if tot <= 1e-9:
+        return [0.0, 0.0, 1.0] if len(eng_subs_probs) > 2 else [1.0, 0.0, 0.0]
+    p0 = round(p_no / tot, 6)
+    p1 = round(p_yes / tot, 6)
+    p2 = round(max(0.0, 1.0 - p0 - p1), 6) if len(eng_subs_probs) > 2 else 0.0
+    return [p0, p1, p2]
+
+
+_LOCALIZED_FOREIGN_ALIAS_STEM_RE = re.compile(
+    r"(?i)(?:^|[\s._\-\[\(])(?:"
+    r"el[\s._-]+juego[\s._-]+del[\s._-]+calamar|"
+    r"los[\s._-]+anillos[\s._-]+de[\s._-]+poder|el[\s._-]+senor[\s._-]+de[\s._-]+los[\s._-]+anillos|"
+    r"juego[\s._-]+de[\s._-]+tronos|la[\s._-]+casa[\s._-]+del[\s._-]+dragon|"
+    r"la[\s._-]+guerra[\s._-]+de[\s._-]+las[\s._-]+galaxias|piratas[\s._-]+del[\s._-]+caribe|"
+    r"le[\s._-]+seigneur[\s._-]+des[\s._-]+anneaux|les[\s._-]+anneaux[\s._-]+de[\s._-]+pouvoir|"
+    r"la[\s._-]+chronique[\s._-]+des[\s._-]+bridgerton|le[\s._-]+jeu[\s._-]+de[\s._-]+la[\s._-]+dame|"
+    r"la[\s._-]+maison[\s._-]+du[\s._-]+dragon|la[\s._-]+guerre[\s._-]+des[\s._-]+etoiles|"
+    r"pirates[\s._-]+des[\s._-]+caraibes|les[\s._-]+gardiens[\s._-]+de[\s._-]+la[\s._-]+galaxie|"
+    r"haus[\s._-]+des[\s._-]+geldes|herr[\s._-]+der[\s._-]+ringe|ringe[\s._-]+der[\s._-]+macht|"
+    r"krieg[\s._-]+der[\s._-]+sterne|fluch[\s._-]+der[\s._-]+karibik|"
+    r"il[\s._-]+signore[\s._-]+degli[\s._-]+anelli|gli[\s._-]+anelli[\s._-]+del[\s._-]+potere|"
+    r"il[\s._-]+trono[\s._-]+di[\s._-]+spade|guerre[\s._-]+stellari|"
+    r"властелин[\s._-]+колец|игра[\s._-]+престолов|дом[\s._-]+дракона|игра[\s._-]+в[\s._-]+кальмара|"
+    r"звездные[\s._-]+войны|пираты[\s._-]+карибского[\s._-]+моря|стражи[\s._-]+галактики|бумажный[\s._-]+дом"
+    r")(?=$|[\s._\-\]\)])"
+)
+_FOREIGN_ORIGINAL_WORK_STEM_RE = re.compile(
+    r"(?i)(?:^|[\s._\-\[\(])(?:"
+    r"(?:la[\s._-]+)?casa[\s._-]+de[\s._-]+papel|"
+    r"la[\s._-]+haine|le[\s._-]+samourai|les[\s._-]+miserables|la[\s._-]+dolce[\s._-]+vita|"
+    r"la[\s._-]+vita[\s._-]+e[\s._-]+bella|el[\s._-]+laberinto[\s._-]+del[\s._-]+fauno|"
+    r"el[\s._-]+secreto[\s._-]+de[\s._-]+sus[\s._-]+ojos|das[\s._-]+boot|"
+    r"das[\s._-]+leben[\s._-]+der[\s._-]+anderen|der[\s._-]+untergang|ciudad[\s._-]+de[\s._-]+dios|"
+    r"сталкер|солярис|зеркало|левиафан|брат"
+    r")(?=$|[\s._\-\]\)])"
+)
+_NON_VIDEO_OR_ANIME_STEM_SHIELD_RE = re.compile(
+    r"(?i)(?:\.(?:epub|pdf|mobi|azw3|cbz|cbr|mp3|flac|m4b|iso|exe|dmg|apk|zip|rar|7z)$|"
+    r"\b(?:ost|soundtrack|audiobook|ebook|repack|fitgirl|dodi)\b)"
+)
+
+
+def detect_localized_foreign_title_stem(raw_name: str, p_anime: float = 0.0) -> tuple[bool, str]:
+    """Detect whether a video release title uses a localized non-English alias stem (Owner Policy Rule 3)."""
+    s = (raw_name or "").strip()
+    if not s or p_anime >= 0.45 or _NON_VIDEO_OR_ANIME_STEM_SHIELD_RE.search(s):
+        return False, "none"
+    s_folded = "".join(ch for ch in unicodedata.normalize("NFD", s) if unicodedata.category(ch) != "Mn" or "\u0400" <= ch <= "\u04ff")
+    for cand in (s, s_folded):
+        if _FOREIGN_ORIGINAL_WORK_STEM_RE.search(cand):
+            return False, "foreign_original_work"
+    for cand in (s, s_folded):
+        if _LOCALIZED_FOREIGN_ALIAS_STEM_RE.search(cand):
+            return True, "localized_romance_or_germanic_stem"
+    return False, "none"
+
+
+def is_localized_foreign_alias(
+    raw_name: str,
+    p_en: float = 0.5,
+    p_title_foreign: float = 0.0,
+    p_anime: float = 0.0,
+) -> tuple[bool, str]:
+    """Determine if a release uses a confirmed localized non-English title alias (Owner Policy Rule 3)."""
+    nm = (raw_name or "").strip()
+    if not nm or p_anime >= 0.45 or _NON_VIDEO_OR_ANIME_STEM_SHIELD_RE.search(nm):
+        return False, "none"
+    is_stem_alias, stem_reason = detect_localized_foreign_title_stem(nm, p_anime=p_anime)
+    if is_stem_alias:
+        return True, stem_reason
+    return False, "none"
+
+
+def evaluate_owner_policy_rule3(
+    raw_name: str,
+    p_en: float,
+    p_title_foreign: float = 0.0,
+    p_anime: float = 0.0,
+    p_eng_subs_yes: float = 0.0,
+    plugin_rules: Mapping[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Evaluate Owner Policy Rule 3: Foreign Release / Localized Alias with Unverified English."""
+    nm = (raw_name or "").strip()
+    rules = plugin_rules or {}
+    nm_nosub = SUB_SEGMENT_STRIP_RE.sub(" ", nm)
+    custom_en_re = rules.get("explicit_en_regex")
+    has_explicit_eng_audio = bool(
+        re.search(r"(?i)(?:^|[\[\(\.\s_-])(?:eng|english)(?=$|[\]\)\.\s_-])", nm_nosub)
+        or re.search(r"[\[\(\.\s_-]EN[\]\)\.\s_-]", nm_nosub)
+        or re.search(r"英语", nm_nosub)
+        or re.search(r"(?i)(?:^|[\[\(\.\s_-])dual[\.\s_-]*audio(?=$|[\]\)\.\s_-])", nm_nosub)
+        or safe_regex_search(custom_en_re, nm_nosub, field_name="audio_guard.explicit_en_regex")
+    )
+    has_explicit_eng_subs = bool(_EXPLICIT_ENG_SUB_TAG_RE.search(nm) or p_eng_subs_yes >= 0.60)
+    has_verified_english_support = bool(has_explicit_eng_audio or has_explicit_eng_subs)
+    alias_flag, alias_source = is_localized_foreign_alias(
+        nm, p_en=p_en, p_title_foreign=p_title_foreign, p_anime=p_anime
+    )
+    rule3_disallow = bool(alias_flag and not has_verified_english_support)
+    return {
+        "is_localized_foreign_alias": alias_flag,
+        "foreign_alias_source": alias_source,
+        "has_explicit_eng_audio": has_explicit_eng_audio,
+        "has_explicit_eng_subs": has_explicit_eng_subs,
+        "has_verified_english_support": has_verified_english_support,
+        "rule3_disallow": rule3_disallow,
+        "rule3_reason": f"rule3_localized_alias_unverified_en:{alias_source}" if rule3_disallow else "allowed",
+    }
 
 
 def classify_audio_and_anime_dub_v3(
@@ -275,6 +524,8 @@ def classify_audio_and_anime_dub_v3(
     p_anime: float,
     p_title_foreign: float = 0.0,
     plugin_rules: Mapping[str, Any] | None = None,
+    *,
+    p_eng_subs_yes: float = 0.0,
 ) -> dict[str, Any]:
     """Classify general English-compatible audio and high-precision anime English-dub/dual-audio status."""
     nm = raw_name or ""
@@ -292,6 +543,16 @@ def classify_audio_and_anime_dub_v3(
         p_title_foreign=p_title_foreign,
         plugin_rules=rules,
     )
+    rule3_eval = evaluate_owner_policy_rule3(
+        nm,
+        p_en=p_en_adj,
+        p_title_foreign=p_title_foreign,
+        p_anime=p_anime,
+        p_eng_subs_yes=p_eng_subs_yes,
+        plugin_rules=rules,
+    )
+    if rule3_eval["rule3_disallow"]:
+        p_en_adj = min(p_en_adj, 0.15)
     is_english_compatible = p_en_adj >= en_thresh
     is_anime = p_anime >= anime_thresh
 
@@ -341,6 +602,9 @@ def classify_audio_and_anime_dub_v3(
         "is_anime_dub_or_dual": is_anime_dub,
         "audio_class": "english_compatible" if is_english_compatible else "non_english",
         "anime_audio_subtype": ("dub_or_dual" if is_anime_dub else "sub_or_raw") if is_anime else "not_anime",
+        "is_localized_foreign_alias": rule3_eval["is_localized_foreign_alias"],
+        "foreign_alias_source": rule3_eval["foreign_alias_source"],
+        "owner_policy_rule3": rule3_eval,
     }
 
 

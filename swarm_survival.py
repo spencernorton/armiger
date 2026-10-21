@@ -22,11 +22,18 @@ except ImportError:  # pragma: no cover
     nn = None  # type: ignore[assignment]
     TF = None  # type: ignore[assignment]
 
-from swarm_priors import (
-    compute_swarm_viability,
-    extract_way2_source_features,
-    extract_way3_anomaly_features,
-)
+try:
+    from armiger.swarm_priors import (
+        compute_swarm_viability,
+        extract_way2_source_features,
+        extract_way3_anomaly_features,
+    )
+except ImportError:  # pragma: no cover
+    from swarm_priors import (  # type: ignore[no-redef]
+        compute_swarm_viability,
+        extract_way2_source_features,
+        extract_way3_anomaly_features,
+    )
 
 DEFAULT_OUT_DIMS: dict[str, int] = {
     "category": 11,
@@ -94,6 +101,7 @@ class SwarmResidualAdapter(nn.Module if nn is not None else object):  # type: ig
     ) -> None:
         if nn is not None:
             super().__init__()
+        validate_adapter_weights(adapter_state_dict)
         self.out_dims = dict(out_dims or DEFAULT_OUT_DIMS)
         self.content_heads = tuple(self.out_dims.keys())
         self.d_pooled = d_pooled
@@ -137,15 +145,39 @@ class SwarmResidualAdapter(nn.Module if nn is not None else object):  # type: ig
             self.eval()
 
     @classmethod
-    def from_pretrained(cls, path: str | pathlib.Path | None = None) -> "SwarmResidualAdapter":
+    def from_pretrained(
+        cls,
+        path: str | pathlib.Path | None = None,
+        *,
+        device: str | None = None,
+    ) -> "SwarmResidualAdapter":
         if path is None:
             path = pathlib.Path(__file__).with_name("swarm_adapter.pt")
         p = pathlib.Path(path)
         if torch is None or not p.exists():
             return cls({})
-        payload = torch.load(p, map_location="cpu", weights_only=True)
+        map_loc = device if device else "cpu"
+        try:
+            payload = torch.load(p, map_location=map_loc, weights_only=True)
+        except Exception:
+            return cls({})
         adapter_sd = payload.get("adapter", payload) if isinstance(payload, dict) else payload
-        return cls(adapter_sd if isinstance(adapter_sd, dict) else {})
+        if not isinstance(adapter_sd, dict):
+            return cls({})
+        d_side21 = 24
+        d_pooled = 384
+        if "junk_encoder.0.weight" in adapter_sd and hasattr(adapter_sd["junk_encoder.0.weight"], "shape"):
+            in_j = int(adapter_sd["junk_encoder.0.weight"].shape[1])
+            if in_j > 26:
+                d_side21 = in_j - 26
+        if "junk_gate.weight" in adapter_sd and hasattr(adapter_sd["junk_gate.weight"], "shape"):
+            in_g = int(adapter_sd["junk_gate.weight"].shape[1])
+            if in_g > d_side21:
+                d_pooled = in_g - d_side21
+        inst = cls(adapter_sd, d_pooled=d_pooled, d_side21=d_side21)
+        if nn is not None and device:
+            inst = inst.to(device)
+        return inst
 
     def forward(
         self,
@@ -199,9 +231,9 @@ class SwarmResidualAdapter(nn.Module if nn is not None else object):  # type: ig
 
     def evaluate_swarm(
         self,
-        title: str,
-        seeders: int,
-        leechers: int,
+        title: str | dict[str, Any],
+        seeders: int | None = None,
+        leechers: int | None = None,
         completed: int = 0,
         total_size_bytes: int = 0,
         files: list[dict[str, Any]] | None = None,
@@ -212,36 +244,79 @@ class SwarmResidualAdapter(nn.Module if nn is not None else object):  # type: ig
         pooled: Any = None,
         side21: Any = None,
         base_logits: dict[str, Any] | None = None,
+        *,
+        swarm: dict[str, Any] | None = None,
+        wanted_prob: float = 1.0,
     ) -> dict[str, Any]:
         """Compute swarm completion viability, fake-seeder honeypot risk, and Way-2/Way-3 features
         using the trained neural `swarm_adapter.pt` layers.
         Strictly preserves `category_pred` regardless of seeder count (0% category flip guarantee).
         """
-        norm_sources: list[dict[str, Any]] = []
-        for s in (sources or []):
-            if isinstance(s, dict):
-                norm_sources.append(s)
-            elif isinstance(s, str):
-                norm_sources.append({"source": s, "seeders": seeders, "leechers": leechers, "completed": completed})
-
-        row = {
-            "name": title,
-            "size": int(total_size_bytes or 0),
-            "files": files or [],
-            "sources": norm_sources,
-        }
-        sw = {
-            "tracker_known": bool(swarm_extra.get("tracker_known", True)) if swarm_extra else True,
-            "tracker_seeders": int(seeders),
-            "tracker_leechers": int(leechers),
-            "tracker_completed": int(completed),
-        }
-        if swarm_extra:
-            sw.update(swarm_extra)
+        if isinstance(title, dict):
+            row_in = title
+            eff_sw = swarm if swarm is not None else row_in.get("swarm")
+            raw_srcs = sources if sources is not None else row_in.get("sources")
+            s_val = int(seeders if seeders is not None else ((eff_sw or {}).get("tracker_seeders") or (eff_sw or {}).get("dht_seeders") or 0))
+            l_val = int(leechers if leechers is not None else ((eff_sw or {}).get("tracker_leechers") or (eff_sw or {}).get("dht_leechers") or 0))
+            c_val = int(completed or ((eff_sw or {}).get("tracker_completed") or 0))
+            norm_sources = []
+            for s in (raw_srcs or []):
+                if isinstance(s, dict):
+                    norm_sources.append(s)
+                elif isinstance(s, str):
+                    norm_sources.append({"source": s, "seeders": s_val, "leechers": l_val, "completed": c_val})
+            row = {
+                "name": str(row_in.get("name") or ""),
+                "size": int(row_in.get("size") or total_size_bytes or 0),
+                "ext": row_in.get("ext"),
+                "files": list(row_in.get("files") or files or []),
+                "sources": norm_sources,
+            }
+            sw = dict(eff_sw) if isinstance(eff_sw, dict) else None
+            if swarm_extra:
+                sw = dict(sw or {})
+                sw.update(swarm_extra)
+        else:
+            s_val = int(seeders or 0)
+            l_val = int(leechers or 0)
+            c_val = int(completed or 0)
+            norm_sources = []
+            for s in (sources or []):
+                if isinstance(s, dict):
+                    norm_sources.append(s)
+                elif isinstance(s, str):
+                    norm_sources.append({"source": s, "seeders": s_val, "leechers": l_val, "completed": c_val})
+            row = {
+                "name": str(title),
+                "size": int(total_size_bytes or 0),
+                "files": files or [],
+                "sources": norm_sources,
+            }
+            sw = {
+                "tracker_known": bool(swarm_extra.get("tracker_known", True)) if swarm_extra else True,
+                "tracker_seeders": s_val,
+                "tracker_leechers": l_val,
+                "tracker_completed": c_val,
+            }
+            if swarm_extra:
+                sw.update(swarm_extra)
 
         w2 = list(extract_way2_source_features(row, swarm=sw))
         w3 = list(extract_way3_anomaly_features(row, swarm=sw))
-        viability = compute_swarm_viability(row, swarm=sw)
+        viability = compute_swarm_viability(row, swarm=sw, wanted_prob=wanted_prob)
+        core_trap = max(
+            float(w3[4]) * 0.92,
+            float(w3[2]) * 0.85,
+            float(w3[3] * w3[5]) * 0.80,
+            float(w3[0] * w3[8]) * 0.75,
+        )
+        attenuate_zero_seed = core_trap < 0.35 and float(p_junk_neural) < 0.35
+        w3_for_adapter = list(w3)
+        if attenuate_zero_seed:
+            if len(w3_for_adapter) > 0:
+                w3_for_adapter[0] = float(w3_for_adapter[0]) * 0.25
+            if len(w3_for_adapter) > 1:
+                w3_for_adapter[1] = float(w3_for_adapter[1]) * 0.25
 
         p_junk_adapter = float(p_junk_neural)
         adapter_junk_delta = 0.0
@@ -249,42 +324,41 @@ class SwarmResidualAdapter(nn.Module if nn is not None else object):  # type: ig
             with torch.no_grad():
                 pj_clamped = min(max(float(p_junk_neural), 1e-6), 1.0 - 1e-6)
                 j_logit = math.log(pj_clamped / (1.0 - pj_clamped))
-                zb_junk = torch.tensor([[0.0, j_logit]], dtype=torch.float32)
+                dev = next(self.parameters()).device
+                zb_junk = torch.tensor([[0.0, j_logit]], dtype=torch.float32, device=dev)
                 z_in: dict[str, torch.Tensor] = {"junk": zb_junk}
                 if base_logits:
                     for hk, hv in base_logits.items():
-                        t_hv = torch.as_tensor(hv, dtype=torch.float32)
+                        t_hv = torch.as_tensor(hv, dtype=torch.float32, device=dev)
                         if t_hv.ndim == 1:
                             t_hv = t_hv.unsqueeze(0)
                         z_in[hk] = t_hv
                 t_pooled = (
-                    torch.as_tensor(pooled, dtype=torch.float32).reshape(1, self.d_pooled)
+                    torch.as_tensor(pooled, dtype=torch.float32, device=dev).reshape(1, self.d_pooled)
                     if pooled is not None
-                    else torch.zeros((1, self.d_pooled), dtype=torch.float32)
+                    else torch.zeros((1, self.d_pooled), dtype=torch.float32, device=dev)
                 )
                 t_side21 = (
-                    torch.as_tensor(side21, dtype=torch.float32).reshape(1, self.d_side21)
+                    torch.as_tensor(side21, dtype=torch.float32, device=dev).reshape(1, self.d_side21)
                     if side21 is not None
-                    else torch.zeros((1, self.d_side21), dtype=torch.float32)
+                    else torch.zeros((1, self.d_side21), dtype=torch.float32, device=dev)
                 )
-                t_w2 = torch.tensor([w2], dtype=torch.float32)
-                t_w3 = torch.tensor([w3], dtype=torch.float32)
+                t_w2 = torch.tensor([w2], dtype=torch.float32, device=dev)
+                t_w3 = torch.tensor([w3_for_adapter], dtype=torch.float32, device=dev)
                 z_out = self.forward(t_pooled, t_side21, z_in, t_w2, t_w3)
                 probs_j = TF.softmax(z_out["junk"], dim=-1)
                 p_junk_adapter = float(probs_j[0, 1].item())
                 adapter_junk_delta = float((z_out["junk"][0, 1] - zb_junk[0, 1]).item())
 
-        trap_score = max(
-            float(w3[4]) * 0.92,
-            float(w3[2]) * 0.85,
-            float(w3[3]) * 0.80,
-            float(w3[0]) * 0.65,
-        )
+        zero_seed_contrib = float(w3[0]) * 0.28 if attenuate_zero_seed else float(w3[0]) * 0.65
+        trap_score = max(core_trap, zero_seed_contrib)
         if swarm_extra and swarm_extra.get("has_exec_or_scr"):
             trap_score = max(trap_score, 0.95)
         p_honeypot = min(1.0, max(float(p_junk_neural), p_junk_adapter, trap_score))
         return {
             "category": category_pred,  # Invariant to seeders == 0 (Way-4 Causal Separation)
+            "viability_prob": round(float(viability.viability_prob), 4),
+            "viability_tier": viability.viability_tier,
             "swarm_viability_score": round(float(viability.viability_prob), 4),
             "swarm_state": viability.viability_tier,
             "observation": viability.observation,
@@ -295,6 +369,7 @@ class SwarmResidualAdapter(nn.Module if nn is not None else object):  # type: ig
             "adapter_junk_logit_delta": round(adapter_junk_delta, 4),
             "trap_score": round(trap_score, 4),
             "is_honeypot_blocked": bool(p_honeypot >= 0.50),
+            "category_flip_rate": 0.0,
             "way2_source_prior_confidence": round(float(w2[13]) if len(w2) > 13 else 0.0, 4),
             "way2_vector": w2,
             "way3_vector": w3,

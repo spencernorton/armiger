@@ -32,6 +32,11 @@ try:
 except ImportError:
     from calibration_and_dht import MAX_CUSTOM_REGEX_INPUT_CHARS, safe_regex_search  # type: ignore[no-redef]
 
+try:
+    from armiger.audio_language_guard import detect_localized_foreign_title_stem, split_and_score_title_slug
+except ImportError:
+    from audio_language_guard import detect_localized_foreign_title_stem, split_and_score_title_slug  # type: ignore[no-redef]
+
 CATS = [
     "movie", "tv_show", "xxx", "music", "comic",
     "game", "audiobook", "software", "ebook", "course", "unknown",
@@ -75,6 +80,10 @@ GAME_ARCHIVE_RE = re.compile(
     r"\bopenxcom|\bcorsixth|\bsimutrans|\blincity|\bunknown-horizons|\bwidelands|\bhedgewars|\bpingus\b|"
     r"\bfrogatto|\bflare-game|\bvalyriatear|\bnaev\b|\boolite\b|\bpioneerspacesim|\bvegastrike|\burquan|\buqm\b|"
     r"segasoft|gremlin[\s\._-]+interactive|crosscountrycanada|petepilotti|\.levelset\.)"
+)
+
+_SOUNDTRACK_AUDIO_EXCLUSION_RE = re.compile(
+    r"(?i)(?:\b(?:ost|soundtrack|original[\s._-]*score|score|flac|mp3|cbr|vbr|320kbps|lossless|discography)\b)"
 )
 
 ADULT_SITERIP_RE = re.compile(
@@ -225,6 +234,13 @@ def parse_clean_candidates(raw_name: str, extra_spans: list[str] | None = None) 
                 add(nsp, year)
                 add(nsp, None)
 
+    slug_res = split_and_score_title_slug(s_no_lead)
+    if slug_res["found_concat_slug"] and len(slug_res["segmented_words"]) >= 2:
+        segmented_title = norm_title(" ".join(slug_res["segmented_words"]))
+        if len(segmented_title) >= 6:
+            add(segmented_title, year)
+            add(segmented_title, None)
+
     raw_cands.sort(key=lambda item: (item[1] is not None, len(item[0])), reverse=True)
     ordered: list[tuple[str, int | None]] = []
     seen: set[tuple[str, int | None]] = set()
@@ -293,6 +309,55 @@ def lookup_zero_cue_catalog(
     return None, None
 
 
+_AUDIOBOOK_FILE_TREE_RE = re.compile(
+    r"(?i)(?:_librivox\b|(?:^|[/\\\s._\-\[\(])chapter[\s._-]*\d{1,3}(?:[\s._-]+[a-z0-9_]+)?\.(?:mp3|m4b|ogg|flac|aac)\b|(?:^|[/\\\s._\-\[\(])part[\s._-]*\d{1,2}(?:[\s._-]+[a-z0-9_]+)?\.(?:m4b|mp3)\b|(?:^|[/\\\s._\-\[\(])\d{2,3}[\s._-]+chapter[\s._-]*\d+)"
+)
+_COURSE_FILE_TREE_RE = re.compile(
+    r"(?i)(?:(?:^|[/\\\s._\-\[\(])(?:module|lesson|lecture|section|week|unit)[\s._-]*\d{1,2}(?=$|[/\\\s._\-\]\)]).*\.(?:mp4|mkv|pdf|zip|srt|html)\b|(?:^|[/\\\s._\-\[\(])\d{1,2}[\s._-]+\d{1,2}[\s._-]+[a-z].*\.(?:mp4|srt)\b)"
+)
+_COMIC_ALLOWED_COMPANION_EXTS = frozenset({
+    "cbr", "cbz", "cb7", "cbt", "cba", "pdf", "epub", "mobi", "azw3",
+    "jpg", "jpeg", "png", "webp", "gif", "txt", "nfo", "sfv", "md5", "xml", "json",
+})
+_AUDIOBOOK_ALLOWED_COMPANION_EXTS = _COMIC_ALLOWED_COMPANION_EXTS | frozenset({
+    "m4b", "mp3", "ogg", "flac", "m4a", "opus", "aac", "wav", "cue", "m3u", "pls", "log",
+})
+_COURSE_ALLOWED_COMPANION_EXTS = _AUDIOBOOK_ALLOWED_COMPANION_EXTS | frozenset({
+    "mp4", "mkv", "avi", "mov", "webm", "ts", "srt", "vtt", "ass", "ssa", "sub", "html", "htm", "md", "csv", "py", "ipynb", "js", "css", "sql", "sh", "zip", "rar", "7z",
+})
+
+
+def _is_primary_book_payload(
+    raw_name: str, file_exts: set[str], target_exts: set[str], has_tv_cue: bool, has_movie_cue: bool,
+    allowed_exts: frozenset[str] = _COMIC_ALLOWED_COMPANION_EXTS,
+) -> bool:
+    return bool(
+        (file_exts & target_exts) and file_exts <= allowed_exts and not GAME_ARCHIVE_RE.search(raw_name)
+        and not _V3_GAME_STRONG_RE.search(raw_name) and not _V3_SOFTWARE_RE.search(raw_name)
+        and not has_tv_cue and not has_movie_cue
+    )
+
+
+def _extract_file_surface(files: list[Any] | tuple[Any, ...] | None) -> tuple[str, set[str], int]:
+    """Return `(joined_paths_sample, lowercase_extensions_set, file_count)` from a torrent file list."""
+    if not files:
+        return "", set(), 0
+    paths: list[str] = []
+    exts: set[str] = set()
+    for f in files:
+        p = str(f.get("path") or f.get("name") or "") if isinstance(f, Mapping) else str(f or "")
+        p = p.strip()
+        if not p:
+            continue
+        if len(paths) < 32:
+            paths.append(p)
+        if "." in p:
+            ext = p.rsplit(".", 1)[-1].lower()
+            if 1 <= len(ext) <= 6:
+                exts.add(ext)
+    return " | ".join(paths), exts, len(files)
+
+
 def apply_structural_and_zero_cue_disambiguation(
     raw_name: str,
     probs_category: list[float] | Any,
@@ -301,14 +366,14 @@ def apply_structural_and_zero_cue_disambiguation(
     catalog: Mapping[str, Any] | None = None,
     extra_spans: list[str] | None = None,
     plugin_rules: Mapping[str, Any] | None = None,
+    files: list[Any] | tuple[Any, ...] | None = None,
 ) -> tuple[int, str]:
     """Apply deterministic structural rules (Stage 1) and Zero-Cue catalog lookup (Stage 2)
     to an 11-class category probability vector from Armiger or Armiger Ultra.
-
-    Returns `(predicted_category_index, resolution_source)`.
     """
     rules = plugin_rules or {}
     p = [float(x) for x in probs_category]
+    file_surface, file_exts, file_cnt = _extract_file_surface(files)
     zc_ceiling = float(rules.get("confidence_ceiling", rules.get("zero_cue_confidence_ceiling", 0.88)))
     anime_min_p = float(rules.get("anime_threshold", rules.get("anime_catalog_min_prob", 0.20)))
     adult_siterip_floor = float(rules.get("adult_siterip_floor", 0.92))
@@ -334,20 +399,40 @@ def apply_structural_and_zero_cue_disambiguation(
         or safe_regex_search(rules.get("explicit_movie_pack_regex"), raw_name, field_name="zero_cue.explicit_movie_pack_regex")
     )
 
-    if ADULT_SITERIP_RE.search(raw_name) or safe_regex_search(
-        rules.get("adult_siterip_regex"), raw_name, field_name="zero_cue.adult_siterip_regex"
-    ):
+    if ADULT_SITERIP_RE.search(raw_name) or safe_regex_search(rules.get("adult_siterip_regex"), raw_name, field_name="zero_cue.adult_siterip_regex"):
         p[IDX_XXX] = max(p[IDX_XXX], adult_siterip_floor)
         return IDX_XXX, "structural_adult_siterip"
 
+    top_i = int(max(range(len(p)), key=p.__getitem__))
+    has_primary_comic = _is_primary_book_payload(raw_name, file_exts, {"cbr", "cbz", "cb7"}, has_tv_cue, has_movie_cue)
     if (
-        EXPLICIT_COMIC_RE.search(raw_name)
+        EXPLICIT_COMIC_RE.search(raw_name) or has_primary_comic
         or safe_regex_search(rules.get("explicit_comic_regex"), raw_name, field_name="zero_cue.explicit_comic_regex")
     ) and not re.search(r"(?i)how\s+to\s+draw", raw_name):
-        top_i = int(max(range(len(p)), key=p.__getitem__))
         if top_i in (IDX_EBOOK, IDX_COMIC) or p[top_i] < comic_archive_floor:
             p[IDX_COMIC] = max(p[IDX_COMIC], comic_archive_floor)
             return IDX_COMIC, "structural_comic_archive"
+    has_primary_ab = (
+        _is_primary_book_payload(raw_name, file_exts, {"m4b", "mp3", "ogg", "flac"}, has_tv_cue, has_movie_cue, _AUDIOBOOK_ALLOWED_COMPANION_EXTS)
+        and ("m4b" in file_exts or (file_surface and _AUDIOBOOK_FILE_TREE_RE.search(file_surface)))
+        and (top_i in (IDX_AUDIOBOOK, IDX_EBOOK, IDX_MUSIC) or p[top_i] < 0.90)
+    )
+    if _AUDIOBOOK_FILE_TREE_RE.search(raw_name) or has_primary_ab:
+        p[IDX_AUDIOBOOK] = max(p[IDX_AUDIOBOOK], 0.90)
+        return IDX_AUDIOBOOK, "structural_audiobook_files"
+
+    has_primary_course = (
+        bool(file_surface and _COURSE_FILE_TREE_RE.search(file_surface) and file_cnt >= 3)
+        and _is_primary_book_payload(raw_name, file_exts, {"mp4", "mkv", "pdf", "zip", "srt", "html"}, has_tv_cue, has_movie_cue, _COURSE_ALLOWED_COMPANION_EXTS)
+        and (top_i in (IDX_COURSE, IDX_EBOOK, IDX_TV, IDX_MOVIE) or p[top_i] < course_book_floor)
+    )
+    if (
+        COURSE_BOOK_RE.search(raw_name) or _V3_COURSE_RE.search(raw_name) or has_primary_course
+        or _match_safe_tokens(raw_name, list(rules.get("extra_course_tokens") or []))
+        or safe_regex_search(rules.get("course_book_regex"), raw_name, field_name="zero_cue.course_book_regex")
+    ):
+        p[IDX_COURSE] = max(p[IDX_COURSE], course_book_floor)
+        return IDX_COURSE, "structural_course_book"
 
     if has_movie_cue and not has_tv_cue:
         if p[IDX_MOVIE] + p[IDX_TV] > movie_pack_sum_floor:
@@ -357,32 +442,19 @@ def apply_structural_and_zero_cue_disambiguation(
         if p[IDX_XXX] < tv_cue_xxx_ceiling and p_adult < tv_cue_adult_ceiling:
             p[IDX_TV] = max(p[IDX_TV], p[IDX_MOVIE] + tv_cue_margin, tv_cue_floor)
             return int(max(range(len(p)), key=p.__getitem__)), "structural_tv_cue"
-
     if (
-        GAME_ARCHIVE_RE.search(raw_name)
-        or _match_safe_tokens(raw_name, list(rules.get("extra_game_tokens") or []))
-        or safe_regex_search(rules.get("game_archive_regex"), raw_name, field_name="zero_cue.game_archive_regex")
-    ) and p_adult < game_archive_adult_ceiling:
+        (GAME_ARCHIVE_RE.search(raw_name) or _match_safe_tokens(raw_name, list(rules.get("extra_game_tokens") or []))
+         or safe_regex_search(rules.get("game_archive_regex"), raw_name, field_name="zero_cue.game_archive_regex"))
+        and not _SOUNDTRACK_AUDIO_EXCLUSION_RE.search(raw_name) and p_adult < game_archive_adult_ceiling
+    ):
         p[IDX_GAME] = max(p[IDX_GAME], game_archive_floor)
         return IDX_GAME, "structural_game_archive"
-
-    if (
-        COURSE_BOOK_RE.search(raw_name)
-        or _match_safe_tokens(raw_name, list(rules.get("extra_course_tokens") or []))
-        or safe_regex_search(rules.get("course_book_regex"), raw_name, field_name="zero_cue.course_book_regex")
-    ):
-        p[IDX_COURSE] = max(p[IDX_COURSE], course_book_floor)
-        return IDX_COURSE, "structural_course_book"
-
     pred_idx = int(max(range(len(p)), key=p.__getitem__))
     if catalog is not None and pred_idx in (IDX_MOVIE, IDX_TV) and not has_tv_cue and not has_movie_cue:
         if max(p[IDX_MOVIE], p[IDX_TV]) < zc_ceiling:
-            cat_hit, src_kind = lookup_zero_cue_catalog(
-                raw_name, catalog, is_anime=bool(p_anime >= anime_min_p), extra_spans=extra_spans
-            )
+            cat_hit, src_kind = lookup_zero_cue_catalog(raw_name, catalog, is_anime=bool(p_anime >= anime_min_p), extra_spans=extra_spans)
             if cat_hit in ("movie", "tv_show") and src_kind is not None:
                 return (IDX_MOVIE if cat_hit == "movie" else IDX_TV), f"zero_cue_{src_kind}"
-
     return pred_idx, "neural_backbone"
 
 
@@ -490,41 +562,24 @@ class ZeroCueCatalogPlugin:
         p_anime: float = 0.0,
         extra_spans: list[str] | None = None,
         plugin_rules: Mapping[str, Any] | None = None,
+        files: list[Any] | tuple[Any, ...] | None = None,
     ) -> dict[str, Any]:
         eff_rules = plugin_rules if plugin_rules is not None else self.plugin_rules
         idx, source = apply_structural_and_zero_cue_disambiguation(
-            raw_name=raw_name,
-            probs_category=probs_category,
-            p_adult=p_adult,
-            p_anime=p_anime,
-            catalog=self.catalog,
-            extra_spans=extra_spans,
-            plugin_rules=eff_rules,
+            raw_name=raw_name, probs_category=probs_category, p_adult=p_adult, p_anime=p_anime,
+            catalog=self.catalog, extra_spans=extra_spans, plugin_rules=eff_rules, files=files,
         )
         if source == "neural_backbone":
             idx_v3, src_v3, probs_v3 = resolve_category_v3(
-                raw_name=raw_name,
-                probs_category=probs_category,
-                p_adult=p_adult,
-                p_anime=p_anime,
-                catalog=self.catalog,
-                extra_spans=extra_spans,
-                plugin_rules=eff_rules,
+                raw_name=raw_name, probs_category=probs_category, p_adult=p_adult, p_anime=p_anime,
+                catalog=self.catalog, extra_spans=extra_spans, plugin_rules=eff_rules, files=files,
             )
             if src_v3 != "v3_neural_calibrated" or eff_rules:
                 return {
-                    "category_index": idx_v3,
-                    "category": CATS[idx_v3],
-                    "resolution_source": src_v3,
-                    "calibrated_probs": probs_v3,
-                    "catalog_mode": self.catalog_mode,
+                    "category_index": idx_v3, "category": CATS[idx_v3], "resolution_source": src_v3,
+                    "calibrated_probs": probs_v3, "catalog_mode": self.catalog_mode,
                 }
-        return {
-            "category_index": idx,
-            "category": CATS[idx],
-            "resolution_source": source,
-            "catalog_mode": self.catalog_mode,
-        }
+        return {"category_index": idx, "category": CATS[idx], "resolution_source": source, "catalog_mode": self.catalog_mode}
 
 
 # --- Armiger v3.0 Structural Disambiguator & Prior-Corrected Logit Calibrator ---
@@ -532,17 +587,13 @@ class ZeroCueCatalogPlugin:
 _V3_COMIC_RE = re.compile(
     r"(?i)(?:\.(?:cbr|cbz|cb7)$|\b(?:cbr|cbz|cb7)\b|\([0-9]{4}\)\s*\(digital\)|\bc2c\b.*\.(?:cbr|cbz|rar|zip)$)"
 )
-_V3_AUDIOBOOK_RE = re.compile(
-    r"(?i)(?:\.m4b$|\baudiobook\b|\bunabridged\b|\babridged\b)"
-)
-_V3_EBOOK_RE = re.compile(
-    r"(?i)(?:\.(?:epub|mobi|azw3)$|\b(?:epub|mobi|azw3)\b)"
-)
+_V3_AUDIOBOOK_RE = re.compile(r"(?i)(?:\.m4b$|\baudiobook\b|\bunabridged\b|\babridged\b|_librivox\b)")
+_V3_EBOOK_RE = re.compile(r"(?i)(?:\.(?:epub|mobi|azw3)$|\b(?:epub|mobi|azw3)\b)")
 _V3_GAME_STRONG_RE = re.compile(
     r"(?i)(?:\.(?:nsp|xci|cia|3ds|vpk|wbfs)$|\b(?:fitgirl|dodi[\s._-]*repack|elamigos|kaos[\s._-]*repack|"
-    r"codex|skidrow|plaza|flt|rune|tenoke|razor1911|reloaded|cpy|empress|gog|rg[\s._-]*mechanics)\b|"
-    r"(?:^|[\s._\-\[\(])plus[\s._-]+\d+[\s._-]+trainer(?=$|[\s._\-\]\)])|\bbuild[\s._-]+\d{5,9}\b|\bps[2345]\b.*\b(?:usa|eur|jpn|pkg|iso)\b|"
-    r"\bxbox\s*360\b|\bnintendo\s+switch\b|\brpg\s+maker\b)"
+    r"codex|skidrow|plaza|flt|rune|tenoke|razor1911|reloaded|cpy|empress|rg[\s._-]*mechanics)\b|"
+    r"\bgog[\s._-]+(?:repack|edition|rip|v\d)\b|(?:^|[\s._\-\[\(])plus[\s._-]+\d+[\s._-]+trainer(?=$|[\s._\-\]\)])|"
+    r"\bbuild[\s._-]+\d{5,9}\b|\bps[2345]\b.*\b(?:usa|eur|jpn|pkg|iso)\b|\bxbox\s*360\b|\bnintendo\s+switch\b|\brpg\s+maker\b)"
 )
 _V3_COURSE_RE = re.compile(
     r"(?i)(?:(?:^|[\s._\-\[\(])(?:udemy|coursera|pluralsight|lynda|linkedin[\s._-]*learning|skillshare|masterclass|"
@@ -553,8 +604,8 @@ _V3_COURSE_RE = re.compile(
     r"(?:^|[\s._\-\[\(])(?:lecture[\s._-]+series|video[\s._-]+training|video[\s._-]+course|full[\s._-]+tutorial|study[\s._-]+guide|open\s*course\s*ware)(?=$|[\s._\-\]\)]))"
 )
 _V3_SOFTWARE_RE = re.compile(
-    r"(?i)(?:\b(?:macos|macosx|mac\s+os\s+x|win32|win64|x64|x86_64|multilingual|pre-activated|"
-    r"crack|keygen|patch|portable|bootable)\b.*\b(?:v?\d+\.\d+|20[12]\d)\b|"
+    r"(?i)(?:\b(?:macos|macosx|mac\s+os\s+x|win32|win64|x86_64|pre-activated|crack|keygen)\b.*\b(?:v?\d+\.\d+|20[12]\d)\b|"
+    r"\b(?:multilingual|portable|bootable)\b.*\b(?:v\d+\.\d+\.\d+|x64|win64|macos|dmg|setup|installer)\b|"
     r"\b(?:adobe|autodesk|jetbrains|microsoft\s+office|windows\s+(?:10|11|server)|"
     r"vmware|parallels|ableton|fl\s+studio|native\s+instruments|kontakt|waves\s+complete)\b)"
 )
@@ -606,11 +657,7 @@ def calibrate_category_logits_v3(
     arr = [float(x) for x in logits_or_probs]
     s = sum(arr)
     is_prob = all(x >= 0.0 for x in arr) and (0.98 <= s <= 1.02)
-    if is_prob:
-        logits = [math.log(max(x, 1e-12)) for x in arr]
-    else:
-        logits = list(arr)
-
+    logits = [math.log(max(x, 1e-12)) for x in arr] if is_prob else list(arr)
     eff_boost = list(prior_boost) if prior_boost is not None and len(prior_boost) >= 11 else list(DEFAULT_V3_CATEGORY_PRIOR_BOOST)
     scaled = [(logits[i] + float(eff_boost[i])) / max(float(temperature), 0.1) for i in range(min(len(logits), 11))]
     m = max(scaled)
@@ -632,13 +679,13 @@ def resolve_category_v3(
     catalog: Mapping[str, Any] | None = None,
     extra_spans: list[str] | None = None,
     plugin_rules: Mapping[str, Any] | None = None,
+    files: list[Any] | tuple[Any, ...] | None = None,
 ) -> tuple[int, str, list[float]]:
     """Armiger v3.0 11-class category resolver combining calibrated neural probabilities,
     structural/format rules, and zero-cue BLAKE2b-64 catalog lookup (`ZCB3` or JSON).
-
-    Returns `(category_index, resolution_source, calibrated_probs)`.
     """
     rules = plugin_rules or {}
+    file_surface, file_exts, file_cnt = _extract_file_surface(files)
     cat_temp = float(rules.get("category_temperature", 0.85))
     cat_prior = rules.get("category_prior_boost")
     zc_ceiling = float(rules.get("zero_cue_confidence_ceiling", rules.get("confidence_ceiling", 0.93)))
@@ -669,10 +716,8 @@ def resolve_category_v3(
         or safe_regex_search(rules.get("explicit_movie_pack_regex"), s, field_name="zero_cue.explicit_movie_pack_regex")
     )
     has_video_ext_or_codec = bool(
-        re.search(
-            r"(?i)(?:\.(?:mkv|mp4|avi|m2ts|ts|wmv|mov)$|\b(?:1080p|720p|2160p|480p|bluray|web-dl|webrip|bdrip|dvdrip|x264|x265|hevc|h264|h265|xvid)\b)",
-            s,
-        )
+        re.search(r"(?i)(?:\.(?:mkv|mp4|avi|m2ts|ts|wmv|mov)$|\b(?:1080p|720p|2160p|480p|bluray|web-dl|webrip|bdrip|dvdrip|x264|x265|hevc|h264|h265|xvid)\b)", s)
+        or (file_exts & {"mkv", "mp4", "avi", "m2ts", "ts", "wmv", "mov"})
     )
 
     if (
@@ -681,46 +726,53 @@ def resolve_category_v3(
         or (_V3_ADULT_STUDIO_RE.search(s) and p_adult >= 0.25)
     ):
         return IDX_XXX, "v3_structural_adult", _boost_and_normalize_v3(p, IDX_XXX, adult_siterip_floor)
-
+    top_i = int(max(range(len(p)), key=p.__getitem__))
+    has_primary_comic = _is_primary_book_payload(s, file_exts, {"cbr", "cbz", "cb7"}, has_tv_cue, has_movie_cue) and (
+        top_i in (IDX_EBOOK, IDX_COMIC) or p[top_i] < comic_archive_floor
+    )
     if (
-        _V3_COMIC_RE.search(s)
-        or EXPLICIT_COMIC_RE.search(s)
+        _V3_COMIC_RE.search(s) or EXPLICIT_COMIC_RE.search(s) or has_primary_comic
         or safe_regex_search(rules.get("explicit_comic_regex"), s, field_name="zero_cue.explicit_comic_regex")
     ) and not re.search(r"(?i)how\s+to\s+draw", s):
         return IDX_COMIC, "v3_structural_comic", _boost_and_normalize_v3(p, IDX_COMIC, comic_archive_floor)
-
-    if _V3_AUDIOBOOK_RE.search(s):
+    has_primary_ab_v3 = (
+        _is_primary_book_payload(s, file_exts, {"m4b", "mp3", "ogg", "flac"}, has_tv_cue, has_movie_cue, _AUDIOBOOK_ALLOWED_COMPANION_EXTS)
+        and ("m4b" in file_exts or (file_surface and _AUDIOBOOK_FILE_TREE_RE.search(file_surface)))
+        and (top_i in (IDX_AUDIOBOOK, IDX_EBOOK, IDX_MUSIC) or p[top_i] < 0.92)
+    )
+    if _V3_AUDIOBOOK_RE.search(s) or has_primary_ab_v3:
         return IDX_AUDIOBOOK, "v3_structural_audiobook", _boost_and_normalize_v3(p, IDX_AUDIOBOOK, 0.92)
-
+    has_primary_course_v3 = (
+        bool(file_surface and _COURSE_FILE_TREE_RE.search(file_surface) and file_cnt >= 3)
+        and _is_primary_book_payload(s, file_exts, {"mp4", "mkv", "pdf", "zip", "srt", "html"}, has_tv_cue, has_movie_cue, _COURSE_ALLOWED_COMPANION_EXTS)
+        and (top_i in (IDX_COURSE, IDX_EBOOK, IDX_TV, IDX_MOVIE) or p[top_i] < course_book_floor)
+    )
     if (
-        _V3_COURSE_RE.search(s)
-        or COURSE_BOOK_RE.search(s)
+        _V3_COURSE_RE.search(s) or COURSE_BOOK_RE.search(s) or has_primary_course_v3
         or _match_safe_tokens(s, list(rules.get("extra_course_tokens") or []))
         or safe_regex_search(rules.get("course_book_regex"), s, field_name="zero_cue.course_book_regex")
     ):
         return IDX_COURSE, "v3_structural_course", _boost_and_normalize_v3(p, IDX_COURSE, course_book_floor)
-
-    if _V3_EBOOK_RE.search(s) and not _V3_COMIC_RE.search(s) and not _V3_AUDIOBOOK_RE.search(s):
+    has_primary_ebook = _is_primary_book_payload(s, file_exts, {"epub", "mobi", "azw3"}, has_tv_cue, has_movie_cue) and (
+        top_i in (IDX_EBOOK, IDX_COMIC) or p[top_i] < 0.91
+    )
+    if (_V3_EBOOK_RE.search(s) or has_primary_ebook) and not _V3_COMIC_RE.search(s) and not _V3_AUDIOBOOK_RE.search(s):
         return IDX_EBOOK, "v3_structural_ebook", _boost_and_normalize_v3(p, IDX_EBOOK, 0.91)
 
     if (
-        GAME_ARCHIVE_RE.search(s)
-        or _V3_GAME_STRONG_RE.search(s)
+        GAME_ARCHIVE_RE.search(s) or _V3_GAME_STRONG_RE.search(s) or (file_exts & {"nsp", "xci", "cia", "3ds", "vpk", "wbfs"})
         or _match_safe_tokens(s, list(rules.get("extra_game_tokens") or []))
         or safe_regex_search(rules.get("game_archive_regex"), s, field_name="zero_cue.game_archive_regex")
     ) and p_adult < game_archive_adult_ceiling and not has_tv_cue:
-        if not re.search(r"(?i)\b(?:ost|soundtrack|score|flac|mp3)\b", s):
+        if not _SOUNDTRACK_AUDIO_EXCLUSION_RE.search(s) and not (file_exts and file_exts <= {"mp3", "flac", "ogg", "m4a", "wav", "cue", "log", "jpg", "png", "txt", "nfo"}):
             return IDX_GAME, "v3_structural_game", _boost_and_normalize_v3(p, IDX_GAME, game_archive_floor)
-
     if _V3_CONCERT_OR_DOC_VIDEO_RE.search(s) and not has_tv_cue:
         return IDX_MOVIE, "v3_structural_video_override", _boost_and_normalize_v3(p, IDX_MOVIE, 0.88)
-
     if _V3_MUSIC_RE.search(s) and not has_video_ext_or_codec and not has_tv_cue:
         return IDX_MUSIC, "v3_structural_music", _boost_and_normalize_v3(p, IDX_MUSIC, 0.90)
-
     if _V3_SOFTWARE_RE.search(s) and not has_video_ext_or_codec and not has_tv_cue and p_adult < 0.50:
-        return IDX_SOFTWARE, "v3_structural_software", _boost_and_normalize_v3(p, IDX_SOFTWARE, 0.89)
-
+        if not (file_exts and file_exts <= {"epub", "pdf", "mobi", "azw3", "mp3", "flac", "m4b", "txt", "nfo"}):
+            return IDX_SOFTWARE, "v3_structural_software", _boost_and_normalize_v3(p, IDX_SOFTWARE, 0.89)
     if has_movie_cue and not has_tv_cue:
         if p[IDX_MOVIE] + p[IDX_TV] > movie_pack_sum_floor:
             floor_m = min(0.99, max(p[IDX_MOVIE], p[IDX_TV] + movie_pack_margin, 0.85))
