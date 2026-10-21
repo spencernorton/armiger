@@ -1,0 +1,6646 @@
+{
+ "catalog_hit_vs_miss_audit": {
+  "beyond_confirmation": {
+   "catalog_hit_n": 114,
+   "catalog_hit_ultra_hyb_pct": 95.61,
+   "catalog_hit_ultra_raw_pct": 87.72,
+   "catalog_miss_n": 911,
+   "catalog_miss_ultra_hyb_pct": 94.95,
+   "catalog_miss_ultra_raw_pct": 94.07,
+   "n_valid": 1025
+  },
+  "fresh_confirmation": {
+   "catalog_hit_n": 193,
+   "catalog_hit_ultra_hyb_pct": 95.34,
+   "catalog_hit_ultra_raw_pct": 93.78,
+   "catalog_miss_n": 1209,
+   "catalog_miss_ultra_hyb_pct": 93.3,
+   "catalog_miss_ultra_raw_pct": 93.13,
+   "n_valid": 1402
+  },
+  "oct15_confirmation": {
+   "catalog_hit_n": 503,
+   "catalog_hit_ultra_hyb_pct": 96.22,
+   "catalog_hit_ultra_raw_pct": 93.04,
+   "catalog_miss_n": 2332,
+   "catalog_miss_ultra_hyb_pct": 94.64,
+   "catalog_miss_ultra_raw_pct": 94.47,
+   "n_valid": 2835
+  },
+  "tc_truespec_2000": {
+   "catalog_hit_n": 1550,
+   "catalog_hit_ultra_hyb_pct": 90.84,
+   "catalog_hit_ultra_raw_pct": 83.81,
+   "catalog_miss_n": 450,
+   "catalog_miss_ultra_hyb_pct": 80.44,
+   "catalog_miss_ultra_raw_pct": 79.33,
+   "n_valid": 2000
+  },
+  "tc_truespec_multilang_3000": {
+   "catalog_hit_n": 1920,
+   "catalog_hit_ultra_hyb_pct": 99.22,
+   "catalog_hit_ultra_raw_pct": 98.23,
+   "catalog_miss_n": 1080,
+   "catalog_miss_ultra_hyb_pct": 95.46,
+   "catalog_miss_ultra_raw_pct": 95.56,
+   "n_valid": 3000
+  }
+ },
+ "catalog_sha256": "a43193a7d9982f1b83e9e6968c47dbbe8d058b113af5020d6d5ea45ed2af7fcd",
+ "created_at": "2026-10-19T15:48:19Z",
+ "historical_splits_designation": {
+  "beyond_confirmation": "development_historical (exposed during teacher LOTO & ladder audits)",
+  "fresh_confirmation": "development_historical (exposed during 5-split & learning-curve evaluation)",
+  "oct15_confirmation": "development_historical (exposed during plugin & key audits)",
+  "sealed_confirmation_v3": "unscored_pre_label_tranche (0 overlap with packed_benchmarks_v6.pkl; no labels in repo; excluded from all charts until confirmation)"
+ },
+ "schema": "armiger.sealed_confirmation_v3_and_catalog_audit.v3.1",
+ "sealed_confirmation_v3": {
+  "distinct_strata": 114,
+  "labels_present_in_repo": false,
+  "ledger_columns": [
+   "item_id",
+   "family_id",
+   "stratum",
+   "selector_sha256",
+   "u_i",
+   "pi_i",
+   "R_i",
+   "rng_seed_reserved_at"
+  ],
+  "ledger_records": [
+   {
+    "R_i": 1,
+    "difficulty_weight": 1.0,
+    "family_id": 775048506,
+    "files": [
+     {
+      "path_blake2b64": "0766442f4cb82770",
+      "size": 3093714664
+     }
+    ],
+    "item_id": "lc-00768",
+    "pi_i": 0.709534,
+    "rng_seed_reserved_at": "seed=20261019@2026-10-19T00:00:00Z",
+    "selector_sha256": "d67369d0a1d34fe5e94fc30c838a730157719df5258ad89a81e21f5ff9f9f200",
+    "size_bytes": 3093714664,
+    "stratum": "dht_recent_plain|2026-09|video_container|2gb_15gb",
+    "u_i": 0.513695,
+    "name_blake2b64": "7d5d77fcf8b3604e",
+    "info_hash_blake2b64": "8ea80bf6cddc92a1"
+   },
+   {
+    "R_i": 1,
+    "difficulty_weight": 0.65,
+    "family_id": 120203961,
+    "files": [
+     {
+      "path_blake2b64": "cedc0f6f4e675eee",
+      "size": 1570605796
+     },
+     {
+      "path_blake2b64": "1d48e1581f9a3c60",
+      "size": 504746
+     },
+     {
+      "path_blake2b64": "7df4e32fd2ebc844",
+      "size": 228247
+     },
+     {
+      "path_blake2b64": "04a4a0b951af4fea",
+      "size": 1357
+     },
+     {
+      "path_blake2b64": "18288b1b0f36b51b",
+      "size": 279
+     },
+     {
+      "path_blake2b64": "6aaf19a91a6e037a",
+      "size": 46
+     }
+    ],
+    "item_id": "lc-00769",
+    "pi_i": 0.461197,
+    "rng_seed_reserved_at": "seed=20261019@2026-10-19T00:00:00Z",
+    "selector_sha256": "d67369d0a1d34fe5e94fc30c838a730157719df5258ad89a81e21f5ff9f9f200",
+    "size_bytes": 1571340471,
+    "stratum": "dht_older_plain|2026-04|video_container|100mb_2gb",
+    "u_i": 0.41222,
+    "name_blake2b64": "02b86c28b91a82a6",
+    "info_hash_blake2b64": "b0bae5a3de6a33ce"
+   },
+   {
+    "R_i": 1,
+    "difficulty_weight": 0.65,
+    "family_id": 1211435507,
+    "files": [
+     {
+      "path_blake2b64": "e29e77b5a9976c34",
+      "size": 871524591
+     },
+     {
+      "path_blake2b64": "cf3f0c2f6c868bf8",
+      "size": 718
+     },
+     {
+      "path_blake2b64": "c4d251d629412e90",
+      "size": 47
+     }
+    ],
+    "item_id": "lc-00770",
+    "pi_i": 0.461197,
+    "rng_seed_reserved_at": "seed=20261019@2026-10-19T00:00:00Z",
+    "selector_sha256": "d67369d0a1d34fe5e94fc30c838a730157719df5258ad89a81e21f5ff9f9f200",
+    "size_bytes": 871525356,
+    "stratum": "dht_recent_plain|2026-09|video_container|100mb_2gb",
+    "u_i": 0.382737,
+    "name_blake2b64": "e690b1308a7d139a",
+    "info_hash_blake2b64": "d3a5f6138548883e"
+   },
+   {
+    "R_i": 1,
+    "difficulty_weight": 1.0,
+    "family_id": 1991422726,
+    "files": [
+     {
+      "path_blake2b64": "97d9fd5f7fd01e19",
+      "size": 2083153920
+     }
+    ],
+    "item_id": "lc-00771",
+    "pi_i": 0.709534,
+    "rng_seed_reserved_at": "seed=20261019@2026-10-19T00:00:00Z",
+    "selector_sha256": "d67369d0a1d34fe5e94fc30c838a730157719df5258ad89a81e21f5ff9f9f200",
+    "size_bytes": 2083153920,
+    "stratum": "dht_recent_nonlatin|2026-09|other_ext|100mb_2gb",
+    "u_i": 0.468999,
+    "name_blake2b64": "cb9997d4874b2ff5",
+    "info_hash_blake2b64": "07cd50aea5d5c641"
+   },
+   {
+    "R_i": 1,
+    "difficulty_weight": 1.0,
+    "family_id": 1115845003,
+    "files": [],
+    "item_id": "lc-00772",
+    "pi_i": 0.709534,
+    "rng_seed_reserved_at": "seed=20261019@2026-10-19T00:00:00Z",
+    "selector_sha256": "d67369d0a1d34fe5e94fc30c838a730157719df5258ad89a81e21f5ff9f9f200",
+    "size_bytes": 733517824,
+    "stratum": "dht_recent_plain|2026-09|bare_title|100mb_2gb",
+    "u_i": 0.210953,
+    "name_blake2b64": "ef973e40e311c649",
+    "info_hash_blake2b64": "ad52d44e0355ba22"
+   },
+   {
+    "R_i": 1,
+    "difficulty_weight": 0.65,
+    "family_id": 1598787445,
+    "files": [
+     {
+      "path_blake2b64": "ea51ec52cb2290eb",
+      "size": 15493184
+     },
+     {
+      "path_blake2b64": "583c826e24f5b957",
+      "size": 13315632
+     },
+     {
+      "path_blake2b64": "04a2df34ef900768",
+      "size": 12732560
+     },
+     {
+      "path_blake2b64": "6cdb9520df359ccf",
+      "size": 12661527
+     },
+     {
+      "path_blake2b64": "7e74f2cfd76d3897",
+      "size": 12585833
+     },
+     {
+      "path_blake2b64": "443e7a6457a3a2ed",
+      "size": 12460900
+     }
+    ],
+    "item_id": "lc-00773",
+    "pi_i": 0.461197,
+    "rng_seed_reserved_at": "seed=20261019@2026-10-19T00:00:00Z",
+    "selector_sha256": "d67369d0a1d34fe5e94fc30c838a730157719df5258ad89a81e21f5ff9f9f200",
+    "size_bytes": 626556448,
+    "stratum": "dht_older_plain|2026-09|audio_container|100mb_2gb",
+    "u_i": 0.343091,
+    "name_blake2b64": "8093dec09270845b",
+    "info_hash_blake2b64": "85f666f3df13ef2c"
+   },
+   {
+    "R_i": 1,
+    "difficulty_weight": 0.65,
+    "family_id": 1566441597,
+    "files": [
+     {
+      "path_blake2b64": "bfa7996bc7a8befe",
+      "size": 14660103
+     },
+     {
+      "path_blake2b64": "940d796ece1bf0c7",
+      "size": 13556784
+     },
+     {
+      "path_blake2b64": "252c08d8229080a8",
+      "size": 12834016
+     },
+     {
+      "path_blake2b64": "2a921272be73e9d5",
+      "size": 11825653
+     },
+     {
+      "path_blake2b64": "6ea74a2714ada652",
+      "size": 11445382
+     },
+     {
+      "path_blake2b64": "ae387ddfd9b5c7c0",
+      "size": 11348840
+     }
+    ],
+    "item_id": "lc-00775",
+    "pi_i": 0.461197,
+    "rng_seed_reserved_at": "seed=20261019@2026-10-19T00:00:00Z",
+    "selector_sha256": "d67369d0a1d34fe5e94fc30c838a730157719df5258ad89a81e21f5ff9f9f200",
+    "size_bytes": 371260216,
+    "stratum": "dht_older_nonlatin|2026-09|audio_container|100mb_2gb",
+    "u_i": 0.457896,
+    "name_blake2b64": "cf7476e2f82d26b9",
+    "info_hash_blake2b64": "ba9bf38f2d809d1b"
+   },
+   {
+    "R_i": 0,
+    "difficulty_weight": 0.65,
+    "family_id": 319796768,
+    "files": [
+     {
+      "path_blake2b64": "5bfcbaf861fda740",
+      "size": 707821254
+     },
+     {
+      "path_blake2b64": "e53d80f8079c8246",
+      "size": 123
+     },
+     {
+      "path_blake2b64": "bd4c2801016c87c6",
+      "size": 122
+     },
+     {
+      "path_blake2b64": "9d855857428ca79d",
+      "size": 114
+     },
+     {
+      "path_blake2b64": "8cf9bb1385ce2929",
+      "size": 114
+     },
+     {
+      "path_blake2b64": "f2e3e46f0e5b0a42",
+      "size": 111
+     }
+    ],
+    "item_id": "lc-00776",
+    "pi_i": 0.461197,
+    "rng_seed_reserved_at": "seed=20261019@2026-10-19T00:00:00Z",
+    "selector_sha256": "d67369d0a1d34fe5e94fc30c838a730157719df5258ad89a81e21f5ff9f9f200",
+    "size_bytes": 707821838,
+    "stratum": "dht_recent_plain|2026-09|video_container|100mb_2gb",
+    "u_i": 0.620765,
+    "name_blake2b64": "e8def2ba7ae580bc",
+    "info_hash_blake2b64": "4087c2e120d714df"
+   },
+   {
+    "R_i": 1,
+    "difficulty_weight": 1.0,
+    "family_id": 2091735502,
+    "files": [
+     {
+      "path_blake2b64": "621523c446b5f4bf",
+      "size": 238648137
+     }
+    ],
+    "item_id": "lc-00777",
+    "pi_i": 0.709534,
+    "rng_seed_reserved_at": "seed=20261019@2026-10-19T00:00:00Z",
+    "selector_sha256": "d67369d0a1d34fe5e94fc30c838a730157719df5258ad89a81e21f5ff9f9f200",
+    "size_bytes": 238648137,
+    "stratum": "dht_older_plain|2026-09|video_container|100mb_2gb",
+    "u_i": 0.598176,
+    "name_blake2b64": "d96a4bce5173c325",
+    "info_hash_blake2b64": "54d568e6f4899f04"
+   },
+   {
+    "R_i": 1,
+    "difficulty_weight": 0.65,
+    "family_id": 1535559986,
+    "files": [],
+    "item_id": "lc-00778",
+    "pi_i": 0.461197,
+    "rng_seed_reserved_at": "seed=20261019@2026-10-19T00:00:00Z",
+    "selector_sha256": "d67369d0a1d34fe5e94fc30c838a730157719df5258ad89a81e21f5ff9f9f200",
+    "size_bytes": 1562265600,
+    "stratum": "dht_older_plain|2026-02|bare_title|100mb_2gb",
+    "u_i": 0.10939,
+    "name_blake2b64": "831e6fda8221d130",
+    "info_hash_blake2b64": "1204754cc709b1d8"
+   },
+   {
+    "R_i": 0,
+    "difficulty_weight": 0.65,
+    "family_id": 2045676576,
+    "files": [
+     {
+      "path_blake2b64": "63b293cc95486b95",
+      "size": 2861896765
+     },
+     {
+      "path_blake2b64": "7c00f45d795b6186",
+      "size": 2323106
+     },
+     {
+      "path_blake2b64": "eefc6b03143c6834",
+      "size": 1780384
+     },
+     {
+      "path_blake2b64": "35590a95d021a669",
+      "size": 1647666
+     },
+     {
+      "path_blake2b64": "6e48532deb6cecd1",
+      "size": 1556089
+     },
+     {
+      "path_blake2b64": "0eb5cd9504328c43",
+      "size": 1467117
+     }
+    ],
+    "item_id": "lc-00779",
+    "pi_i": 0.461197,
+    "rng_seed_reserved_at": "seed=20261019@2026-10-19T00:00:00Z",
+    "selector_sha256": "d67369d0a1d34fe5e94fc30c838a730157719df5258ad89a81e21f5ff9f9f200",
+    "size_bytes": 2878430784,
+    "stratum": "dht_recent_nonlatin|2026-09|video_container|2gb_15gb",
+    "u_i": 0.61992,
+    "name_blake2b64": "a78726025a3b00a3",
+    "info_hash_blake2b64": "a7cbdbe79b224847"
+   },
+   {
+    "R_i": 0,
+    "difficulty_weight": 0.65,
+    "family_id": 1743395828,
+    "files": [],
+    "item_id": "lc-00781",
+    "pi_i": 0.461197,
+    "rng_seed_reserved_at": "seed=20261019@2026-10-19T00:00:00Z",
+    "selector_sha256": "d67369d0a1d34fe5e94fc30c838a730157719df5258ad89a81e21f5ff9f9f200",
+    "size_bytes": 1711839733,
+    "stratum": "dht_older_nonlatin|2026-08|bare_title|100mb_2gb",
+    "u_i": 0.997917,
+    "name_blake2b64": "d0193207640981a2",
+    "info_hash_blake2b64": "15a0f3b1301b8ccd"
+   },
+   {
+    "R_i": 0,
+    "difficulty_weight": 0.65,
+    "family_id": 1522825170,
+    "files": [
+     {
+      "path_blake2b64": "6d229f2449c0cf47",
+      "size": 271769810
+     },
+     {
+      "path_blake2b64": "721ab3e09320512a",
+      "size": 47
+     }
+    ],
+    "item_id": "lc-00782",
+    "pi_i": 0.461197,
+    "rng_seed_reserved_at": "seed=20261019@2026-10-19T00:00:00Z",
+    "selector_sha256": "d67369d0a1d34fe5e94fc30c838a730157719df5258ad89a81e21f5ff9f9f200",
+    "size_bytes": 271769857,
+    "stratum": "dht_recent_plain|2026-10|video_container|100mb_2gb",
+    "u_i": 0.586253,
+    "name_blake2b64": "902eab976741b0ce",
+    "info_hash_blake2b64": "0ce1074bd17ea5bb"
+   },
+   {
+    "R_i": 0,
+    "difficulty_weight": 0.65,
+    "family_id": 560794621,
+    "files": [
+     {
+      "path_blake2b64": "0e616b463a51e657",
+      "size": 48322465
+     },
+     {
+      "path_blake2b64": "d2de8198c7176840",
+      "size": 31789053
+     },
+     {
+      "path_blake2b64": "8b6b19b317a1dadd",
+      "size": 31339735
+     },
+     {
+      "path_blake2b64": "682fb83764831bf1",
+      "size": 30797461
+     },
+     {
+      "path_blake2b64": "9a56f8b5cad5f01a",
+      "size": 25554153
+     },
+     {
+      "path_blake2b64": "f73f10b9832ffdc9",
+      "size": 22969071
+     }
+    ],
+    "item_id": "lc-00783",
+    "pi_i": 0.461197,
+    "rng_seed_reserved_at": "seed=20261019@2026-10-19T00:00:00Z",
+    "selector_sha256": "d67369d0a1d34fe5e94fc30c838a730157719df5258ad89a81e21f5ff9f9f200",
+    "size_bytes": 387939687,
+    "stratum": "dht_older_nonlatin|2026-08|audio_container|100mb_2gb",
+    "u_i": 0.561121,
+    "name_blake2b64": "f0ff666f9e36293e",
+    "info_hash_blake2b64": "490bf4fdff8e22f9"
+   },
+   {
+    "R_i": 0,
+    "difficulty_weight": 0.65,
+    "family_id": 507715882,
+    "files": [
+     {
+      "path_blake2b64": "3725ee6ed9cdb6be",
+      "size": 424673280
+     },
+     {
+      "path_blake2b64": "b1ee2ae545d69e3c",
+      "size": 366505984
+     }
+    ],
+    "item_id": "lc-00784",
+    "pi_i": 0.461197,
+    "rng_seed_reserved_at": "seed=20261019@2026-10-19T00:00:00Z",
+    "selector_sha256": "d67369d0a1d34fe5e94fc30c838a730157719df5258ad89a81e21f5ff9f9f200",
+    "size_bytes": 791179264,
+    "stratum": "dht_recent_plain|2026-09|video_container|100mb_2gb",
+    "u_i": 0.702223,
+    "name_blake2b64": "b225d5d6106b051e",
+    "info_hash_blake2b64": "8e41ecd8f4483eaf"
+   },
+   {
+    "R_i": 0,
+    "difficulty_weight": 1.0,
+    "family_id": 610568891,
+    "files": [
+     {
+      "path_blake2b64": "edf013d8f04398a2",
+      "size": 733528064
+     }
+    ],
+    "item_id": "lc-00785",
+    "pi_i": 0.709534,
+    "rng_seed_reserved_at": "seed=20261019@2026-10-19T00:00:00Z",
+    "selector_sha256": "d67369d0a1d34fe5e94fc30c838a730157719df5258ad89a81e21f5ff9f9f200",
+    "size_bytes": 733528064,
+    "stratum": "dht_recent_plain|2026-10|video_container|100mb_2gb",
+    "u_i": 0.769442,
+    "name_blake2b64": "3fc9da95c583defe",
+    "info_hash_blake2b64": "0a3a570250f96004"
+   },
+   {
+    "R_i": 0,
+    "difficulty_weight": 1.0,
+    "family_id": 1097190672,
+    "files": [],
+    "item_id": "lc-00786",
+    "pi_i": 0.709534,
+    "rng_seed_reserved_at": "seed=20261019@2026-10-19T00:00:00Z",
+    "selector_sha256": "d67369d0a1d34fe5e94fc30c838a730157719df5258ad89a81e21f5ff9f9f200",
+    "size_bytes": 1387038304,
+    "stratum": "dht_older_plain|2026-09|bare_title|100mb_2gb",
+    "u_i": 0.848172,
+    "name_blake2b64": "d58ccca0859769c9",
+    "info_hash_blake2b64": "6032adeeee98846c"
+   },
+   {
+    "R_i": 1,
+    "difficulty_weight": 1.0,
+    "family_id": 1969284017,
+    "files": [
+     {
+      "path_blake2b64": "63252934edb84ff0",
+      "size": 6795972
+     }
+    ],
+    "item_id": "lc-00787",
+    "pi_i": 0.709534,
+    "rng_seed_reserved_at": "seed=20261019@2026-10-19T00:00:00Z",
+    "selector_sha256": "d67369d0a1d34fe5e94fc30c838a730157719df5258ad89a81e21f5ff9f9f200",
+    "size_bytes": 1399008875,
+    "stratum": "dht_older_nonlatin|2026-09|other_ext|100mb_2gb",
+    "u_i": 0.617048,
+    "name_blake2b64": "939de544da0823dc",
+    "info_hash_blake2b64": "ed03a3ba958bf7c4"
+   },
+   {
+    "R_i": 0,
+    "difficulty_weight": 0.65,
+    "family_id": 1895858632,
+    "files": [],
+    "item_id": "lc-00789",
+    "pi_i": 0.461197,
+    "rng_seed_reserved_at": "seed=20261019@2026-10-19T00:00:00Z",
+    "selector_sha256": "d67369d0a1d34fe5e94fc30c838a730157719df5258ad89a81e21f5ff9f9f200",
+    "size_bytes": 203827442,
+    "stratum": "dht_older_plain|2026-07|bare_title|100mb_2gb",
+    "u_i": 0.472853,
+    "name_blake2b64": "4121bee77e435bdc",
+    "info_hash_blake2b64": "08b1715e3eccff41"
+   },
+   {
+    "R_i": 0,
+    "difficulty_weight": 0.65,
+    "family_id": 1119491157,
+    "files": [
+     {
+      "path_blake2b64": "49e09f3e31cf9288",
+      "size": 694239767
+     },
+     {
+      "path_blake2b64": "4f773598cea13699",
+      "size": 41071801
+     },
+     {
+      "path_blake2b64": "a36436cea97de66b",
+      "size": 33040120
+     },
+     {
+      "path_blake2b64": "7db2754c07782658",
+      "size": 14677024
+     },
+     {
+      "path_blake2b64": "4841cc4cb823f974",
+      "size": 724403
+     },
+     {
+      "path_blake2b64": "9f35b1d0acd36641",
+      "size": 294516
+     }
+    ],
+    "item_id": "lc-00790",
+    "pi_i": 0.461197,
+    "rng_seed_reserved_at": "seed=20261019@2026-10-19T00:00:00Z",
+    "selector_sha256": "d67369d0a1d34fe5e94fc30c838a730157719df5258ad89a81e21f5ff9f9f200",
+    "size_bytes": 792892581,
+    "stratum": "dht_older_exe_archive|2026-08|video_container|100mb_2gb",
+    "u_i": 0.600718,
+    "name_blake2b64": "401ae976d3e6f1f4",
+    "info_hash_blake2b64": "b42dc91db79fd972"
+   },
+   {
+    "R_i": 1,
+    "difficulty_weight": 1.0,
+    "family_id": 1114013182,
+    "files": [],
+    "item_id": "lc-00791",
+    "pi_i": 0.709534,
+    "rng_seed_reserved_at": "seed=20261019@2026-10-19T00:00:00Z",
+    "selector_sha256": "d67369d0a1d34fe5e94fc30c838a730157719df5258ad89a81e21f5ff9f9f200",
+    "size_bytes": 276130706,
+    "stratum": "dht_older_exe_archive|2026-09|bare_title|100mb_2gb",
+    "u_i": 0.199801,
+    "name_blake2b64": "5bb39fee038577a5",
+    "info_hash_blake2b64": "c1f9af1af76830e4"
+   },
+   {
+    "R_i": 1,
+    "difficulty_weight": 1.0,
+    "family_id": 152646514,
+    "files": [],
+    "item_id": "lc-00792",
+    "pi_i": 0.709534,
+    "rng_seed_reserved_at": "seed=20261019@2026-10-19T00:00:00Z",
+    "selector_sha256": "d67369d0a1d34fe5e94fc30c838a730157719df5258ad89a81e21f5ff9f9f200",
+    "size_bytes": 1466522385,
+    "stratum": "dht_recent_plain|2026-09|bare_title|100mb_2gb",
+    "u_i": 0.261816,
+    "name_blake2b64": "93de93ee5e981514",
+    "info_hash_blake2b64": "3e70d0cc52130494"
+   },
+   {
+    "R_i": 0,
+    "difficulty_weight": 0.65,
+    "family_id": 166185819,
+    "files": [
+     {
+      "path_blake2b64": "a35f9f8109a8a667",
+      "size": 3870652
+     },
+     {
+      "path_blake2b64": "58a7e005d657abb7",
+      "size": 21738
+     },
+     {
+      "path_blake2b64": "b561356f680d19af",
+      "size": 21738
+     },
+     {
+      "path_blake2b64": "f84b1d7646d05c30",
+      "size": 21738
+     },
+     {
+      "path_blake2b64": "bb1c14ddc665f204",
+      "size": 21738
+     },
+     {
+      "path_blake2b64": "4110bca4d5f38978",
+      "size": 21738
+     }
+    ],
+    "item_id": "lc-00794",
+    "pi_i": 0.461197,
+    "rng_seed_reserved_at": "seed=20261019@2026-10-19T00:00:00Z",
+    "selector_sha256": "d67369d0a1d34fe5e94fc30c838a730157719df5258ad89a81e21f5ff9f9f200",
+    "size_bytes": 4095637,
+    "stratum": "dht_recent_nonlatin|2026-09|video_container|lt_100mb",
+    "u_i": 0.731842,
+    "name_blake2b64": "d566136c2dc290ab",
+    "info_hash_blake2b64": "bd7f0dbd34278660"
+   },
+   {
+    "R_i": 1,
+    "difficulty_weight": 0.65,
+    "family_id": 425594300,
+    "files": [
+     {
+      "path_blake2b64": "20f0c1f96e86373f",
+      "size": 19993832
+     },
+     {
+      "path_blake2b64": "7697c9739fb868cc",
+      "size": 18674753
+     },
+     {
+      "path_blake2b64": "fe8aa4a471088986",
+      "size": 18204863
+     },
+     {
+      "path_blake2b64": "64dee6ba80e82e01",
+      "size": 17783560
+     },
+     {
+      "path_blake2b64": "bd88553252527795",
+      "size": 14282420
+     },
+     {
+      "path_blake2b64": "6addb4e1d8b4f494",
+      "size": 10869679
+     }
+    ],
+    "item_id": "lc-00795",
+    "pi_i": 0.461197,
+    "rng_seed_reserved_at": "seed=20261019@2026-10-19T00:00:00Z",
+    "selector_sha256": "d67369d0a1d34fe5e94fc30c838a730157719df5258ad89a81e21f5ff9f9f200",
+    "size_bytes": 99809107,
+    "stratum": "dht_recent_plain|2026-10|audio_container|lt_100mb",
+    "u_i": 0.284686,
+    "name_blake2b64": "4c0edaf3c2fab176",
+    "info_hash_blake2b64": "0391d41b21df9844"
+   },
+   {
+    "R_i": 0,
+    "difficulty_weight": 0.65,
+    "family_id": 1192208088,
+    "files": [
+     {
+      "path_blake2b64": "df0c5bab6e2cd4c7",
+      "size": 221198193
+     },
+     {
+      "path_blake2b64": "46e8e164c5792892",
+      "size": 1431
+     },
+     {
+      "path_blake2b64": "3ad196a287374177",
+      "size": 1424
+     },
+     {
+      "path_blake2b64": "718e3122d323089e",
+      "size": 1405
+     },
+     {
+      "path_blake2b64": "7a611d8c5189decd",
+      "size": 1399
+     },
+     {
+      "path_blake2b64": "230ce35daddd58ce",
+      "size": 1396
+     }
+    ],
+    "item_id": "lc-00796",
+    "pi_i": 0.461197,
+    "rng_seed_reserved_at": "seed=20261019@2026-10-19T00:00:00Z",
+    "selector_sha256": "d67369d0a1d34fe5e94fc30c838a730157719df5258ad89a81e21f5ff9f9f200",
+    "size_bytes": 221205248,
+    "stratum": "dht_older_nonlatin|2026-09|video_container|100mb_2gb",
+    "u_i": 0.943586,
+    "name_blake2b64": "90f3ff9e79164163",
+    "info_hash_blake2b64": "74a3b183545619b8"
+   },
+   {
+    "R_i": 0,
+    "difficulty_weight": 0.65,
+    "family_id": 1414561640,
+    "files": [],
+    "item_id": "lc-00797",
+    "pi_i": 0.461197,
+    "rng_seed_reserved_at": "seed=20261019@2026-10-19T00:00:00Z",
+    "selector_sha256": "d67369d0a1d34fe5e94fc30c838a730157719df5258ad89a81e21f5ff9f9f200",
+    "size_bytes": 2573756110,
+    "stratum": "dht_older_plain|2026-07|bare_title|2gb_15gb",
+    "u_i": 0.968177,
+    "name_blake2b64": "ee0eae0941193e58",
+    "info_hash_blake2b64": "9170454aa0898c0c"
+   },
+   {
+    "R_i": 1,
+    "difficulty_weight": 1.0,
+    "family_id": 1465208080,
+    "files": [],
+    "item_id": "lc-00798",
+    "pi_i": 0.709534,
+    "rng_seed_reserved_at": "seed=20261019@2026-10-19T00:00:00Z",
+    "selector_sha256": "d67369d0a1d34fe5e94fc30c838a730157719df5258ad89a81e21f5ff9f9f200",
+    "size_bytes": 48286082,
+    "stratum": "dht_older_exe_archive|2026-08|bare_title|lt_100mb",
+    "u_i": 0.338087,
+    "name_blake2b64": "340d8e4c5bb19bae",
+    "info_hash_blake2b64": "0da2ebc3b3a47db2"
+   },
+   {
+    "R_i": 1,
+    "difficulty_weight": 1.0,
+    "family_id": 901053387,
+    "files": [],
+    "item_id": "lc-00799",
+    "pi_i": 0.709534,
+    "rng_seed_reserved_at": "seed=20261019@2026-10-19T00:00:00Z",
+    "selector_sha256": "d67369d0a1d34fe5e94fc30c838a730157719df5258ad89a81e21f5ff9f9f200",
+    "size_bytes": 2824048355,
+    "stratum": "dht_recent_exe_archive|2026-10|bare_title|2gb_15gb",
+    "u_i": 0.003639,
+    "name_blake2b64": "90b289260c56012e",
+    "info_hash_blake2b64": "b654211682583e99"
+   },
+   {
+    "R_i": 0,
+    "difficulty_weight": 1.0,
+    "family_id": 1057645974,
+    "files": [],
+    "item_id": "lc-00800",
+    "pi_i": 0.709534,
+    "rng_seed_reserved_at": "seed=20261019@2026-10-19T00:00:00Z",
+    "selector_sha256": "d67369d0a1d34fe5e94fc30c838a730157719df5258ad89a81e21f5ff9f9f200",
+    "size_bytes": 1819111101,
+    "stratum": "dht_older_exe_archive|2026-08|bare_title|100mb_2gb",
+    "u_i": 0.931374,
+    "name_blake2b64": "25a7a5b98222ab77",
+    "info_hash_blake2b64": "f44b8943254243b9"
+   },
+   {
+    "R_i": 0,
+    "difficulty_weight": 0.65,
+    "family_id": 1056953060,
+    "files": [
+     {
+      "path_blake2b64": "16f43bdeaa9520b5",
+      "size": 2210973696
+     },
+     {
+      "path_blake2b64": "12199353eb894d62",
+      "size": 156100608
+     }
+    ],
+    "item_id": "lc-00801",
+    "pi_i": 0.461197,
+    "rng_seed_reserved_at": "seed=20261019@2026-10-19T00:00:00Z",
+    "selector_sha256": "d67369d0a1d34fe5e94fc30c838a730157719df5258ad89a81e21f5ff9f9f200",
+    "size_bytes": 2367074304,
+    "stratum": "dht_older_nonlatin|2026-09|video_container|2gb_15gb",
+    "u_i": 0.969332,
+    "name_blake2b64": "8684fec60ab0fdf9",
+    "info_hash_blake2b64": "179650ea3b49efbb"
+   },
+   {
+    "R_i": 1,
+    "difficulty_weight": 0.65,
+    "family_id": 675822832,
+    "files": [
+     {
+      "path_blake2b64": "41923e72309f3536",
+      "size": 565436737
+     },
+     {
+      "path_blake2b64": "cf3f0c2f6c868bf8",
+      "size": 718
+     },
+     {
+      "path_blake2b64": "c4d251d629412e90",
+      "size": 47
+     }
+    ],
+    "item_id": "lc-00802",
+    "pi_i": 0.461197,
+    "rng_seed_reserved_at": "seed=20261019@2026-10-19T00:00:00Z",
+    "selector_sha256": "d67369d0a1d34fe5e94fc30c838a730157719df5258ad89a81e21f5ff9f9f200",
+    "size_bytes": 565437502,
+    "stratum": "dht_older_adult|2026-08|video_container|100mb_2gb",
+    "u_i": 0.06236,
+    "name_blake2b64": "0f2bf2f1583dc782",
+    "info_hash_blake2b64": "ba69e3c0078e82d4"
+   },
+   {
+    "R_i": 0,
+    "difficulty_weight": 1.0,
+    "family_id": 1154698127,
+    "files": [],
+    "item_id": "lc-00803",
+    "pi_i": 0.709534,
+    "rng_seed_reserved_at": "seed=20261019@2026-10-19T00:00:00Z",
+    "selector_sha256": "d67369d0a1d34fe5e94fc30c838a730157719df5258ad89a81e21f5ff9f9f200",
+    "size_bytes": 1165895512,
+    "stratum": "dht_older_anime|2026-09|bare_title|100mb_2gb",
+    "u_i": 0.947825,
+    "name_blake2b64": "225becb84b8754ed",
+    "info_hash_blake2b64": "609cad6ec6f0364a"
+   },
+   {
+    "R_i": 1,
+    "difficulty_weight": 0.65,
+    "family_id": 406622182,
+    "files": [
+     {
+      "path_blake2b64": "81b0c4a6fa48a155",
+      "size": 227432058
+     },
+     {
+      "path_blake2b64": "cd7e54bf0282b738",
+      "size": 271
+     }
+    ],
+    "item_id": "lc-00804",
+    "pi_i": 0.461197,
+    "rng_seed_reserved_at": "seed=20261019@2026-10-19T00:00:00Z",
+    "selector_sha256": "d67369d0a1d34fe5e94fc30c838a730157719df5258ad89a81e21f5ff9f9f200",
+    "size_bytes": 227432329,
+    "stratum": "dht_recent_plain|2026-09|video_container|100mb_2gb",
+    "u_i": 0.230345,
+    "name_blake2b64": "98beb9a44bfc52e9",
+    "info_hash_blake2b64": "a4371f587c82f023"
+   },
+   {
+    "R_i": 1,
+    "difficulty_weight": 0.65,
+    "family_id": 1986171285,
+    "files": [
+     {
+      "path_blake2b64": "c56f34ee53c68c47",
+      "size": 1890630363
+     },
+     {
+      "path_blake2b64": "15b41305ac33735b",
+      "size": 1063394047
+     },
+     {
+      "path_blake2b64": "51329bfc9e084050",
+      "size": 963976927
+     },
+     {
+      "path_blake2b64": "f67079a38b539414",
+      "size": 963762301
+     },
+     {
+      "path_blake2b64": "f3648e6553c1a430",
+      "size": 963388010
+     },
+     {
+      "path_blake2b64": "9216c6f485ea141b",
+      "size": 962491522
+     }
+    ],
+    "item_id": "lc-00805",
+    "pi_i": 0.461197,
+    "rng_seed_reserved_at": "seed=20261019@2026-10-19T00:00:00Z",
+    "selector_sha256": "d67369d0a1d34fe5e94fc30c838a730157719df5258ad89a81e21f5ff9f9f200",
+    "size_bytes": 47405697730,
+    "stratum": "dht_recent_nonlatin|2026-09|video_container|ge_15gb",
+    "u_i": 0.054955,
+    "name_blake2b64": "c90fdf1d51603738",
+    "info_hash_blake2b64": "43accec9c183dfe4"
+   },
+   {
+    "R_i": 0,
+    "difficulty_weight": 0.65,
+    "family_id": 2124069060,
+    "files": [
+     {
+      "path_blake2b64": "5c79b52d3b568f20",
+      "size": 830905294
+     },
+     {
+      "path_blake2b64": "be7fe683c0d40f7f",
+      "size": 8903
+     },
+     {
+      "path_blake2b64": "da1d51401e4849e8",
+      "size": 99
+     },
+     {
+      "path_blake2b64": "7c403f5930ac6079",
+      "size": 30
+     }
+    ],
+    "item_id": "lc-00806",
+    "pi_i": 0.461197,
+    "rng_seed_reserved_at": "seed=20261019@2026-10-19T00:00:00Z",
+    "selector_sha256": "d67369d0a1d34fe5e94fc30c838a730157719df5258ad89a81e21f5ff9f9f200",
+    "size_bytes": 830914326,
+    "stratum": "dht_recent_exe_archive|2026-10|video_container|100mb_2gb",
+    "u_i": 0.500716,
+    "name_blake2b64": "5cf4305a6aa5a80f",
+    "info_hash_blake2b64": "e712ee6dbf18fc2c"
+   },
+   {
+    "R_i": 0,
+    "difficulty_weight": 0.65,
+    "family_id": 1199272761,
+    "files": [],
+    "item_id": "lc-00807",
+    "pi_i": 0.461197,
+    "rng_seed_reserved_at": "seed=20261019@2026-10-19T00:00:00Z",
+    "selector_sha256": "d67369d0a1d34fe5e94fc30c838a730157719df5258ad89a81e21f5ff9f9f200",
+    "size_bytes": 1537701559,
+    "stratum": "dht_older_plain|2026-08|bare_title|100mb_2gb",
+    "u_i": 0.880956,
+    "name_blake2b64": "7c72da7fc17cd787",
+    "info_hash_blake2b64": "8b16f6d2bcfe2f22"
+   },
+   {
+    "R_i": 1,
+    "difficulty_weight": 1.0,
+    "family_id": 640282685,
+    "files": [],
+    "item_id": "lc-00808",
+    "pi_i": 0.709534,
+    "rng_seed_reserved_at": "seed=20261019@2026-10-19T00:00:00Z",
+    "selector_sha256": "d67369d0a1d34fe5e94fc30c838a730157719df5258ad89a81e21f5ff9f9f200",
+    "size_bytes": 182169902,
+    "stratum": "dht_recent_exe_archive|2026-09|bare_title|100mb_2gb",
+    "u_i": 0.101206,
+    "name_blake2b64": "bc4f35e6dd752bcb",
+    "info_hash_blake2b64": "9f1a563532bc2c4a"
+   },
+   {
+    "R_i": 0,
+    "difficulty_weight": 0.65,
+    "family_id": 671422987,
+    "files": [
+     {
+      "path_blake2b64": "f5f2bb52dba0d9d5",
+      "size": 3558968097
+     },
+     {
+      "path_blake2b64": "c777fb880371bdad",
+      "size": 3553936786
+     },
+     {
+      "path_blake2b64": "638c078e57d8a936",
+      "size": 3547195595
+     },
+     {
+      "path_blake2b64": "6b8d018c68445f41",
+      "size": 3542837485
+     },
+     {
+      "path_blake2b64": "996fe3562b93dc8f",
+      "size": 3507489261
+     },
+     {
+      "path_blake2b64": "562fe25e47a5bca0",
+      "size": 2795097029
+     }
+    ],
+    "item_id": "lc-00809",
+    "pi_i": 0.461197,
+    "rng_seed_reserved_at": "seed=20261019@2026-10-19T00:00:00Z",
+    "selector_sha256": "d67369d0a1d34fe5e94fc30c838a730157719df5258ad89a81e21f5ff9f9f200",
+    "size_bytes": 35414440424,
+    "stratum": "dht_older_exe_archive|2026-09|video_container|ge_15gb",
+    "u_i": 0.608709,
+    "name_blake2b64": "5183e121fde175c7",
+    "info_hash_blake2b64": "5db378b7baa06803"
+   },
+   {
+    "R_i": 0,
+    "difficulty_weight": 0.65,
+    "family_id": 954990134,
+    "files": [
+     {
+      "path_blake2b64": "58c87559f5f4eba4",
+      "size": 1058292
+     },
+     {
+      "path_blake2b64": "eb2f74ac01523aa0",
+      "size": 929119
+     },
+     {
+      "path_blake2b64": "a3ba13be5ae7c422",
+      "size": 910551
+     },
+     {
+      "path_blake2b64": "6c89a6d5fe0f3013",
+      "size": 881606
+     },
+     {
+      "path_blake2b64": "af317e276b7a2071",
+      "size": 879120
+     },
+     {
+      "path_blake2b64": "be402a9bd90b100d",
+      "size": 867394
+     }
+    ],
+    "item_id": "lc-00810",
+    "pi_i": 0.461197,
+    "rng_seed_reserved_at": "seed=20261019@2026-10-19T00:00:00Z",
+    "selector_sha256": "d67369d0a1d34fe5e94fc30c838a730157719df5258ad89a81e21f5ff9f9f200",
+    "size_bytes": 246308358,
+    "stratum": "dht_recent_nonlatin|2026-10|other_ext|100mb_2gb",
+    "u_i": 0.952867,
+    "name_blake2b64": "1f5ca781c43917d9",
+    "info_hash_blake2b64": "464bc32924414644"
+   },
+   {
+    "R_i": 0,
+    "difficulty_weight": 0.65,
+    "family_id": 2005938007,
+    "files": [
+     {
+      "path_blake2b64": "c4202d4f41d8c3c3",
+      "size": 28941596
+     },
+     {
+      "path_blake2b64": "4a2f18bcfde8a2a7",
+      "size": 28346840
+     },
+     {
+      "path_blake2b64": "11b0fd707d242620",
+      "size": 27734530
+     },
+     {
+      "path_blake2b64": "8f654596985ea321",
+      "size": 27069555
+     },
+     {
+      "path_blake2b64": "6832ce5d2a2b9621",
+      "size": 26893176
+     },
+     {
+      "path_blake2b64": "9ed3e144e9cb7d1b",
+      "size": 26254954
+     }
+    ],
+    "item_id": "lc-00811",
+    "pi_i": 0.461197,
+    "rng_seed_reserved_at": "seed=20261019@2026-10-19T00:00:00Z",
+    "selector_sha256": "d67369d0a1d34fe5e94fc30c838a730157719df5258ad89a81e21f5ff9f9f200",
+    "size_bytes": 519524080,
+    "stratum": "dht_recent_plain|2026-09|audio_container|100mb_2gb",
+    "u_i": 0.919231,
+    "name_blake2b64": "d855e3125cac0c6c",
+    "info_hash_blake2b64": "ee6f12de6d33d0cb"
+   },
+   {
+    "R_i": 1,
+    "difficulty_weight": 1.0,
+    "family_id": 1465575669,
+    "files": [],
+    "item_id": "lc-00812",
+    "pi_i": 0.709534,
+    "rng_seed_reserved_at": "seed=20261019@2026-10-19T00:00:00Z",
+    "selector_sha256": "d67369d0a1d34fe5e94fc30c838a730157719df5258ad89a81e21f5ff9f9f200",
+    "size_bytes": 1426234141,
+    "stratum": "dht_recent_exe_archive|2026-09|bare_title|100mb_2gb",
+    "u_i": 0.65343,
+    "name_blake2b64": "936ada79a9ea4890",
+    "info_hash_blake2b64": "850e29077e228b4a"
+   },
+   {
+    "R_i": 1,
+    "difficulty_weight": 1.0,
+    "family_id": 1651834489,
+    "files": [],
+    "item_id": "lc-00813",
+    "pi_i": 0.709534,
+    "rng_seed_reserved_at": "seed=20261019@2026-10-19T00:00:00Z",
+    "selector_sha256": "d67369d0a1d34fe5e94fc30c838a730157719df5258ad89a81e21f5ff9f9f200",
+    "size_bytes": 137166801,
+    "stratum": "dht_older_plain|2026-08|bare_title|100mb_2gb",
+    "u_i": 0.028869,
+    "name_blake2b64": "f4855c1041107850",
+    "info_hash_blake2b64": "44cd4dccee113624"
+   },
+   {
+    "R_i": 1,
+    "difficulty_weight": 1.0,
+    "family_id": 1521291871,
+    "files": [],
+    "item_id": "lc-00815",
+    "pi_i": 0.709534,
+    "rng_seed_reserved_at": "seed=20261019@2026-10-19T00:00:00Z",
+    "selector_sha256": "d67369d0a1d34fe5e94fc30c838a730157719df5258ad89a81e21f5ff9f9f200",
+    "size_bytes": 402027361,
+    "stratum": "dht_recent_exe_archive|2026-09|bare_title|100mb_2gb",
+    "u_i": 0.65631,
+    "name_blake2b64": "ee9407df74616ab5",
+    "info_hash_blake2b64": "f2cbac90f1823a90"
+   },
+   {
+    "R_i": 0,
+    "difficulty_weight": 0.65,
+    "family_id": 889270663,
+    "files": [
+     {
+      "path_blake2b64": "de85c97dec5ae6f1",
+      "size": 490761141
+     },
+     {
+      "path_blake2b64": "863bb1d02902df05",
+      "size": 53226
+     },
+     {
+      "path_blake2b64": "3d3f8ed4579e3984",
+      "size": 604
+     }
+    ],
+    "item_id": "lc-00816",
+    "pi_i": 0.461197,
+    "rng_seed_reserved_at": "seed=20261019@2026-10-19T00:00:00Z",
+    "selector_sha256": "d67369d0a1d34fe5e94fc30c838a730157719df5258ad89a81e21f5ff9f9f200",
+    "size_bytes": 490814971,
+    "stratum": "dht_recent_plain|2026-09|video_container|100mb_2gb",
+    "u_i": 0.923363,
+    "name_blake2b64": "121616ef23eae173",
+    "info_hash_blake2b64": "9e603c69bf20575c"
+   },
+   {
+    "R_i": 1,
+    "difficulty_weight": 0.65,
+    "family_id": 586076065,
+    "files": [
+     {
+      "path_blake2b64": "ad0f063818e72c0c",
+      "size": 131203796
+     },
+     {
+      "path_blake2b64": "b28aa163a9d26b03",
+      "size": 352
+     },
+     {
+      "path_blake2b64": "0d4f424da31ba58a",
+      "size": 46
+     }
+    ],
+    "item_id": "lc-00817",
+    "pi_i": 0.461197,
+    "rng_seed_reserved_at": "seed=20261019@2026-10-19T00:00:00Z",
+    "selector_sha256": "d67369d0a1d34fe5e94fc30c838a730157719df5258ad89a81e21f5ff9f9f200",
+    "size_bytes": 131204194,
+    "stratum": "dht_older_plain|2026-09|other_ext|100mb_2gb",
+    "u_i": 0.207933,
+    "name_blake2b64": "b6d250535bc35483",
+    "info_hash_blake2b64": "a8d2e083112af574"
+   },
+   {
+    "R_i": 1,
+    "difficulty_weight": 0.65,
+    "family_id": 79841462,
+    "files": [
+     {
+      "path_blake2b64": "3c6ba38429160ca9",
+      "size": 815049172
+     },
+     {
+      "path_blake2b64": "e57e98a16507c887",
+      "size": 43212630
+     },
+     {
+      "path_blake2b64": "a8d913c9a6e46083",
+      "size": 155789
+     },
+     {
+      "path_blake2b64": "6e9695890ee3b02a",
+      "size": 70078
+     },
+     {
+      "path_blake2b64": "649875de2b267c33",
+      "size": 126
+     },
+     {
+      "path_blake2b64": "152ab6447ae39a1c",
+      "size": 118
+     }
+    ],
+    "item_id": "lc-00818",
+    "pi_i": 0.461197,
+    "rng_seed_reserved_at": "seed=20261019@2026-10-19T00:00:00Z",
+    "selector_sha256": "d67369d0a1d34fe5e94fc30c838a730157719df5258ad89a81e21f5ff9f9f200",
+    "size_bytes": 858488145,
+    "stratum": "dht_older_nonlatin|2026-08|video_container|100mb_2gb",
+    "u_i": 0.089524,
+    "name_blake2b64": "470b072cbc8ad92f",
+    "info_hash_blake2b64": "0c45667aa32de456"
+   },
+   {
+    "R_i": 0,
+    "difficulty_weight": 0.65,
+    "family_id": 172340411,
+    "files": [
+     {
+      "path_blake2b64": "37c37fac8bcaf166",
+      "size": 883684459
+     },
+     {
+      "path_blake2b64": "9e60cf607d0bb1dc",
+      "size": 757097814
+     },
+     {
+      "path_blake2b64": "a5bf7cbab43ed8fc",
+      "size": 655620962
+     },
+     {
+      "path_blake2b64": "c531631436edfb16",
+      "size": 506613382
+     }
+    ],
+    "item_id": "lc-00819",
+    "pi_i": 0.461197,
+    "rng_seed_reserved_at": "seed=20261019@2026-10-19T00:00:00Z",
+    "selector_sha256": "d67369d0a1d34fe5e94fc30c838a730157719df5258ad89a81e21f5ff9f9f200",
+    "size_bytes": 2803016617,
+    "stratum": "dht_recent_nonlatin|2026-10|video_container|2gb_15gb",
+    "u_i": 0.811457,
+    "name_blake2b64": "de47942d050e0f69",
+    "info_hash_blake2b64": "050b7bbb33ecb5f1"
+   },
+   {
+    "R_i": 0,
+    "difficulty_weight": 0.65,
+    "family_id": 64777653,
+    "files": [
+     {
+      "path_blake2b64": "32ab9024b42309b3",
+      "size": 4662442769
+     },
+     {
+      "path_blake2b64": "1b3a2effc4adf9f0",
+      "size": 34
+     }
+    ],
+    "item_id": "lc-00820",
+    "pi_i": 0.461197,
+    "rng_seed_reserved_at": "seed=20261019@2026-10-19T00:00:00Z",
+    "selector_sha256": "d67369d0a1d34fe5e94fc30c838a730157719df5258ad89a81e21f5ff9f9f200",
+    "size_bytes": 4662442803,
+    "stratum": "dht_older_plain|2026-08|video_container|2gb_15gb",
+    "u_i": 0.981717,
+    "name_blake2b64": "ca6a10a862dd4929",
+    "info_hash_blake2b64": "9ee5aefd21cc573b"
+   },
+   {
+    "R_i": 1,
+    "difficulty_weight": 0.65,
+    "family_id": 28484423,
+    "files": [
+     {
+      "path_blake2b64": "dc72428e32df2f36",
+      "size": 230445311
+     },
+     {
+      "path_blake2b64": "745d4c977edd6052",
+      "size": 561269
+     }
+    ],
+    "item_id": "lc-00822",
+    "pi_i": 0.461197,
+    "rng_seed_reserved_at": "seed=20261019@2026-10-19T00:00:00Z",
+    "selector_sha256": "d67369d0a1d34fe5e94fc30c838a730157719df5258ad89a81e21f5ff9f9f200",
+    "size_bytes": 231006580,
+    "stratum": "dht_older_plain|2026-09|video_container|100mb_2gb",
+    "u_i": 0.060927,
+    "name_blake2b64": "aa1f213594c518f4",
+    "info_hash_blake2b64": "abaf31ceb69e4a0b"
+   },
+   {
+    "R_i": 1,
+    "difficulty_weight": 0.65,
+    "family_id": 264304100,
+    "files": [
+     {
+      "path_blake2b64": "2c647203f5bcf287",
+      "size": 1000040448
+     },
+     {
+      "path_blake2b64": "3370061d66b31923",
+      "size": 565096
+     },
+     {
+      "path_blake2b64": "b75a87a0b4964d23",
+      "size": 203088
+     },
+     {
+      "path_blake2b64": "0b163bb3874e34ae",
+      "size": 161918
+     },
+     {
+      "path_blake2b64": "c27a77f7b5f479b8",
+      "size": 150027
+     },
+     {
+      "path_blake2b64": "9d05e1ed0c1c48f6",
+      "size": 134108
+     }
+    ],
+    "item_id": "lc-00823",
+    "pi_i": 0.461197,
+    "rng_seed_reserved_at": "seed=20261019@2026-10-19T00:00:00Z",
+    "selector_sha256": "d67369d0a1d34fe5e94fc30c838a730157719df5258ad89a81e21f5ff9f9f200",
+    "size_bytes": 1001401252,
+    "stratum": "dht_older_nonlatin|2026-08|video_container|100mb_2gb",
+    "u_i": 0.074409,
+    "name_blake2b64": "bba4a5a0e56745b5",
+    "info_hash_blake2b64": "0fe8ba55f4a226e7"
+   },
+   {
+    "R_i": 1,
+    "difficulty_weight": 0.65,
+    "family_id": 1263648300,
+    "files": [
+     {
+      "path_blake2b64": "2662c05971ac8ff0",
+      "size": 697189029
+     },
+     {
+      "path_blake2b64": "1b3a2effc4adf9f0",
+      "size": 34
+     }
+    ],
+    "item_id": "lc-00824",
+    "pi_i": 0.461197,
+    "rng_seed_reserved_at": "seed=20261019@2026-10-19T00:00:00Z",
+    "selector_sha256": "d67369d0a1d34fe5e94fc30c838a730157719df5258ad89a81e21f5ff9f9f200",
+    "size_bytes": 697189063,
+    "stratum": "dht_older_adult|2026-09|video_container|100mb_2gb",
+    "u_i": 0.386656,
+    "name_blake2b64": "b34bf3678f1d9b5e",
+    "info_hash_blake2b64": "32378ceac41989cf"
+   },
+   {
+    "R_i": 1,
+    "difficulty_weight": 1.0,
+    "family_id": 1850214837,
+    "files": [],
+    "item_id": "lc-00825",
+    "pi_i": 0.709534,
+    "rng_seed_reserved_at": "seed=20261019@2026-10-19T00:00:00Z",
+    "selector_sha256": "d67369d0a1d34fe5e94fc30c838a730157719df5258ad89a81e21f5ff9f9f200",
+    "size_bytes": 685310621,
+    "stratum": "dht_recent_plain|2026-10|bare_title|100mb_2gb",
+    "u_i": 0.608845,
+    "name_blake2b64": "eaeeecf787cd1562",
+    "info_hash_blake2b64": "6942356b4f855d43"
+   },
+   {
+    "R_i": 0,
+    "difficulty_weight": 0.65,
+    "family_id": 1541590886,
+    "files": [
+     {
+      "path_blake2b64": "b726cbb664aeb8ab",
+      "size": 8042122
+     },
+     {
+      "path_blake2b64": "8af9dd8d847c69b6",
+      "size": 8021454
+     },
+     {
+      "path_blake2b64": "f7306b371efc1b33",
+      "size": 7977798
+     },
+     {
+      "path_blake2b64": "0ef66ec4612c5608",
+      "size": 7945587
+     },
+     {
+      "path_blake2b64": "02a3405793638eab",
+      "size": 7923783
+     },
+     {
+      "path_blake2b64": "0d29280b393286a9",
+      "size": 7922848
+     }
+    ],
+    "item_id": "lc-00826",
+    "pi_i": 0.461197,
+    "rng_seed_reserved_at": "seed=20261019@2026-10-19T00:00:00Z",
+    "selector_sha256": "d67369d0a1d34fe5e94fc30c838a730157719df5258ad89a81e21f5ff9f9f200",
+    "size_bytes": 1828817882,
+    "stratum": "dht_older_plain|2026-08|audio_container|100mb_2gb",
+    "u_i": 0.925098,
+    "name_blake2b64": "d0514890750c30ed",
+    "info_hash_blake2b64": "aeb6e6c41b9c58ee"
+   },
+   {
+    "R_i": 0,
+    "difficulty_weight": 0.65,
+    "family_id": 1319643561,
+    "files": [
+     {
+      "path_blake2b64": "67e0437a902753f4",
+      "size": 1544980177
+     },
+     {
+      "path_blake2b64": "cf3f0c2f6c868bf8",
+      "size": 678
+     }
+    ],
+    "item_id": "lc-00827",
+    "pi_i": 0.461197,
+    "rng_seed_reserved_at": "seed=20261019@2026-10-19T00:00:00Z",
+    "selector_sha256": "d67369d0a1d34fe5e94fc30c838a730157719df5258ad89a81e21f5ff9f9f200",
+    "size_bytes": 1544980855,
+    "stratum": "dht_older_plain|2026-09|video_container|100mb_2gb",
+    "u_i": 0.951662,
+    "name_blake2b64": "f516edb39a85e97e",
+    "info_hash_blake2b64": "8e392d7c6724c811"
+   },
+   {
+    "R_i": 0,
+    "difficulty_weight": 0.65,
+    "family_id": 349162706,
+    "files": [],
+    "item_id": "lc-00828",
+    "pi_i": 0.461197,
+    "rng_seed_reserved_at": "seed=20261019@2026-10-19T00:00:00Z",
+    "selector_sha256": "d67369d0a1d34fe5e94fc30c838a730157719df5258ad89a81e21f5ff9f9f200",
+    "size_bytes": 1117158857,
+    "stratum": "dht_older_plain|2026-07|bare_title|100mb_2gb",
+    "u_i": 0.839991,
+    "name_blake2b64": "a44dc11e206b0aac",
+    "info_hash_blake2b64": "41debd9a49912455"
+   },
+   {
+    "R_i": 0,
+    "difficulty_weight": 0.65,
+    "family_id": 2012790496,
+    "files": [
+     {
+      "path_blake2b64": "1f9fc5c86b7ed1fb",
+      "size": 2885709224
+     },
+     {
+      "path_blake2b64": "df0b45317e786659",
+      "size": 2799982712
+     },
+     {
+      "path_blake2b64": "586c30bc11e06fb2",
+      "size": 2545368062
+     },
+     {
+      "path_blake2b64": "dee00dcefb21e7e8",
+      "size": 2442866390
+     },
+     {
+      "path_blake2b64": "d7f1d17095b6f59f",
+      "size": 2409809616
+     },
+     {
+      "path_blake2b64": "5ace859942c89e89",
+      "size": 2348371476
+     }
+    ],
+    "item_id": "lc-00829",
+    "pi_i": 0.461197,
+    "rng_seed_reserved_at": "seed=20261019@2026-10-19T00:00:00Z",
+    "selector_sha256": "d67369d0a1d34fe5e94fc30c838a730157719df5258ad89a81e21f5ff9f9f200",
+    "size_bytes": 53699421019,
+    "stratum": "dht_older_nonlatin|2026-08|video_container|ge_15gb",
+    "u_i": 0.755764,
+    "name_blake2b64": "aca28896664bdca1",
+    "info_hash_blake2b64": "a12591178c0f713d"
+   },
+   {
+    "R_i": 0,
+    "difficulty_weight": 0.65,
+    "family_id": 188319122,
+    "files": [],
+    "item_id": "lc-00830",
+    "pi_i": 0.461197,
+    "rng_seed_reserved_at": "seed=20261019@2026-10-19T00:00:00Z",
+    "selector_sha256": "d67369d0a1d34fe5e94fc30c838a730157719df5258ad89a81e21f5ff9f9f200",
+    "size_bytes": 4503675153,
+    "stratum": "dht_older_plain|2026-07|bare_title|2gb_15gb",
+    "u_i": 0.973341,
+    "name_blake2b64": "bec2b0741231f6e4",
+    "info_hash_blake2b64": "8219c77bab2f3b8c"
+   },
+   {
+    "R_i": 1,
+    "difficulty_weight": 0.65,
+    "family_id": 1361312706,
+    "files": [
+     {
+      "path_blake2b64": "78c1aa8a51d221fe",
+      "size": 38931190
+     },
+     {
+      "path_blake2b64": "977fc71f867e97cf",
+      "size": 36717240
+     },
+     {
+      "path_blake2b64": "7cec5eefff35d933",
+      "size": 35865488
+     },
+     {
+      "path_blake2b64": "ce648897c50f0ef6",
+      "size": 34953540
+     },
+     {
+      "path_blake2b64": "c01681d6ace6b63b",
+      "size": 34276752
+     },
+     {
+      "path_blake2b64": "02c58c0c20a44d50",
+      "size": 32514809
+     }
+    ],
+    "item_id": "lc-00831",
+    "pi_i": 0.461197,
+    "rng_seed_reserved_at": "seed=20261019@2026-10-19T00:00:00Z",
+    "selector_sha256": "d67369d0a1d34fe5e94fc30c838a730157719df5258ad89a81e21f5ff9f9f200",
+    "size_bytes": 282572224,
+    "stratum": "dht_recent_plain|2026-10|audio_container|100mb_2gb",
+    "u_i": 0.421031,
+    "name_blake2b64": "dd942e27a7d235e2",
+    "info_hash_blake2b64": "3c90ea9fe06a5463"
+   },
+   {
+    "R_i": 0,
+    "difficulty_weight": 0.65,
+    "family_id": 2100235817,
+    "files": [
+     {
+      "path_blake2b64": "1b9ec00967086588",
+      "size": 1817525588
+     },
+     {
+      "path_blake2b64": "893f1035a86c28ca",
+      "size": 147351
+     },
+     {
+      "path_blake2b64": "38b81a8b399e2327",
+      "size": 48
+     }
+    ],
+    "item_id": "lc-00832",
+    "pi_i": 0.461197,
+    "rng_seed_reserved_at": "seed=20261019@2026-10-19T00:00:00Z",
+    "selector_sha256": "d67369d0a1d34fe5e94fc30c838a730157719df5258ad89a81e21f5ff9f9f200",
+    "size_bytes": 1817672987,
+    "stratum": "dht_older_plain|2026-09|video_container|100mb_2gb",
+    "u_i": 0.953444,
+    "name_blake2b64": "886b7f75bf28da0e",
+    "info_hash_blake2b64": "888d58dbb1c4a706"
+   },
+   {
+    "R_i": 0,
+    "difficulty_weight": 0.65,
+    "family_id": 1832710522,
+    "files": [
+     {
+      "path_blake2b64": "6b4e8245e5e14966",
+      "size": 7975609
+     },
+     {
+      "path_blake2b64": "b91db6caeb96b1ba",
+      "size": 7373153
+     },
+     {
+      "path_blake2b64": "ba9456f39117a862",
+      "size": 4976903
+     },
+     {
+      "path_blake2b64": "87a3712aaae6fb49",
+      "size": 4696525
+     },
+     {
+      "path_blake2b64": "4157672ba0285c2a",
+      "size": 4062631
+     },
+     {
+      "path_blake2b64": "e0a556d9343511bb",
+      "size": 3979795
+     }
+    ],
+    "item_id": "lc-00833",
+    "pi_i": 0.461197,
+    "rng_seed_reserved_at": "seed=20261019@2026-10-19T00:00:00Z",
+    "selector_sha256": "d67369d0a1d34fe5e94fc30c838a730157719df5258ad89a81e21f5ff9f9f200",
+    "size_bytes": 127002910,
+    "stratum": "dht_older_plain|2026-09|audio_container|100mb_2gb",
+    "u_i": 0.610741,
+    "name_blake2b64": "3626127a02f5b0b1",
+    "info_hash_blake2b64": "f03cbeb598b35ede"
+   },
+   {
+    "R_i": 1,
+    "difficulty_weight": 1.0,
+    "family_id": 1396034499,
+    "files": [],
+    "item_id": "lc-00835",
+    "pi_i": 0.709534,
+    "rng_seed_reserved_at": "seed=20261019@2026-10-19T00:00:00Z",
+    "selector_sha256": "d67369d0a1d34fe5e94fc30c838a730157719df5258ad89a81e21f5ff9f9f200",
+    "size_bytes": 775252681,
+    "stratum": "dht_older_plain|2026-09|bare_title|100mb_2gb",
+    "u_i": 0.251035,
+    "name_blake2b64": "a35915ff4ff411d5",
+    "info_hash_blake2b64": "d2237cdcddaa5238"
+   },
+   {
+    "R_i": 0,
+    "difficulty_weight": 1.0,
+    "family_id": 1709588994,
+    "files": [],
+    "item_id": "lc-00837",
+    "pi_i": 0.709534,
+    "rng_seed_reserved_at": "seed=20261019@2026-10-19T00:00:00Z",
+    "selector_sha256": "d67369d0a1d34fe5e94fc30c838a730157719df5258ad89a81e21f5ff9f9f200",
+    "size_bytes": 733803548,
+    "stratum": "dht_recent_plain|2026-10|bare_title|100mb_2gb",
+    "u_i": 0.823365,
+    "name_blake2b64": "1244a333c958aeda",
+    "info_hash_blake2b64": "eaa523dbacb1ff4d"
+   },
+   {
+    "R_i": 1,
+    "difficulty_weight": 1.0,
+    "family_id": 599779842,
+    "files": [],
+    "item_id": "lc-00838",
+    "pi_i": 0.709534,
+    "rng_seed_reserved_at": "seed=20261019@2026-10-19T00:00:00Z",
+    "selector_sha256": "d67369d0a1d34fe5e94fc30c838a730157719df5258ad89a81e21f5ff9f9f200",
+    "size_bytes": 101321400,
+    "stratum": "dht_recent_adult|2026-09|bare_title|lt_100mb",
+    "u_i": 0.120589,
+    "name_blake2b64": "4cbc7327511712b0",
+    "info_hash_blake2b64": "2ed8989f0cd40a4c"
+   },
+   {
+    "R_i": 1,
+    "difficulty_weight": 0.65,
+    "family_id": 642528579,
+    "files": [
+     {
+      "path_blake2b64": "d188b8a40ebb42d2",
+      "size": 10061095187
+     },
+     {
+      "path_blake2b64": "52e9fe40a2974c74",
+      "size": 1380
+     },
+     {
+      "path_blake2b64": "1ef428691fb3124f",
+      "size": 3
+     }
+    ],
+    "item_id": "lc-00839",
+    "pi_i": 0.461197,
+    "rng_seed_reserved_at": "seed=20261019@2026-10-19T00:00:00Z",
+    "selector_sha256": "d67369d0a1d34fe5e94fc30c838a730157719df5258ad89a81e21f5ff9f9f200",
+    "size_bytes": 10061096570,
+    "stratum": "dht_older_plain|2026-09|video_container|2gb_15gb",
+    "u_i": 0.035156,
+    "name_blake2b64": "cbaad52c6dbb8081",
+    "info_hash_blake2b64": "3e4eb75aab306e09"
+   },
+   {
+    "R_i": 1,
+    "difficulty_weight": 1.0,
+    "family_id": 1754487695,
+    "files": [],
+    "item_id": "lc-00840",
+    "pi_i": 0.709534,
+    "rng_seed_reserved_at": "seed=20261019@2026-10-19T00:00:00Z",
+    "selector_sha256": "d67369d0a1d34fe5e94fc30c838a730157719df5258ad89a81e21f5ff9f9f200",
+    "size_bytes": 477988054,
+    "stratum": "dht_older_adult|2026-09|bare_title|100mb_2gb",
+    "u_i": 0.439611,
+    "name_blake2b64": "01d114d479e1191a",
+    "info_hash_blake2b64": "54d8a1ad4d801f3d"
+   },
+   {
+    "R_i": 1,
+    "difficulty_weight": 0.65,
+    "family_id": 1484946983,
+    "files": [
+     {
+      "path_blake2b64": "1e34f6f4e3dfadad",
+      "size": 2074589
+     },
+     {
+      "path_blake2b64": "7b55c9c06a7febc3",
+      "size": 2058383
+     },
+     {
+      "path_blake2b64": "123f1cef67278780",
+      "size": 1324720
+     },
+     {
+      "path_blake2b64": "d2a9665f993c753c",
+      "size": 643472
+     },
+     {
+      "path_blake2b64": "eb475c988d30957d",
+      "size": 133810
+     },
+     {
+      "path_blake2b64": "8f951e7f2306d5ad",
+      "size": 127354
+     }
+    ],
+    "item_id": "lc-00841",
+    "pi_i": 0.461197,
+    "rng_seed_reserved_at": "seed=20261019@2026-10-19T00:00:00Z",
+    "selector_sha256": "d67369d0a1d34fe5e94fc30c838a730157719df5258ad89a81e21f5ff9f9f200",
+    "size_bytes": 7528017,
+    "stratum": "dht_recent_plain|2026-09|video_container|lt_100mb",
+    "u_i": 0.293231,
+    "name_blake2b64": "6c25dff1ac70343b",
+    "info_hash_blake2b64": "11da741779dc3b4b"
+   },
+   {
+    "R_i": 0,
+    "difficulty_weight": 0.65,
+    "family_id": 963789759,
+    "files": [
+     {
+      "path_blake2b64": "f32b8870903140dc",
+      "size": 717072384
+     },
+     {
+      "path_blake2b64": "ddde1aaf95479bd7",
+      "size": 278879
+     }
+    ],
+    "item_id": "lc-00842",
+    "pi_i": 0.461197,
+    "rng_seed_reserved_at": "seed=20261019@2026-10-19T00:00:00Z",
+    "selector_sha256": "d67369d0a1d34fe5e94fc30c838a730157719df5258ad89a81e21f5ff9f9f200",
+    "size_bytes": 717351263,
+    "stratum": "dht_older_plain|2026-08|video_container|100mb_2gb",
+    "u_i": 0.634397,
+    "name_blake2b64": "9d440c66b7e37bae",
+    "info_hash_blake2b64": "24cd0fac7bcb081f"
+   },
+   {
+    "R_i": 1,
+    "difficulty_weight": 0.65,
+    "family_id": 1388789485,
+    "files": [
+     {
+      "path_blake2b64": "0f2eac6220cebe76",
+      "size": 1123380393
+     },
+     {
+      "path_blake2b64": "cf189559447fcaff",
+      "size": 1022920247
+     },
+     {
+      "path_blake2b64": "fb34739abf0737e4",
+      "size": 17748127
+     },
+     {
+      "path_blake2b64": "1ca6fb8353349cc8",
+      "size": 1233367
+     },
+     {
+      "path_blake2b64": "e151edd9ec150b76",
+      "size": 572261
+     },
+     {
+      "path_blake2b64": "6bd5347cbac8f933",
+      "size": 334421
+     }
+    ],
+    "item_id": "lc-00843",
+    "pi_i": 0.461197,
+    "rng_seed_reserved_at": "seed=20261019@2026-10-19T00:00:00Z",
+    "selector_sha256": "d67369d0a1d34fe5e94fc30c838a730157719df5258ad89a81e21f5ff9f9f200",
+    "size_bytes": 2166200474,
+    "stratum": "dht_older_exe_archive|2026-08|video_container|2gb_15gb",
+    "u_i": 0.241436,
+    "name_blake2b64": "6c1163696dd06f50",
+    "info_hash_blake2b64": "87157940d85b320e"
+   },
+   {
+    "R_i": 0,
+    "difficulty_weight": 0.65,
+    "family_id": 194705157,
+    "files": [
+     {
+      "path_blake2b64": "16996957c89d0d07",
+      "size": 786591554
+     }
+    ],
+    "item_id": "lc-00844",
+    "pi_i": 0.461197,
+    "rng_seed_reserved_at": "seed=20261019@2026-10-19T00:00:00Z",
+    "selector_sha256": "d67369d0a1d34fe5e94fc30c838a730157719df5258ad89a81e21f5ff9f9f200",
+    "size_bytes": 786591554,
+    "stratum": "dht_older_plain|2026-06|video_container|100mb_2gb",
+    "u_i": 0.794006,
+    "name_blake2b64": "4e1857db39a6ec08",
+    "info_hash_blake2b64": "6da98e4e1fd33d7d"
+   },
+   {
+    "R_i": 1,
+    "difficulty_weight": 0.65,
+    "family_id": 1165132845,
+    "files": [
+     {
+      "path_blake2b64": "952f5180624caecc",
+      "size": 5320261990
+     },
+     {
+      "path_blake2b64": "20289e4bc6448bd3",
+      "size": 228270
+     },
+     {
+      "path_blake2b64": "edb9606bab5a7ce3",
+      "size": 197522
+     },
+     {
+      "path_blake2b64": "918692e6306de7bc",
+      "size": 177565
+     },
+     {
+      "path_blake2b64": "b89c2e722f02d967",
+      "size": 147887
+     },
+     {
+      "path_blake2b64": "bd93ffbb709482e3",
+      "size": 136594
+     }
+    ],
+    "item_id": "lc-00845",
+    "pi_i": 0.461197,
+    "rng_seed_reserved_at": "seed=20261019@2026-10-19T00:00:00Z",
+    "selector_sha256": "d67369d0a1d34fe5e94fc30c838a730157719df5258ad89a81e21f5ff9f9f200",
+    "size_bytes": 5325647702,
+    "stratum": "dht_recent_exe_archive|2026-09|archive_or_binary|2gb_15gb",
+    "u_i": 0.099094,
+    "name_blake2b64": "6d055c54cadca4ee",
+    "info_hash_blake2b64": "39ca1c8c34f785d1"
+   },
+   {
+    "R_i": 0,
+    "difficulty_weight": 0.65,
+    "family_id": 828337147,
+    "files": [
+     {
+      "path_blake2b64": "530ec6e32a5dad49",
+      "size": 8792857826
+     },
+     {
+      "path_blake2b64": "30eca9f965e8264f",
+      "size": 4851
+     }
+    ],
+    "item_id": "lc-00846",
+    "pi_i": 0.461197,
+    "rng_seed_reserved_at": "seed=20261019@2026-10-19T00:00:00Z",
+    "selector_sha256": "d67369d0a1d34fe5e94fc30c838a730157719df5258ad89a81e21f5ff9f9f200",
+    "size_bytes": 8792862677,
+    "stratum": "dht_older_plain|2026-06|video_container|2gb_15gb",
+    "u_i": 0.849461,
+    "name_blake2b64": "6c5191161ba860fc",
+    "info_hash_blake2b64": "885e5e608f145013"
+   },
+   {
+    "R_i": 0,
+    "difficulty_weight": 0.65,
+    "family_id": 1712098807,
+    "files": [
+     {
+      "path_blake2b64": "02784cac6f66151c",
+      "size": 1005081
+     },
+     {
+      "path_blake2b64": "0d1e4c65c8c3713a",
+      "size": 956948
+     },
+     {
+      "path_blake2b64": "7641bb9931803cc4",
+      "size": 916416
+     },
+     {
+      "path_blake2b64": "a43e558c3b9b9c7c",
+      "size": 888563
+     },
+     {
+      "path_blake2b64": "18675844eecd79d9",
+      "size": 876760
+     },
+     {
+      "path_blake2b64": "e9b57afed0bafa0e",
+      "size": 863392
+     }
+    ],
+    "item_id": "lc-00847",
+    "pi_i": 0.461197,
+    "rng_seed_reserved_at": "seed=20261019@2026-10-19T00:00:00Z",
+    "selector_sha256": "d67369d0a1d34fe5e94fc30c838a730157719df5258ad89a81e21f5ff9f9f200",
+    "size_bytes": 752143263,
+    "stratum": "dht_older_nonlatin|2026-08|other_ext|100mb_2gb",
+    "u_i": 0.514801,
+    "name_blake2b64": "58dcf403298f5243",
+    "info_hash_blake2b64": "05a193720cf2d662"
+   },
+   {
+    "R_i": 0,
+    "difficulty_weight": 0.65,
+    "family_id": 430102241,
+    "files": [
+     {
+      "path_blake2b64": "408fc9a7949d9387",
+      "size": 185733689
+     },
+     {
+      "path_blake2b64": "f47b294e5a64328a",
+      "size": 172952777
+     },
+     {
+      "path_blake2b64": "1cdecdea2550befa",
+      "size": 169545691
+     },
+     {
+      "path_blake2b64": "cc75e1f06c3cc240",
+      "size": 156761523
+     },
+     {
+      "path_blake2b64": "3514d31d97f48606",
+      "size": 2130961
+     },
+     {
+      "path_blake2b64": "1ac4df724f82d151",
+      "size": 1455388
+     }
+    ],
+    "item_id": "lc-00848",
+    "pi_i": 0.461197,
+    "rng_seed_reserved_at": "seed=20261019@2026-10-19T00:00:00Z",
+    "selector_sha256": "d67369d0a1d34fe5e94fc30c838a730157719df5258ad89a81e21f5ff9f9f200",
+    "size_bytes": 690725374,
+    "stratum": "dht_recent_plain|2026-10|audio_container|100mb_2gb",
+    "u_i": 0.666003,
+    "name_blake2b64": "8d4fcf595f8b0db6",
+    "info_hash_blake2b64": "c18aedfe94a46192"
+   },
+   {
+    "R_i": 0,
+    "difficulty_weight": 0.65,
+    "family_id": 16010715,
+    "files": [
+     {
+      "path_blake2b64": "f8d2c3a764db9bfe",
+      "size": 199380607
+     },
+     {
+      "path_blake2b64": "7110f4ec34decbbd",
+      "size": 183337002
+     },
+     {
+      "path_blake2b64": "11289573dbcc9b18",
+      "size": 182704219
+     },
+     {
+      "path_blake2b64": "821cfcda35b9b200",
+      "size": 173707872
+     },
+     {
+      "path_blake2b64": "6a9e0a96c89660b8",
+      "size": 171906101
+     },
+     {
+      "path_blake2b64": "c01837a7e9959c44",
+      "size": 170802674
+     }
+    ],
+    "item_id": "lc-00849",
+    "pi_i": 0.461197,
+    "rng_seed_reserved_at": "seed=20261019@2026-10-19T00:00:00Z",
+    "selector_sha256": "d67369d0a1d34fe5e94fc30c838a730157719df5258ad89a81e21f5ff9f9f200",
+    "size_bytes": 2164435327,
+    "stratum": "dht_older_plain|2025-08|video_container|2gb_15gb",
+    "u_i": 0.757737,
+    "name_blake2b64": "22e8c8fe1e3ebc27",
+    "info_hash_blake2b64": "3e5a4fc146406f92"
+   },
+   {
+    "R_i": 0,
+    "difficulty_weight": 0.65,
+    "family_id": 1007661807,
+    "files": [
+     {
+      "path_blake2b64": "cd2e5bdd5308d8fe",
+      "size": 39074008
+     },
+     {
+      "path_blake2b64": "fd92d0a4df3fcf7a",
+      "size": 20671356
+     },
+     {
+      "path_blake2b64": "2e9f54df2ae49fd9",
+      "size": 20657180
+     },
+     {
+      "path_blake2b64": "ba03281f6a5b950e",
+      "size": 19926350
+     },
+     {
+      "path_blake2b64": "7f2cacf8ce05c62b",
+      "size": 19792889
+     },
+     {
+      "path_blake2b64": "6a72bab4a651ace4",
+      "size": 18309891
+     }
+    ],
+    "item_id": "lc-00850",
+    "pi_i": 0.461197,
+    "rng_seed_reserved_at": "seed=20261019@2026-10-19T00:00:00Z",
+    "selector_sha256": "d67369d0a1d34fe5e94fc30c838a730157719df5258ad89a81e21f5ff9f9f200",
+    "size_bytes": 1016445756,
+    "stratum": "dht_older_plain|2026-08|audio_container|100mb_2gb",
+    "u_i": 0.789312,
+    "name_blake2b64": "ef054a9227dac108",
+    "info_hash_blake2b64": "eeb9f85540a38b0e"
+   },
+   {
+    "R_i": 0,
+    "difficulty_weight": 0.65,
+    "family_id": 1592138307,
+    "files": [
+     {
+      "path_blake2b64": "41eb89d50ba1d608",
+      "size": 640592326
+     },
+     {
+      "path_blake2b64": "f407b7b848513058",
+      "size": 866468
+     },
+     {
+      "path_blake2b64": "44d34b52aeca7524",
+      "size": 73352
+     },
+     {
+      "path_blake2b64": "ad5d83c54324516a",
+      "size": 1096
+     }
+    ],
+    "item_id": "lc-00851",
+    "pi_i": 0.461197,
+    "rng_seed_reserved_at": "seed=20261019@2026-10-19T00:00:00Z",
+    "selector_sha256": "d67369d0a1d34fe5e94fc30c838a730157719df5258ad89a81e21f5ff9f9f200",
+    "size_bytes": 641533242,
+    "stratum": "dht_recent_adult|2026-10|video_container|100mb_2gb",
+    "u_i": 0.632505,
+    "name_blake2b64": "cacdde5196d1631a",
+    "info_hash_blake2b64": "2555584e8ba67825"
+   },
+   {
+    "R_i": 1,
+    "difficulty_weight": 1.0,
+    "family_id": 1081387078,
+    "files": [],
+    "item_id": "lc-00852",
+    "pi_i": 0.709534,
+    "rng_seed_reserved_at": "seed=20261019@2026-10-19T00:00:00Z",
+    "selector_sha256": "d67369d0a1d34fe5e94fc30c838a730157719df5258ad89a81e21f5ff9f9f200",
+    "size_bytes": 3397021744,
+    "stratum": "dht_older_exe_archive|2026-08|bare_title|2gb_15gb",
+    "u_i": 0.270912,
+    "name_blake2b64": "acc07ed3a55072f0",
+    "info_hash_blake2b64": "950942dc1d2f349a"
+   },
+   {
+    "R_i": 1,
+    "difficulty_weight": 0.65,
+    "family_id": 1103716148,
+    "files": [
+     {
+      "path_blake2b64": "810581b6a42241f7",
+      "size": 912891270
+     },
+     {
+      "path_blake2b64": "6b4d6dfb007e2dfb",
+      "size": 202
+     },
+     {
+      "path_blake2b64": "7c578340a3442d73",
+      "size": 20
+     }
+    ],
+    "item_id": "lc-00853",
+    "pi_i": 0.461197,
+    "rng_seed_reserved_at": "seed=20261019@2026-10-19T00:00:00Z",
+    "selector_sha256": "d67369d0a1d34fe5e94fc30c838a730157719df5258ad89a81e21f5ff9f9f200",
+    "size_bytes": 912891492,
+    "stratum": "dht_recent_plain|2026-09|video_container|100mb_2gb",
+    "u_i": 0.227371,
+    "name_blake2b64": "76d3a142411a6f70",
+    "info_hash_blake2b64": "db435413b49d1a9d"
+   },
+   {
+    "R_i": 0,
+    "difficulty_weight": 1.0,
+    "family_id": 1999784697,
+    "files": [
+     {
+      "path_blake2b64": "6eb17cd789529813",
+      "size": 559842248
+     }
+    ],
+    "item_id": "lc-00854",
+    "pi_i": 0.709534,
+    "rng_seed_reserved_at": "seed=20261019@2026-10-19T00:00:00Z",
+    "selector_sha256": "d67369d0a1d34fe5e94fc30c838a730157719df5258ad89a81e21f5ff9f9f200",
+    "size_bytes": 559842248,
+    "stratum": "dht_older_plain|2026-09|video_container|100mb_2gb",
+    "u_i": 0.834413,
+    "name_blake2b64": "56c70d2176f76454",
+    "info_hash_blake2b64": "0d3f55756773c89c"
+   },
+   {
+    "R_i": 0,
+    "difficulty_weight": 0.65,
+    "family_id": 746267187,
+    "files": [],
+    "item_id": "lc-00855",
+    "pi_i": 0.461197,
+    "rng_seed_reserved_at": "seed=20261019@2026-10-19T00:00:00Z",
+    "selector_sha256": "d67369d0a1d34fe5e94fc30c838a730157719df5258ad89a81e21f5ff9f9f200",
+    "size_bytes": 1648670720,
+    "stratum": "dht_older_plain|2025-10|bare_title|100mb_2gb",
+    "u_i": 0.782182,
+    "name_blake2b64": "0c2b7f8547e280cc",
+    "info_hash_blake2b64": "2c0f72966ca7b15b"
+   },
+   {
+    "R_i": 1,
+    "difficulty_weight": 0.65,
+    "family_id": 2099305465,
+    "files": [
+     {
+      "path_blake2b64": "a33a1565ddad7ba0",
+      "size": 306350256
+     },
+     {
+      "path_blake2b64": "694ca3c21fb2ec73",
+      "size": 14169327
+     },
+     {
+      "path_blake2b64": "c24c670702fedfd1",
+      "size": 262023
+     },
+     {
+      "path_blake2b64": "c691234e272847fe",
+      "size": 248593
+     },
+     {
+      "path_blake2b64": "74bf3488fa71be78",
+      "size": 145545
+     },
+     {
+      "path_blake2b64": "5de5bdc1488e7a0f",
+      "size": 116599
+     }
+    ],
+    "item_id": "lc-00856",
+    "pi_i": 0.461197,
+    "rng_seed_reserved_at": "seed=20261019@2026-10-19T00:00:00Z",
+    "selector_sha256": "d67369d0a1d34fe5e94fc30c838a730157719df5258ad89a81e21f5ff9f9f200",
+    "size_bytes": 321388700,
+    "stratum": "dht_recent_exe_archive|2026-10|video_container|100mb_2gb",
+    "u_i": 0.453539,
+    "name_blake2b64": "14d1d26becc23bcb",
+    "info_hash_blake2b64": "4315c53542f3074b"
+   },
+   {
+    "R_i": 1,
+    "difficulty_weight": 0.65,
+    "family_id": 1028966845,
+    "files": [
+     {
+      "path_blake2b64": "7c8a33eda8387df3",
+      "size": 12234166
+     },
+     {
+      "path_blake2b64": "8908fb388c6cb641",
+      "size": 9533213
+     },
+     {
+      "path_blake2b64": "fb3af9e9b2d9d366",
+      "size": 8374025
+     },
+     {
+      "path_blake2b64": "16aa6717bfdff4dc",
+      "size": 8228211
+     },
+     {
+      "path_blake2b64": "09f8000d0114b92c",
+      "size": 8117587
+     },
+     {
+      "path_blake2b64": "e280c113c7ac7809",
+      "size": 7676810
+     }
+    ],
+    "item_id": "lc-00857",
+    "pi_i": 0.461197,
+    "rng_seed_reserved_at": "seed=20261019@2026-10-19T00:00:00Z",
+    "selector_sha256": "d67369d0a1d34fe5e94fc30c838a730157719df5258ad89a81e21f5ff9f9f200",
+    "size_bytes": 112959573,
+    "stratum": "dht_older_plain|2026-09|audio_container|100mb_2gb",
+    "u_i": 0.203975,
+    "name_blake2b64": "2568b5c85442de58",
+    "info_hash_blake2b64": "5e898641081a5aad"
+   },
+   {
+    "R_i": 1,
+    "difficulty_weight": 1.0,
+    "family_id": 1836573214,
+    "files": [],
+    "item_id": "lc-00858",
+    "pi_i": 0.709534,
+    "rng_seed_reserved_at": "seed=20261019@2026-10-19T00:00:00Z",
+    "selector_sha256": "d67369d0a1d34fe5e94fc30c838a730157719df5258ad89a81e21f5ff9f9f200",
+    "size_bytes": 8832694797,
+    "stratum": "dht_recent_plain|2026-10|bare_title|2gb_15gb",
+    "u_i": 0.165943,
+    "name_blake2b64": "59a46efcc165b320",
+    "info_hash_blake2b64": "6faf683825311258"
+   },
+   {
+    "R_i": 1,
+    "difficulty_weight": 0.65,
+    "family_id": 1882551569,
+    "files": [
+     {
+      "path_blake2b64": "b34a339ee9028e83",
+      "size": 9420300
+     },
+     {
+      "path_blake2b64": "38fc090788c90ade",
+      "size": 8942686
+     },
+     {
+      "path_blake2b64": "cdbf0459115a56dc",
+      "size": 8509093
+     },
+     {
+      "path_blake2b64": "e0f92923080d908d",
+      "size": 8466170
+     },
+     {
+      "path_blake2b64": "a671a1e1d2476565",
+      "size": 7924997
+     },
+     {
+      "path_blake2b64": "c5d17e88c723643c",
+      "size": 3439168
+     }
+    ],
+    "item_id": "lc-00859",
+    "pi_i": 0.461197,
+    "rng_seed_reserved_at": "seed=20261019@2026-10-19T00:00:00Z",
+    "selector_sha256": "d67369d0a1d34fe5e94fc30c838a730157719df5258ad89a81e21f5ff9f9f200",
+    "size_bytes": 46737803,
+    "stratum": "dht_older_plain|2026-09|audio_container|lt_100mb",
+    "u_i": 0.116795,
+    "name_blake2b64": "d668af557e19be8d",
+    "info_hash_blake2b64": "bad7666bb382f272"
+   },
+   {
+    "R_i": 0,
+    "difficulty_weight": 0.65,
+    "family_id": 583420319,
+    "files": [
+     {
+      "path_blake2b64": "4a9c0fc550eedd3c",
+      "size": 747219
+     },
+     {
+      "path_blake2b64": "4fe43b8d8480ab80",
+      "size": 741849
+     },
+     {
+      "path_blake2b64": "0238f077647f9fee",
+      "size": 735378
+     },
+     {
+      "path_blake2b64": "67f5823762ce6505",
+      "size": 733910
+     },
+     {
+      "path_blake2b64": "ea56c688182cae43",
+      "size": 722899
+     },
+     {
+      "path_blake2b64": "b908497be87df563",
+      "size": 715746
+     }
+    ],
+    "item_id": "lc-00860",
+    "pi_i": 0.461197,
+    "rng_seed_reserved_at": "seed=20261019@2026-10-19T00:00:00Z",
+    "selector_sha256": "d67369d0a1d34fe5e94fc30c838a730157719df5258ad89a81e21f5ff9f9f200",
+    "size_bytes": 40365204,
+    "stratum": "dht_recent_nonlatin|2026-09|other_ext|lt_100mb",
+    "u_i": 0.515294,
+    "name_blake2b64": "2665fa34aa955570",
+    "info_hash_blake2b64": "33e05008fa7f31a3"
+   },
+   {
+    "R_i": 1,
+    "difficulty_weight": 1.0,
+    "family_id": 1563836065,
+    "files": [],
+    "item_id": "lc-00861",
+    "pi_i": 0.709534,
+    "rng_seed_reserved_at": "seed=20261019@2026-10-19T00:00:00Z",
+    "selector_sha256": "d67369d0a1d34fe5e94fc30c838a730157719df5258ad89a81e21f5ff9f9f200",
+    "size_bytes": 731338752,
+    "stratum": "dht_older_plain|2026-09|bare_title|100mb_2gb",
+    "u_i": 0.586469,
+    "name_blake2b64": "d3d2ff0832225d76",
+    "info_hash_blake2b64": "0010d9eb79175d45"
+   },
+   {
+    "R_i": 1,
+    "difficulty_weight": 0.65,
+    "family_id": 239424225,
+    "files": [
+     {
+      "path_blake2b64": "4cef08860b53b169",
+      "size": 14755219
+     },
+     {
+      "path_blake2b64": "d052a42006415052",
+      "size": 13681989
+     },
+     {
+      "path_blake2b64": "960b5a1e92189919",
+      "size": 11429793
+     },
+     {
+      "path_blake2b64": "edf5a6dabc25a333",
+      "size": 11367383
+     },
+     {
+      "path_blake2b64": "9b47d3b4f91e3d48",
+      "size": 10368992
+     },
+     {
+      "path_blake2b64": "0e3c987842fad4cd",
+      "size": 9299657
+     }
+    ],
+    "item_id": "lc-00862",
+    "pi_i": 0.461197,
+    "rng_seed_reserved_at": "seed=20261019@2026-10-19T00:00:00Z",
+    "selector_sha256": "d67369d0a1d34fe5e94fc30c838a730157719df5258ad89a81e21f5ff9f9f200",
+    "size_bytes": 98140344,
+    "stratum": "dht_recent_plain|2026-09|audio_container|lt_100mb",
+    "u_i": 0.031207,
+    "name_blake2b64": "5e5e9a831f08d643",
+    "info_hash_blake2b64": "57625c01080f5b13"
+   },
+   {
+    "R_i": 1,
+    "difficulty_weight": 1.0,
+    "family_id": 519390427,
+    "files": [
+     {
+      "path_blake2b64": "d39821033ef5d1b0",
+      "size": 941692818
+     }
+    ],
+    "item_id": "lc-00863",
+    "pi_i": 0.709534,
+    "rng_seed_reserved_at": "seed=20261019@2026-10-19T00:00:00Z",
+    "selector_sha256": "d67369d0a1d34fe5e94fc30c838a730157719df5258ad89a81e21f5ff9f9f200",
+    "size_bytes": 941692818,
+    "stratum": "dht_older_plain|2026-08|video_container|100mb_2gb",
+    "u_i": 0.634725,
+    "name_blake2b64": "b909cd7969a3bb78",
+    "info_hash_blake2b64": "71e19669833f202a"
+   },
+   {
+    "R_i": 0,
+    "difficulty_weight": 0.65,
+    "family_id": 1401039274,
+    "files": [
+     {
+      "path_blake2b64": "f7580cdfddbd17f4",
+      "size": 1685605600
+     },
+     {
+      "path_blake2b64": "af61fd5e6701cb70",
+      "size": 54376967
+     },
+     {
+      "path_blake2b64": "aa31c8a9bde78dc1",
+      "size": 45955165
+     },
+     {
+      "path_blake2b64": "07354ac08060b7be",
+      "size": 2671
+     },
+     {
+      "path_blake2b64": "8198388f968a67a8",
+      "size": 169
+     }
+    ],
+    "item_id": "lc-00864",
+    "pi_i": 0.461197,
+    "rng_seed_reserved_at": "seed=20261019@2026-10-19T00:00:00Z",
+    "selector_sha256": "d67369d0a1d34fe5e94fc30c838a730157719df5258ad89a81e21f5ff9f9f200",
+    "size_bytes": 1785940572,
+    "stratum": "dht_older_plain|2026-08|video_container|100mb_2gb",
+    "u_i": 0.736586,
+    "name_blake2b64": "56bce0069d154d8b",
+    "info_hash_blake2b64": "05b4c680880d4e39"
+   },
+   {
+    "R_i": 1,
+    "difficulty_weight": 0.65,
+    "family_id": 2083677887,
+    "files": [
+     {
+      "path_blake2b64": "0e00ac47e77553c2",
+      "size": 732493824
+     },
+     {
+      "path_blake2b64": "9796093b16b3b237",
+      "size": 732076032
+     },
+     {
+      "path_blake2b64": "2de5d315195bcafe",
+      "size": 728842240
+     },
+     {
+      "path_blake2b64": "8fda383dc92ccd6a",
+      "size": 728690688
+     },
+     {
+      "path_blake2b64": "8ce1c9e444121a6f",
+      "size": 827911
+     },
+     {
+      "path_blake2b64": "acf4add64c202b17",
+      "size": 825291
+     }
+    ],
+    "item_id": "lc-00865",
+    "pi_i": 0.461197,
+    "rng_seed_reserved_at": "seed=20261019@2026-10-19T00:00:00Z",
+    "selector_sha256": "d67369d0a1d34fe5e94fc30c838a730157719df5258ad89a81e21f5ff9f9f200",
+    "size_bytes": 2925730308,
+    "stratum": "dht_recent_plain|2026-09|video_container|2gb_15gb",
+    "u_i": 0.184544,
+    "name_blake2b64": "a6d73146af73212c",
+    "info_hash_blake2b64": "9979469ad7f2942f"
+   },
+   {
+    "R_i": 0,
+    "difficulty_weight": 0.65,
+    "family_id": 24101598,
+    "files": [
+     {
+      "path_blake2b64": "2d5eb91903c10eff",
+      "size": 2478325047
+     },
+     {
+      "path_blake2b64": "1b3a2effc4adf9f0",
+      "size": 34
+     }
+    ],
+    "item_id": "lc-00866",
+    "pi_i": 0.461197,
+    "rng_seed_reserved_at": "seed=20261019@2026-10-19T00:00:00Z",
+    "selector_sha256": "d67369d0a1d34fe5e94fc30c838a730157719df5258ad89a81e21f5ff9f9f200",
+    "size_bytes": 2478325081,
+    "stratum": "dht_recent_plain|2026-10|video_container|2gb_15gb",
+    "u_i": 0.668031,
+    "name_blake2b64": "dbafd2b115aae79e",
+    "info_hash_blake2b64": "370a885b2631dac7"
+   },
+   {
+    "R_i": 1,
+    "difficulty_weight": 1.0,
+    "family_id": 538685149,
+    "files": [],
+    "item_id": "lc-00867",
+    "pi_i": 0.709534,
+    "rng_seed_reserved_at": "seed=20261019@2026-10-19T00:00:00Z",
+    "selector_sha256": "d67369d0a1d34fe5e94fc30c838a730157719df5258ad89a81e21f5ff9f9f200",
+    "size_bytes": 280219804,
+    "stratum": "dht_recent_plain|2026-10|bare_title|100mb_2gb",
+    "u_i": 0.243372,
+    "name_blake2b64": "2c7099b921eaa439",
+    "info_hash_blake2b64": "f64e0df55e60e966"
+   },
+   {
+    "R_i": 0,
+    "difficulty_weight": 0.65,
+    "family_id": 788210900,
+    "files": [
+     {
+      "path_blake2b64": "6558df7e9ab6c49b",
+      "size": 26780636232
+     },
+     {
+      "path_blake2b64": "d1508b1e454e617e",
+      "size": 7800899920
+     },
+     {
+      "path_blake2b64": "2a40fdab7c8da080",
+      "size": 3379902496
+     },
+     {
+      "path_blake2b64": "d1b0b74a9d6f8e3a",
+      "size": 3156152352
+     },
+     {
+      "path_blake2b64": "d57a2c28d0df0be8",
+      "size": 797140888
+     },
+     {
+      "path_blake2b64": "c3314311cf3df47f",
+      "size": 790502272
+     }
+    ],
+    "item_id": "lc-00868",
+    "pi_i": 0.461197,
+    "rng_seed_reserved_at": "seed=20261019@2026-10-19T00:00:00Z",
+    "selector_sha256": "d67369d0a1d34fe5e94fc30c838a730157719df5258ad89a81e21f5ff9f9f200",
+    "size_bytes": 48799112688,
+    "stratum": "dht_recent_exe_archive|2026-09|other_ext|ge_15gb",
+    "u_i": 0.876151,
+    "name_blake2b64": "6bca0e3695afc528",
+    "info_hash_blake2b64": "9233be9e77abb0c7"
+   },
+   {
+    "R_i": 1,
+    "difficulty_weight": 1.0,
+    "family_id": 231237282,
+    "files": [],
+    "item_id": "lc-00869",
+    "pi_i": 0.709534,
+    "rng_seed_reserved_at": "seed=20261019@2026-10-19T00:00:00Z",
+    "selector_sha256": "d67369d0a1d34fe5e94fc30c838a730157719df5258ad89a81e21f5ff9f9f200",
+    "size_bytes": 5385067523,
+    "stratum": "dht_recent_nonlatin|2026-09|bare_title|2gb_15gb",
+    "u_i": 0.399918,
+    "name_blake2b64": "1647585934eea80b",
+    "info_hash_blake2b64": "bcba12c20f090421"
+   },
+   {
+    "R_i": 0,
+    "difficulty_weight": 0.65,
+    "family_id": 1619129295,
+    "files": [
+     {
+      "path_blake2b64": "afbd231b002331ee",
+      "size": 1811052
+     },
+     {
+      "path_blake2b64": "d64e7057e968d5f2",
+      "size": 1397180
+     },
+     {
+      "path_blake2b64": "0b9dc5fa1bec1de5",
+      "size": 1241581
+     },
+     {
+      "path_blake2b64": "ec8417edea73dfdf",
+      "size": 1219159
+     },
+     {
+      "path_blake2b64": "1ceb48c356df000e",
+      "size": 1176680
+     },
+     {
+      "path_blake2b64": "fc65027ff85df783",
+      "size": 1137364
+     }
+    ],
+    "item_id": "lc-00870",
+    "pi_i": 0.461197,
+    "rng_seed_reserved_at": "seed=20261019@2026-10-19T00:00:00Z",
+    "selector_sha256": "d67369d0a1d34fe5e94fc30c838a730157719df5258ad89a81e21f5ff9f9f200",
+    "size_bytes": 112589309,
+    "stratum": "dht_older_adult|2026-09|other_ext|100mb_2gb",
+    "u_i": 0.813028,
+    "name_blake2b64": "b9606c90fdc22bec",
+    "info_hash_blake2b64": "cf44259fdad86925"
+   },
+   {
+    "R_i": 0,
+    "difficulty_weight": 1.0,
+    "family_id": 191138594,
+    "files": [],
+    "item_id": "lc-00871",
+    "pi_i": 0.709534,
+    "rng_seed_reserved_at": "seed=20261019@2026-10-19T00:00:00Z",
+    "selector_sha256": "d67369d0a1d34fe5e94fc30c838a730157719df5258ad89a81e21f5ff9f9f200",
+    "size_bytes": 308672205,
+    "stratum": "dht_older_plain|2026-06|bare_title|100mb_2gb",
+    "u_i": 0.97823,
+    "name_blake2b64": "88c3ed7a167f5fc6",
+    "info_hash_blake2b64": "0d42f0b8d16b94cb"
+   },
+   {
+    "R_i": 0,
+    "difficulty_weight": 0.65,
+    "family_id": 828869277,
+    "files": [
+     {
+      "path_blake2b64": "a350d48561e0561c",
+      "size": 6716356800
+     },
+     {
+      "path_blake2b64": "9e1cc00b238454c2",
+      "size": 861538816
+     },
+     {
+      "path_blake2b64": "d5e687cb648cca9b",
+      "size": 861538816
+     },
+     {
+      "path_blake2b64": "02ddab4e8d46eff6",
+      "size": 465127936
+     },
+     {
+      "path_blake2b64": "8720cd70d6d9dd3f",
+      "size": 253708800
+     },
+     {
+      "path_blake2b64": "be09360963bee4b8",
+      "size": 253708800
+     }
+    ],
+    "item_id": "lc-00872",
+    "pi_i": 0.461197,
+    "rng_seed_reserved_at": "seed=20261019@2026-10-19T00:00:00Z",
+    "selector_sha256": "d67369d0a1d34fe5e94fc30c838a730157719df5258ad89a81e21f5ff9f9f200",
+    "size_bytes": 9971767316,
+    "stratum": "dht_recent_plain|2026-10|other_ext|2gb_15gb",
+    "u_i": 0.729105,
+    "name_blake2b64": "4ded000def11fe6e",
+    "info_hash_blake2b64": "c8ec7cb73c9d522a"
+   },
+   {
+    "R_i": 1,
+    "difficulty_weight": 1.0,
+    "family_id": 432950312,
+    "files": [],
+    "item_id": "lc-00873",
+    "pi_i": 0.709534,
+    "rng_seed_reserved_at": "seed=20261019@2026-10-19T00:00:00Z",
+    "selector_sha256": "d67369d0a1d34fe5e94fc30c838a730157719df5258ad89a81e21f5ff9f9f200",
+    "size_bytes": 61252518,
+    "stratum": "dht_recent_exe_archive|2026-09|bare_title|lt_100mb",
+    "u_i": 0.546542,
+    "name_blake2b64": "93a6874948f640e2",
+    "info_hash_blake2b64": "74c14936cebafbfb"
+   },
+   {
+    "R_i": 1,
+    "difficulty_weight": 1.0,
+    "family_id": 770069535,
+    "files": [],
+    "item_id": "lc-00874",
+    "pi_i": 0.709534,
+    "rng_seed_reserved_at": "seed=20261019@2026-10-19T00:00:00Z",
+    "selector_sha256": "d67369d0a1d34fe5e94fc30c838a730157719df5258ad89a81e21f5ff9f9f200",
+    "size_bytes": 1364506952,
+    "stratum": "dht_older_nonlatin|2026-09|bare_title|100mb_2gb",
+    "u_i": 0.5823,
+    "name_blake2b64": "4fa6cff3758d8f43",
+    "info_hash_blake2b64": "b2fb139001f91bd8"
+   },
+   {
+    "R_i": 0,
+    "difficulty_weight": 0.65,
+    "family_id": 1575366346,
+    "files": [
+     {
+      "path_blake2b64": "054b8fa8d0e534ed",
+      "size": 734373888
+     },
+     {
+      "path_blake2b64": "8eca383b5a277207",
+      "size": 734066688
+     },
+     {
+      "path_blake2b64": "b8bfe20fdca45c4b",
+      "size": 733865984
+     },
+     {
+      "path_blake2b64": "f1a078364dd15988",
+      "size": 733044736
+     },
+     {
+      "path_blake2b64": "b0ee8b23f0c7f75a",
+      "size": 5786492
+     },
+     {
+      "path_blake2b64": "e03bcb9b18c406bb",
+      "size": 3127716
+     }
+    ],
+    "item_id": "lc-00876",
+    "pi_i": 0.461197,
+    "rng_seed_reserved_at": "seed=20261019@2026-10-19T00:00:00Z",
+    "selector_sha256": "d67369d0a1d34fe5e94fc30c838a730157719df5258ad89a81e21f5ff9f9f200",
+    "size_bytes": 2959694167,
+    "stratum": "dht_older_plain|2026-09|video_container|2gb_15gb",
+    "u_i": 0.664172,
+    "name_blake2b64": "00b9e81a73d6a282",
+    "info_hash_blake2b64": "9e2adb71e63dd3cc"
+   },
+   {
+    "R_i": 1,
+    "difficulty_weight": 1.0,
+    "family_id": 983781403,
+    "files": [
+     {
+      "path_blake2b64": "80fd656d9a1159f3",
+      "size": 319253526
+     }
+    ],
+    "item_id": "lc-00878",
+    "pi_i": 0.709534,
+    "rng_seed_reserved_at": "seed=20261019@2026-10-19T00:00:00Z",
+    "selector_sha256": "d67369d0a1d34fe5e94fc30c838a730157719df5258ad89a81e21f5ff9f9f200",
+    "size_bytes": 319253526,
+    "stratum": "dht_recent_plain|2026-09|video_container|100mb_2gb",
+    "u_i": 0.628057,
+    "name_blake2b64": "2bc8c02c80076553",
+    "info_hash_blake2b64": "1c2d28929094ec5d"
+   },
+   {
+    "R_i": 0,
+    "difficulty_weight": 0.65,
+    "family_id": 408164161,
+    "files": [
+     {
+      "path_blake2b64": "2e3998ed9df71d3f",
+      "size": 6061106695
+     },
+     {
+      "path_blake2b64": "564787cf12cccef8",
+      "size": 22179139
+     },
+     {
+      "path_blake2b64": "c35590cb362e4d81",
+      "size": 8937347
+     },
+     {
+      "path_blake2b64": "4e161d13a4c3dd36",
+      "size": 7694643
+     },
+     {
+      "path_blake2b64": "ae1849dfcf5f9907",
+      "size": 5675782
+     },
+     {
+      "path_blake2b64": "0c67e34eb4df5efa",
+      "size": 651994
+     }
+    ],
+    "item_id": "lc-00879",
+    "pi_i": 0.461197,
+    "rng_seed_reserved_at": "seed=20261019@2026-10-19T00:00:00Z",
+    "selector_sha256": "d67369d0a1d34fe5e94fc30c838a730157719df5258ad89a81e21f5ff9f9f200",
+    "size_bytes": 6106374145,
+    "stratum": "dht_older_exe_archive|2026-08|video_container|2gb_15gb",
+    "u_i": 0.872668,
+    "name_blake2b64": "0a45674955f11c2b",
+    "info_hash_blake2b64": "fb3ece4a30616f52"
+   },
+   {
+    "R_i": 1,
+    "difficulty_weight": 1.0,
+    "family_id": 1094218953,
+    "files": [],
+    "item_id": "lc-00880",
+    "pi_i": 0.709534,
+    "rng_seed_reserved_at": "seed=20261019@2026-10-19T00:00:00Z",
+    "selector_sha256": "d67369d0a1d34fe5e94fc30c838a730157719df5258ad89a81e21f5ff9f9f200",
+    "size_bytes": 370635672,
+    "stratum": "dht_older_adult|2026-08|bare_title|100mb_2gb",
+    "u_i": 0.1127,
+    "name_blake2b64": "1814e6104e9a514d",
+    "info_hash_blake2b64": "b0f9c9a0e9e9e8b6"
+   },
+   {
+    "R_i": 0,
+    "difficulty_weight": 0.65,
+    "family_id": 677210682,
+    "files": [
+     {
+      "path_blake2b64": "498f5f0d1e5d9da2",
+      "size": 10168790
+     },
+     {
+      "path_blake2b64": "5853ee5a63a02918",
+      "size": 9379888
+     },
+     {
+      "path_blake2b64": "8ca7c32ab82b57f1",
+      "size": 8858484
+     },
+     {
+      "path_blake2b64": "916bee183d3c9502",
+      "size": 8538758
+     },
+     {
+      "path_blake2b64": "6e38b0f13870954a",
+      "size": 4003875
+     },
+     {
+      "path_blake2b64": "4c293b44f4c14e15",
+      "size": 159352
+     }
+    ],
+    "item_id": "lc-00881",
+    "pi_i": 0.461197,
+    "rng_seed_reserved_at": "seed=20261019@2026-10-19T00:00:00Z",
+    "selector_sha256": "d67369d0a1d34fe5e94fc30c838a730157719df5258ad89a81e21f5ff9f9f200",
+    "size_bytes": 41109147,
+    "stratum": "dht_older_plain|2026-09|audio_container|lt_100mb",
+    "u_i": 0.931922,
+    "name_blake2b64": "668c365cff6838f4",
+    "info_hash_blake2b64": "e8c83a787e2bd1fd"
+   },
+   {
+    "R_i": 1,
+    "difficulty_weight": 1.0,
+    "family_id": 1675627845,
+    "files": [
+     {
+      "path_blake2b64": "b634d140babcf31e",
+      "size": 138945176
+     }
+    ],
+    "item_id": "lc-00882",
+    "pi_i": 0.709534,
+    "rng_seed_reserved_at": "seed=20261019@2026-10-19T00:00:00Z",
+    "selector_sha256": "d67369d0a1d34fe5e94fc30c838a730157719df5258ad89a81e21f5ff9f9f200",
+    "size_bytes": 138945176,
+    "stratum": "dht_older_nonlatin|2026-09|video_container|100mb_2gb",
+    "u_i": 0.07879,
+    "name_blake2b64": "6556dcdad994d709",
+    "info_hash_blake2b64": "16b9bdc915b1714c"
+   },
+   {
+    "R_i": 0,
+    "difficulty_weight": 0.65,
+    "family_id": 1030798599,
+    "files": [
+     {
+      "path_blake2b64": "8a904a724fcfd4ba",
+      "size": 2136
+     }
+    ],
+    "item_id": "lc-00883",
+    "pi_i": 0.461197,
+    "rng_seed_reserved_at": "seed=20261019@2026-10-19T00:00:00Z",
+    "selector_sha256": "d67369d0a1d34fe5e94fc30c838a730157719df5258ad89a81e21f5ff9f9f200",
+    "size_bytes": 2136,
+    "stratum": "dht_recent_nonlatin|2026-09|other_ext|lt_100mb",
+    "u_i": 0.624641,
+    "name_blake2b64": "08c201e5da09c53e",
+    "info_hash_blake2b64": "ea66dcedbf1057e5"
+   },
+   {
+    "R_i": 1,
+    "difficulty_weight": 0.65,
+    "family_id": 647174100,
+    "files": [
+     {
+      "path_blake2b64": "556b1439b74d173a",
+      "size": 613881512
+     },
+     {
+      "path_blake2b64": "1733e01bca3c69d2",
+      "size": 31504
+     },
+     {
+      "path_blake2b64": "43e4d2eb0cdfefbd",
+      "size": 28672
+     },
+     {
+      "path_blake2b64": "ea07ce6ae0d74392",
+      "size": 12639
+     },
+     {
+      "path_blake2b64": "d36d9e7bf216e699",
+      "size": 8598
+     },
+     {
+      "path_blake2b64": "b012d158a182ead1",
+      "size": 1393
+     }
+    ],
+    "item_id": "lc-00884",
+    "pi_i": 0.461197,
+    "rng_seed_reserved_at": "seed=20261019@2026-10-19T00:00:00Z",
+    "selector_sha256": "d67369d0a1d34fe5e94fc30c838a730157719df5258ad89a81e21f5ff9f9f200",
+    "size_bytes": 613964318,
+    "stratum": "dht_recent_plain|2026-09|other_ext|100mb_2gb",
+    "u_i": 0.212548,
+    "name_blake2b64": "7faa0f293edfa557",
+    "info_hash_blake2b64": "c0a4e559a24af910"
+   },
+   {
+    "R_i": 1,
+    "difficulty_weight": 1.0,
+    "family_id": 786169951,
+    "files": [],
+    "item_id": "lc-00885",
+    "pi_i": 0.709534,
+    "rng_seed_reserved_at": "seed=20261019@2026-10-19T00:00:00Z",
+    "selector_sha256": "d67369d0a1d34fe5e94fc30c838a730157719df5258ad89a81e21f5ff9f9f200",
+    "size_bytes": 5475027869,
+    "stratum": "dht_recent_plain|2026-10|bare_title|2gb_15gb",
+    "u_i": 0.677755,
+    "name_blake2b64": "209fda5538d03dcd",
+    "info_hash_blake2b64": "e01c864bfa1a89a2"
+   },
+   {
+    "R_i": 0,
+    "difficulty_weight": 0.65,
+    "family_id": 1574553198,
+    "files": [
+     {
+      "path_blake2b64": "e81e7c4fe43fabf2",
+      "size": 4009183744
+     },
+     {
+      "path_blake2b64": "8890c87fafb0db65",
+      "size": 491392
+     },
+     {
+      "path_blake2b64": "44eb54d684794028",
+      "size": 173821
+     },
+     {
+      "path_blake2b64": "30541f5569c23774",
+      "size": 36483
+     },
+     {
+      "path_blake2b64": "3d45147351a0a691",
+      "size": 651
+     },
+     {
+      "path_blake2b64": "d6b7a1272d32e5bf",
+      "size": 216
+     }
+    ],
+    "item_id": "lc-00886",
+    "pi_i": 0.461197,
+    "rng_seed_reserved_at": "seed=20261019@2026-10-19T00:00:00Z",
+    "selector_sha256": "d67369d0a1d34fe5e94fc30c838a730157719df5258ad89a81e21f5ff9f9f200",
+    "size_bytes": 4009886511,
+    "stratum": "dht_older_nonlatin|2026-09|video_container|2gb_15gb",
+    "u_i": 0.969209,
+    "name_blake2b64": "137f9c2be62866fa",
+    "info_hash_blake2b64": "1da54adfb5cf9fda"
+   },
+   {
+    "R_i": 1,
+    "difficulty_weight": 1.0,
+    "family_id": 1881027041,
+    "files": [],
+    "item_id": "lc-00887",
+    "pi_i": 0.709534,
+    "rng_seed_reserved_at": "seed=20261019@2026-10-19T00:00:00Z",
+    "selector_sha256": "d67369d0a1d34fe5e94fc30c838a730157719df5258ad89a81e21f5ff9f9f200",
+    "size_bytes": 167398012,
+    "stratum": "dht_older_plain|2026-09|bare_title|100mb_2gb",
+    "u_i": 0.333711,
+    "name_blake2b64": "5f674dba1e26c7e7",
+    "info_hash_blake2b64": "b0dd104b7be8dec0"
+   },
+   {
+    "R_i": 1,
+    "difficulty_weight": 0.65,
+    "family_id": 334367029,
+    "files": [
+     {
+      "path_blake2b64": "10fd7d466ad0ecb2",
+      "size": 13280034
+     },
+     {
+      "path_blake2b64": "3a4fe30802491302",
+      "size": 339
+     },
+     {
+      "path_blake2b64": "85fbe4c3f7d6b34f",
+      "size": 185
+     }
+    ],
+    "item_id": "lc-00888",
+    "pi_i": 0.461197,
+    "rng_seed_reserved_at": "seed=20261019@2026-10-19T00:00:00Z",
+    "selector_sha256": "d67369d0a1d34fe5e94fc30c838a730157719df5258ad89a81e21f5ff9f9f200",
+    "size_bytes": 13280558,
+    "stratum": "dht_older_plain|2026-08|other_ext|lt_100mb",
+    "u_i": 0.395468,
+    "name_blake2b64": "7b693231fdd448ef",
+    "info_hash_blake2b64": "90a0003e16be5111"
+   },
+   {
+    "R_i": 1,
+    "difficulty_weight": 0.65,
+    "family_id": 1167848789,
+    "files": [
+     {
+      "path_blake2b64": "f4259cfa8ed40134",
+      "size": 546413424
+     },
+     {
+      "path_blake2b64": "f91eabf094302ba7",
+      "size": 402934480
+     },
+     {
+      "path_blake2b64": "388c3b98d2276d72",
+      "size": 331320112
+     },
+     {
+      "path_blake2b64": "9d9f72f572e7d8fd",
+      "size": 320782304
+     },
+     {
+      "path_blake2b64": "8449abba3e33a9cb",
+      "size": 311400128
+     },
+     {
+      "path_blake2b64": "55b9cf2317ce1462",
+      "size": 285275152
+     }
+    ],
+    "item_id": "lc-00889",
+    "pi_i": 0.461197,
+    "rng_seed_reserved_at": "seed=20261019@2026-10-19T00:00:00Z",
+    "selector_sha256": "d67369d0a1d34fe5e94fc30c838a730157719df5258ad89a81e21f5ff9f9f200",
+    "size_bytes": 18576824125,
+    "stratum": "dht_older_exe_archive|2026-08|other_ext|ge_15gb",
+    "u_i": 0.370172,
+    "name_blake2b64": "9931da0269bf4638",
+    "info_hash_blake2b64": "32fca40047840bbb"
+   },
+   {
+    "R_i": 0,
+    "difficulty_weight": 0.65,
+    "family_id": 890493253,
+    "files": [
+     {
+      "path_blake2b64": "460483fdb8e6430f",
+      "size": 1442003089
+     },
+     {
+      "path_blake2b64": "7a5428061fd80c05",
+      "size": 1849703
+     },
+     {
+      "path_blake2b64": "f1c477b77291cb89",
+      "size": 104
+     }
+    ],
+    "item_id": "lc-00892",
+    "pi_i": 0.461197,
+    "rng_seed_reserved_at": "seed=20261019@2026-10-19T00:00:00Z",
+    "selector_sha256": "d67369d0a1d34fe5e94fc30c838a730157719df5258ad89a81e21f5ff9f9f200",
+    "size_bytes": 1443852896,
+    "stratum": "dht_older_plain|2026-09|video_container|100mb_2gb",
+    "u_i": 0.681204,
+    "name_blake2b64": "355ae4626c902a01",
+    "info_hash_blake2b64": "033a811f3a2d8be3"
+   },
+   {
+    "R_i": 0,
+    "difficulty_weight": 0.65,
+    "family_id": 432273103,
+    "files": [
+     {
+      "path_blake2b64": "26829434322dfa7f",
+      "size": 6659557315
+     },
+     {
+      "path_blake2b64": "2a689c7a80192f84",
+      "size": 65753642
+     },
+     {
+      "path_blake2b64": "5bde026b2a353aaa",
+      "size": 23947
+     },
+     {
+      "path_blake2b64": "ffca4fe07bafb300",
+      "size": 22116
+     },
+     {
+      "path_blake2b64": "eff5844b044ddbef",
+      "size": 560
+     }
+    ],
+    "item_id": "lc-00893",
+    "pi_i": 0.461197,
+    "rng_seed_reserved_at": "seed=20261019@2026-10-19T00:00:00Z",
+    "selector_sha256": "d67369d0a1d34fe5e94fc30c838a730157719df5258ad89a81e21f5ff9f9f200",
+    "size_bytes": 6725357580,
+    "stratum": "dht_older_plain|2026-09|video_container|2gb_15gb",
+    "u_i": 0.605611,
+    "name_blake2b64": "8a12d79767d12026",
+    "info_hash_blake2b64": "8e84d8a4c6cab37e"
+   },
+   {
+    "R_i": 1,
+    "difficulty_weight": 1.0,
+    "family_id": 280720794,
+    "files": [],
+    "item_id": "lc-00894",
+    "pi_i": 0.709534,
+    "rng_seed_reserved_at": "seed=20261019@2026-10-19T00:00:00Z",
+    "selector_sha256": "d67369d0a1d34fe5e94fc30c838a730157719df5258ad89a81e21f5ff9f9f200",
+    "size_bytes": 560557501,
+    "stratum": "dht_older_plain|2026-09|bare_title|100mb_2gb",
+    "u_i": 0.398744,
+    "name_blake2b64": "286d8b023d85bece",
+    "info_hash_blake2b64": "1f121c8f98a8b947"
+   },
+   {
+    "R_i": 1,
+    "difficulty_weight": 0.65,
+    "family_id": 461807662,
+    "files": [
+     {
+      "path_blake2b64": "48b4b745a08ecdec",
+      "size": 74579871897
+     },
+     {
+      "path_blake2b64": "7c1e7cc784fb6741",
+      "size": 1439651
+     },
+     {
+      "path_blake2b64": "553f7ab47be0af05",
+      "size": 1406164
+     },
+     {
+      "path_blake2b64": "db925716957e865c",
+      "size": 1279991
+     }
+    ],
+    "item_id": "lc-00895",
+    "pi_i": 0.461197,
+    "rng_seed_reserved_at": "seed=20261019@2026-10-19T00:00:00Z",
+    "selector_sha256": "d67369d0a1d34fe5e94fc30c838a730157719df5258ad89a81e21f5ff9f9f200",
+    "size_bytes": 74583997703,
+    "stratum": "dht_older_nonlatin|2026-09|video_container|ge_15gb",
+    "u_i": 0.295409,
+    "name_blake2b64": "98985dfe5c2fa755",
+    "info_hash_blake2b64": "a83433859e14f32e"
+   },
+   {
+    "R_i": 1,
+    "difficulty_weight": 0.65,
+    "family_id": 691723785,
+    "files": [
+     {
+      "path_blake2b64": "07a628187543ca12",
+      "size": 1508161589
+     },
+     {
+      "path_blake2b64": "5ef9175b210d25a3",
+      "size": 479
+     },
+     {
+      "path_blake2b64": "b31fb8544e126453",
+      "size": 71
+     }
+    ],
+    "item_id": "lc-00896",
+    "pi_i": 0.461197,
+    "rng_seed_reserved_at": "seed=20261019@2026-10-19T00:00:00Z",
+    "selector_sha256": "d67369d0a1d34fe5e94fc30c838a730157719df5258ad89a81e21f5ff9f9f200",
+    "size_bytes": 1508162139,
+    "stratum": "dht_older_plain|2025-10|video_container|100mb_2gb",
+    "u_i": 0.410597,
+    "name_blake2b64": "567d691ac5132db8",
+    "info_hash_blake2b64": "6431e7fa37d3007e"
+   },
+   {
+    "R_i": 1,
+    "difficulty_weight": 1.0,
+    "family_id": 315923873,
+    "files": [],
+    "item_id": "lc-00898",
+    "pi_i": 0.709534,
+    "rng_seed_reserved_at": "seed=20261019@2026-10-19T00:00:00Z",
+    "selector_sha256": "d67369d0a1d34fe5e94fc30c838a730157719df5258ad89a81e21f5ff9f9f200",
+    "size_bytes": 3997554,
+    "stratum": "dht_recent_plain|2026-09|bare_title|lt_100mb",
+    "u_i": 0.368682,
+    "name_blake2b64": "fe293b24c5c5dc61",
+    "info_hash_blake2b64": "2a70b837c74bb05e"
+   },
+   {
+    "R_i": 0,
+    "difficulty_weight": 0.65,
+    "family_id": 1489244015,
+    "files": [
+     {
+      "path_blake2b64": "a0c619267df980a8",
+      "size": 596640651
+     },
+     {
+      "path_blake2b64": "36b4714866abea1a",
+      "size": 478009517
+     },
+     {
+      "path_blake2b64": "01ba04e51a48412c",
+      "size": 443131712
+     },
+     {
+      "path_blake2b64": "4ce960b0ed3753c9",
+      "size": 399484135
+     },
+     {
+      "path_blake2b64": "073daa5bc35ae6e7",
+      "size": 356732046
+     },
+     {
+      "path_blake2b64": "e44998946e753e0f",
+      "size": 306972565
+     }
+    ],
+    "item_id": "lc-00899",
+    "pi_i": 0.461197,
+    "rng_seed_reserved_at": "seed=20261019@2026-10-19T00:00:00Z",
+    "selector_sha256": "d67369d0a1d34fe5e94fc30c838a730157719df5258ad89a81e21f5ff9f9f200",
+    "size_bytes": 6137376051,
+    "stratum": "dht_older_nonlatin|2026-08|video_container|2gb_15gb",
+    "u_i": 0.477926,
+    "name_blake2b64": "9379d79d957454fc",
+    "info_hash_blake2b64": "93d226c32031686a"
+   },
+   {
+    "R_i": 1,
+    "difficulty_weight": 0.65,
+    "family_id": 1645580388,
+    "files": [
+     {
+      "path_blake2b64": "c927c26bbf6163a2",
+      "size": 9265581
+     },
+     {
+      "path_blake2b64": "71b9a751ff087701",
+      "size": 7951069
+     },
+     {
+      "path_blake2b64": "37e8485071a15653",
+      "size": 7921907
+     },
+     {
+      "path_blake2b64": "8fc353cfb5c0de49",
+      "size": 7666924
+     },
+     {
+      "path_blake2b64": "2dd92f7275384ea8",
+      "size": 7217623
+     },
+     {
+      "path_blake2b64": "0a278689ed247025",
+      "size": 7216589
+     }
+    ],
+    "item_id": "lc-00900",
+    "pi_i": 0.461197,
+    "rng_seed_reserved_at": "seed=20261019@2026-10-19T00:00:00Z",
+    "selector_sha256": "d67369d0a1d34fe5e94fc30c838a730157719df5258ad89a81e21f5ff9f9f200",
+    "size_bytes": 121015439,
+    "stratum": "dht_older_plain|2026-09|audio_container|100mb_2gb",
+    "u_i": 0.14307,
+    "name_blake2b64": "1e65f0805b905e86",
+    "info_hash_blake2b64": "1ff9c0a2c1322967"
+   },
+   {
+    "R_i": 0,
+    "difficulty_weight": 1.0,
+    "family_id": 1109653830,
+    "files": [],
+    "item_id": "lc-00901",
+    "pi_i": 0.709534,
+    "rng_seed_reserved_at": "seed=20261019@2026-10-19T00:00:00Z",
+    "selector_sha256": "d67369d0a1d34fe5e94fc30c838a730157719df5258ad89a81e21f5ff9f9f200",
+    "size_bytes": 42540474,
+    "stratum": "dht_older_plain|2026-09|bare_title|lt_100mb",
+    "u_i": 0.792423,
+    "name_blake2b64": "bdca010e09e1774f",
+    "info_hash_blake2b64": "52f92d93e1d28e33"
+   },
+   {
+    "R_i": 0,
+    "difficulty_weight": 0.65,
+    "family_id": 1186716887,
+    "files": [
+     {
+      "path_blake2b64": "e67aa750cde2e685",
+      "size": 1073739776
+     },
+     {
+      "path_blake2b64": "bd90cff1be6cdb4a",
+      "size": 1073739776
+     },
+     {
+      "path_blake2b64": "915490eade8f35c8",
+      "size": 1073739776
+     },
+     {
+      "path_blake2b64": "912555f51e43097a",
+      "size": 1073739776
+     },
+     {
+      "path_blake2b64": "b0bc3fce88258777",
+      "size": 1073739776
+     },
+     {
+      "path_blake2b64": "3644a90372b6e412",
+      "size": 1073739776
+     }
+    ],
+    "item_id": "lc-00902",
+    "pi_i": 0.461197,
+    "rng_seed_reserved_at": "seed=20261019@2026-10-19T00:00:00Z",
+    "selector_sha256": "d67369d0a1d34fe5e94fc30c838a730157719df5258ad89a81e21f5ff9f9f200",
+    "size_bytes": 8095178752,
+    "stratum": "dht_recent_plain|2026-10|other_ext|2gb_15gb",
+    "u_i": 0.757903,
+    "name_blake2b64": "768a6fcd61832e28",
+    "info_hash_blake2b64": "b3aec27532e74487"
+   },
+   {
+    "R_i": 1,
+    "difficulty_weight": 0.65,
+    "family_id": 603036104,
+    "files": [
+     {
+      "path_blake2b64": "1b03954f2c8eeb63",
+      "size": 1309020310
+     },
+     {
+      "path_blake2b64": "721ab3e09320512a",
+      "size": 47
+     }
+    ],
+    "item_id": "lc-00903",
+    "pi_i": 0.461197,
+    "rng_seed_reserved_at": "seed=20261019@2026-10-19T00:00:00Z",
+    "selector_sha256": "d67369d0a1d34fe5e94fc30c838a730157719df5258ad89a81e21f5ff9f9f200",
+    "size_bytes": 1309020357,
+    "stratum": "dht_older_plain|2026-09|video_container|100mb_2gb",
+    "u_i": 0.342403,
+    "name_blake2b64": "54802b0ebbd86330",
+    "info_hash_blake2b64": "655eaeff8c5f9321"
+   },
+   {
+    "R_i": 1,
+    "difficulty_weight": 0.65,
+    "family_id": 129629007,
+    "files": [
+     {
+      "path_blake2b64": "c753bd4f4cae2144",
+      "size": 1354781690
+     },
+     {
+      "path_blake2b64": "d6ff0a9854914c1f",
+      "size": 502417
+     },
+     {
+      "path_blake2b64": "4c4801929fa994a8",
+      "size": 21234
+     },
+     {
+      "path_blake2b64": "8c5308868facbb46",
+      "size": 373
+     }
+    ],
+    "item_id": "lc-00904",
+    "pi_i": 0.461197,
+    "rng_seed_reserved_at": "seed=20261019@2026-10-19T00:00:00Z",
+    "selector_sha256": "d67369d0a1d34fe5e94fc30c838a730157719df5258ad89a81e21f5ff9f9f200",
+    "size_bytes": 1355305714,
+    "stratum": "dht_older_plain|2026-09|video_container|100mb_2gb",
+    "u_i": 0.356902,
+    "name_blake2b64": "0da56b830ab182fb",
+    "info_hash_blake2b64": "a617d23a34fec14d"
+   },
+   {
+    "R_i": 1,
+    "difficulty_weight": 0.65,
+    "family_id": 1931610211,
+    "files": [
+     {
+      "path_blake2b64": "720a34c5881c108a",
+      "size": 1760085641
+     },
+     {
+      "path_blake2b64": "1b3a2effc4adf9f0",
+      "size": 34
+     }
+    ],
+    "item_id": "lc-00905",
+    "pi_i": 0.461197,
+    "rng_seed_reserved_at": "seed=20261019@2026-10-19T00:00:00Z",
+    "selector_sha256": "d67369d0a1d34fe5e94fc30c838a730157719df5258ad89a81e21f5ff9f9f200",
+    "size_bytes": 1760085675,
+    "stratum": "dht_older_plain|2026-09|video_container|100mb_2gb",
+    "u_i": 0.338624,
+    "name_blake2b64": "69ac9c7fe8155087",
+    "info_hash_blake2b64": "7623d63835696fc9"
+   },
+   {
+    "R_i": 0,
+    "difficulty_weight": 0.65,
+    "family_id": 24604120,
+    "files": [
+     {
+      "path_blake2b64": "3cd526d16ebb0a95",
+      "size": 1073739776
+     },
+     {
+      "path_blake2b64": "db947eec95fbbc25",
+      "size": 1073739776
+     },
+     {
+      "path_blake2b64": "fa0fc02cf27fc60a",
+      "size": 1073739776
+     },
+     {
+      "path_blake2b64": "a5c1ec6fb96d7451",
+      "size": 1073739776
+     },
+     {
+      "path_blake2b64": "4aaa2a6f1e823b92",
+      "size": 1073739776
+     },
+     {
+      "path_blake2b64": "e75f310cd9e14e9b",
+      "size": 1073739776
+     }
+    ],
+    "item_id": "lc-00906",
+    "pi_i": 0.461197,
+    "rng_seed_reserved_at": "seed=20261019@2026-10-19T00:00:00Z",
+    "selector_sha256": "d67369d0a1d34fe5e94fc30c838a730157719df5258ad89a81e21f5ff9f9f200",
+    "size_bytes": 32160856064,
+    "stratum": "dht_recent_nonlatin|2026-09|other_ext|ge_15gb",
+    "u_i": 0.761669,
+    "name_blake2b64": "32fdfb27ba0fb124",
+    "info_hash_blake2b64": "9c298c26203f5552"
+   },
+   {
+    "R_i": 1,
+    "difficulty_weight": 1.0,
+    "family_id": 529509802,
+    "files": [],
+    "item_id": "lc-00907",
+    "pi_i": 0.709534,
+    "rng_seed_reserved_at": "seed=20261019@2026-10-19T00:00:00Z",
+    "selector_sha256": "d67369d0a1d34fe5e94fc30c838a730157719df5258ad89a81e21f5ff9f9f200",
+    "size_bytes": 523430401,
+    "stratum": "dht_recent_nonlatin|2026-09|bare_title|100mb_2gb",
+    "u_i": 0.160258,
+    "name_blake2b64": "2ee6f5ba56ad9191",
+    "info_hash_blake2b64": "bb5d31f9d0b844c0"
+   },
+   {
+    "R_i": 1,
+    "difficulty_weight": 0.65,
+    "family_id": 2093311139,
+    "files": [
+     {
+      "path_blake2b64": "a5425315cdee3420",
+      "size": 15694155
+     },
+     {
+      "path_blake2b64": "e816fabbe966b353",
+      "size": 13631545
+     },
+     {
+      "path_blake2b64": "6b32de093487fcce",
+      "size": 13376554
+     },
+     {
+      "path_blake2b64": "3a127692bf19264a",
+      "size": 13101762
+     },
+     {
+      "path_blake2b64": "708cb3119dcce69f",
+      "size": 12679638
+     },
+     {
+      "path_blake2b64": "394c9067322b13e4",
+      "size": 11556390
+     }
+    ],
+    "item_id": "lc-00908",
+    "pi_i": 0.461197,
+    "rng_seed_reserved_at": "seed=20261019@2026-10-19T00:00:00Z",
+    "selector_sha256": "d67369d0a1d34fe5e94fc30c838a730157719df5258ad89a81e21f5ff9f9f200",
+    "size_bytes": 138827066,
+    "stratum": "dht_older_exe_archive|2026-09|audio_container|100mb_2gb",
+    "u_i": 0.179355,
+    "name_blake2b64": "12b9fc6ad0a1b0bc",
+    "info_hash_blake2b64": "2bfaecc7a6b53ea4"
+   },
+   {
+    "R_i": 1,
+    "difficulty_weight": 0.65,
+    "family_id": 860243836,
+    "files": [
+     {
+      "path_blake2b64": "18ab7a3107883123",
+      "size": 1821038490
+     },
+     {
+      "path_blake2b64": "ad1335922728f816",
+      "size": 690096
+     },
+     {
+      "path_blake2b64": "44eb54d684794028",
+      "size": 173821
+     },
+     {
+      "path_blake2b64": "30541f5569c23774",
+      "size": 36483
+     },
+     {
+      "path_blake2b64": "3d45147351a0a691",
+      "size": 651
+     },
+     {
+      "path_blake2b64": "d6b7a1272d32e5bf",
+      "size": 216
+     }
+    ],
+    "item_id": "lc-00909",
+    "pi_i": 0.461197,
+    "rng_seed_reserved_at": "seed=20261019@2026-10-19T00:00:00Z",
+    "selector_sha256": "d67369d0a1d34fe5e94fc30c838a730157719df5258ad89a81e21f5ff9f9f200",
+    "size_bytes": 1821939961,
+    "stratum": "dht_recent_plain|2026-10|video_container|100mb_2gb",
+    "u_i": 0.141198,
+    "name_blake2b64": "d6ff96d82e67143d",
+    "info_hash_blake2b64": "577d30151c0c0fdc"
+   },
+   {
+    "R_i": 1,
+    "difficulty_weight": 0.65,
+    "family_id": 694575842,
+    "files": [
+     {
+      "path_blake2b64": "d39c2671260c4ba9",
+      "size": 2103234877
+     },
+     {
+      "path_blake2b64": "1b3a2effc4adf9f0",
+      "size": 34
+     }
+    ],
+    "item_id": "lc-00911",
+    "pi_i": 0.461197,
+    "rng_seed_reserved_at": "seed=20261019@2026-10-19T00:00:00Z",
+    "selector_sha256": "d67369d0a1d34fe5e94fc30c838a730157719df5258ad89a81e21f5ff9f9f200",
+    "size_bytes": 2103234911,
+    "stratum": "dht_recent_adult|2026-10|video_container|100mb_2gb",
+    "u_i": 0.227939,
+    "name_blake2b64": "24980dfa420db462",
+    "info_hash_blake2b64": "739666df47947cd8"
+   },
+   {
+    "R_i": 1,
+    "difficulty_weight": 0.65,
+    "family_id": 492712540,
+    "files": [
+     {
+      "path_blake2b64": "119563b623e69739",
+      "size": 1688216833
+     },
+     {
+      "path_blake2b64": "863bb1d02902df05",
+      "size": 53226
+     }
+    ],
+    "item_id": "lc-00912",
+    "pi_i": 0.461197,
+    "rng_seed_reserved_at": "seed=20261019@2026-10-19T00:00:00Z",
+    "selector_sha256": "d67369d0a1d34fe5e94fc30c838a730157719df5258ad89a81e21f5ff9f9f200",
+    "size_bytes": 1688270059,
+    "stratum": "dht_older_plain|2026-05|video_container|100mb_2gb",
+    "u_i": 0.277833,
+    "name_blake2b64": "fc61e469fdb4f412",
+    "info_hash_blake2b64": "5fcac3de7f1f1827"
+   },
+   {
+    "R_i": 1,
+    "difficulty_weight": 1.0,
+    "family_id": 552903261,
+    "files": [
+     {
+      "path_blake2b64": "cc7693c2afe51561",
+      "size": 44384088
+     }
+    ],
+    "item_id": "lc-00913",
+    "pi_i": 0.709534,
+    "rng_seed_reserved_at": "seed=20261019@2026-10-19T00:00:00Z",
+    "selector_sha256": "d67369d0a1d34fe5e94fc30c838a730157719df5258ad89a81e21f5ff9f9f200",
+    "size_bytes": 44384088,
+    "stratum": "dht_older_nonlatin|2026-09|video_container|lt_100mb",
+    "u_i": 0.047366,
+    "name_blake2b64": "6975bc1a55ab8832",
+    "info_hash_blake2b64": "48aefde9f1b13af4"
+   },
+   {
+    "R_i": 1,
+    "difficulty_weight": 0.65,
+    "family_id": 1066350586,
+    "files": [
+     {
+      "path_blake2b64": "f5c3a6928fc87dda",
+      "size": 2749898371
+     },
+     {
+      "path_blake2b64": "cfe4c0512766685a",
+      "size": 609658976
+     }
+    ],
+    "item_id": "lc-00914",
+    "pi_i": 0.461197,
+    "rng_seed_reserved_at": "seed=20261019@2026-10-19T00:00:00Z",
+    "selector_sha256": "d67369d0a1d34fe5e94fc30c838a730157719df5258ad89a81e21f5ff9f9f200",
+    "size_bytes": 3359557347,
+    "stratum": "dht_recent_plain|2026-09|other_ext|2gb_15gb",
+    "u_i": 0.086786,
+    "name_blake2b64": "234c47f03e5fd24d",
+    "info_hash_blake2b64": "8a8b229026737126"
+   },
+   {
+    "R_i": 0,
+    "difficulty_weight": 0.65,
+    "family_id": 1242007626,
+    "files": [
+     {
+      "path_blake2b64": "32d49379bb76e761",
+      "size": 153851674
+     },
+     {
+      "path_blake2b64": "831cce48705bc593",
+      "size": 20480
+     },
+     {
+      "path_blake2b64": "71756214abbe462e",
+      "size": 5795
+     },
+     {
+      "path_blake2b64": "ea07ce6ae0d74392",
+      "size": 4582
+     },
+     {
+      "path_blake2b64": "279d863bde9d702f",
+      "size": 2884
+     },
+     {
+      "path_blake2b64": "2992a2904dc840a9",
+      "size": 781
+     }
+    ],
+    "item_id": "lc-00915",
+    "pi_i": 0.461197,
+    "rng_seed_reserved_at": "seed=20261019@2026-10-19T00:00:00Z",
+    "selector_sha256": "d67369d0a1d34fe5e94fc30c838a730157719df5258ad89a81e21f5ff9f9f200",
+    "size_bytes": 153886196,
+    "stratum": "dht_recent_exe_archive|2026-10|archive_or_binary|100mb_2gb",
+    "u_i": 0.826261,
+    "name_blake2b64": "eefb30f8830fce94",
+    "info_hash_blake2b64": "8c8369ec6a4c56cf"
+   },
+   {
+    "R_i": 1,
+    "difficulty_weight": 0.65,
+    "family_id": 194305935,
+    "files": [
+     {
+      "path_blake2b64": "876d4a78163484ce",
+      "size": 1785896676
+     },
+     {
+      "path_blake2b64": "27a40cb1b069fca0",
+      "size": 50
+     }
+    ],
+    "item_id": "lc-00916",
+    "pi_i": 0.461197,
+    "rng_seed_reserved_at": "seed=20261019@2026-10-19T00:00:00Z",
+    "selector_sha256": "d67369d0a1d34fe5e94fc30c838a730157719df5258ad89a81e21f5ff9f9f200",
+    "size_bytes": 1785896726,
+    "stratum": "dht_older_plain|2026-08|video_container|100mb_2gb",
+    "u_i": 0.160142,
+    "name_blake2b64": "3895282167df5001",
+    "info_hash_blake2b64": "b44689df99af3ee1"
+   },
+   {
+    "R_i": 0,
+    "difficulty_weight": 0.65,
+    "family_id": 291641813,
+    "files": [],
+    "item_id": "lc-00917",
+    "pi_i": 0.461197,
+    "rng_seed_reserved_at": "seed=20261019@2026-10-19T00:00:00Z",
+    "selector_sha256": "d67369d0a1d34fe5e94fc30c838a730157719df5258ad89a81e21f5ff9f9f200",
+    "size_bytes": 779401182,
+    "stratum": "dht_older_nonlatin|2026-09|bare_title|100mb_2gb",
+    "u_i": 0.7815,
+    "name_blake2b64": "1bac9214a346fc6b",
+    "info_hash_blake2b64": "8f9c59293d3ce6d1"
+   },
+   {
+    "R_i": 0,
+    "difficulty_weight": 0.65,
+    "family_id": 1369447618,
+    "files": [
+     {
+      "path_blake2b64": "f9ea638509f8a34f",
+      "size": 901221655
+     },
+     {
+      "path_blake2b64": "cf3f0c2f6c868bf8",
+      "size": 718
+     },
+     {
+      "path_blake2b64": "c4d251d629412e90",
+      "size": 47
+     }
+    ],
+    "item_id": "lc-00918",
+    "pi_i": 0.461197,
+    "rng_seed_reserved_at": "seed=20261019@2026-10-19T00:00:00Z",
+    "selector_sha256": "d67369d0a1d34fe5e94fc30c838a730157719df5258ad89a81e21f5ff9f9f200",
+    "size_bytes": 901222420,
+    "stratum": "dht_recent_adult|2026-09|video_container|100mb_2gb",
+    "u_i": 0.533526,
+    "name_blake2b64": "81367a8fac3aecc0",
+    "info_hash_blake2b64": "48111f1a6f9fbb4c"
+   },
+   {
+    "R_i": 0,
+    "difficulty_weight": 0.65,
+    "family_id": 1979623197,
+    "files": [
+     {
+      "path_blake2b64": "5098c19bff6f24e0",
+      "size": 1354531093
+     },
+     {
+      "path_blake2b64": "2ef82d4bc4c5f865",
+      "size": 75916258
+     },
+     {
+      "path_blake2b64": "853c2374e1e19d8f",
+      "size": 1762036
+     },
+     {
+      "path_blake2b64": "67bf2b1baf1bb578",
+      "size": 1163258
+     },
+     {
+      "path_blake2b64": "6b5a9d6e774db18f",
+      "size": 143
+     },
+     {
+      "path_blake2b64": "3f2deaa39b548e99",
+      "size": 114
+     }
+    ],
+    "item_id": "lc-00919",
+    "pi_i": 0.461197,
+    "rng_seed_reserved_at": "seed=20261019@2026-10-19T00:00:00Z",
+    "selector_sha256": "d67369d0a1d34fe5e94fc30c838a730157719df5258ad89a81e21f5ff9f9f200",
+    "size_bytes": 1433373346,
+    "stratum": "dht_older_exe_archive|2026-09|video_container|100mb_2gb",
+    "u_i": 0.463136,
+    "name_blake2b64": "b9a3ad6853c4b4d7",
+    "info_hash_blake2b64": "8fb521404cc31a02"
+   },
+   {
+    "R_i": 0,
+    "difficulty_weight": 0.65,
+    "family_id": 482980245,
+    "files": [
+     {
+      "path_blake2b64": "dc50ce0beb76a109",
+      "size": 38648977
+     },
+     {
+      "path_blake2b64": "6a3cef55479cf346",
+      "size": 9027
+     },
+     {
+      "path_blake2b64": "4696d1b63fad1f1e",
+      "size": 2715
+     },
+     {
+      "path_blake2b64": "b674a6f28caa9e57",
+      "size": 450
+     },
+     {
+      "path_blake2b64": "66fae23b43f3dad3",
+      "size": 444
+     },
+     {
+      "path_blake2b64": "e0c79de4d827119f",
+      "size": 442
+     }
+    ],
+    "item_id": "lc-00920",
+    "pi_i": 0.461197,
+    "rng_seed_reserved_at": "seed=20261019@2026-10-19T00:00:00Z",
+    "selector_sha256": "d67369d0a1d34fe5e94fc30c838a730157719df5258ad89a81e21f5ff9f9f200",
+    "size_bytes": 38663097,
+    "stratum": "dht_older_exe_archive|2026-08|video_container|lt_100mb",
+    "u_i": 0.628664,
+    "name_blake2b64": "97aeeda1225ca988",
+    "info_hash_blake2b64": "92f0e92e6df21759"
+   },
+   {
+    "R_i": 0,
+    "difficulty_weight": 0.65,
+    "family_id": 829832983,
+    "files": [
+     {
+      "path_blake2b64": "6a85d07a015cd879",
+      "size": 6815937421
+     },
+     {
+      "path_blake2b64": "140ab3127f666cb6",
+      "size": 206
+     },
+     {
+      "path_blake2b64": "8e6a435b03fd365a",
+      "size": 123
+     }
+    ],
+    "item_id": "lc-00921",
+    "pi_i": 0.461197,
+    "rng_seed_reserved_at": "seed=20261019@2026-10-19T00:00:00Z",
+    "selector_sha256": "d67369d0a1d34fe5e94fc30c838a730157719df5258ad89a81e21f5ff9f9f200",
+    "size_bytes": 6815937750,
+    "stratum": "dht_recent_plain|2026-09|video_container|2gb_15gb",
+    "u_i": 0.561737,
+    "name_blake2b64": "5160edd2365007fe",
+    "info_hash_blake2b64": "eb5039eaf7dcae8f"
+   },
+   {
+    "R_i": 1,
+    "difficulty_weight": 0.65,
+    "family_id": 863429692,
+    "files": [],
+    "item_id": "lc-00922",
+    "pi_i": 0.461197,
+    "rng_seed_reserved_at": "seed=20261019@2026-10-19T00:00:00Z",
+    "selector_sha256": "d67369d0a1d34fe5e94fc30c838a730157719df5258ad89a81e21f5ff9f9f200",
+    "size_bytes": 1476705900,
+    "stratum": "dht_older_plain|2026-04|bare_title|100mb_2gb",
+    "u_i": 0.095087,
+    "name_blake2b64": "1c33476a87a85c89",
+    "info_hash_blake2b64": "e6e3057de4771f0a"
+   },
+   {
+    "R_i": 1,
+    "difficulty_weight": 1.0,
+    "family_id": 953844728,
+    "files": [],
+    "item_id": "lc-00923",
+    "pi_i": 0.709534,
+    "rng_seed_reserved_at": "seed=20261019@2026-10-19T00:00:00Z",
+    "selector_sha256": "d67369d0a1d34fe5e94fc30c838a730157719df5258ad89a81e21f5ff9f9f200",
+    "size_bytes": 50384627,
+    "stratum": "dht_recent_exe_archive|2026-09|bare_title|lt_100mb",
+    "u_i": 0.273004,
+    "name_blake2b64": "8137753088fbdaa8",
+    "info_hash_blake2b64": "a1296f29ff5d559e"
+   },
+   {
+    "R_i": 0,
+    "difficulty_weight": 1.0,
+    "family_id": 271959888,
+    "files": [],
+    "item_id": "lc-00924",
+    "pi_i": 0.709534,
+    "rng_seed_reserved_at": "seed=20261019@2026-10-19T00:00:00Z",
+    "selector_sha256": "d67369d0a1d34fe5e94fc30c838a730157719df5258ad89a81e21f5ff9f9f200",
+    "size_bytes": 175729559,
+    "stratum": "dht_older_plain|2026-09|bare_title|100mb_2gb",
+    "u_i": 0.821194,
+    "name_blake2b64": "d59b933efa40f618",
+    "info_hash_blake2b64": "f552f388031e886a"
+   },
+   {
+    "R_i": 1,
+    "difficulty_weight": 0.65,
+    "family_id": 1356422072,
+    "files": [
+     {
+      "path_blake2b64": "1bce10b9ac479554",
+      "size": 23637294
+     },
+     {
+      "path_blake2b64": "70537793f45340e6",
+      "size": 15017946
+     },
+     {
+      "path_blake2b64": "f38f00637c106a99",
+      "size": 14768318
+     },
+     {
+      "path_blake2b64": "a7d7a3ad2000e8e2",
+      "size": 13187334
+     },
+     {
+      "path_blake2b64": "1847bcff8ab3b988",
+      "size": 12879058
+     },
+     {
+      "path_blake2b64": "0ed86388b4ac1cc3",
+      "size": 12406973
+     }
+    ],
+    "item_id": "lc-00925",
+    "pi_i": 0.461197,
+    "rng_seed_reserved_at": "seed=20261019@2026-10-19T00:00:00Z",
+    "selector_sha256": "d67369d0a1d34fe5e94fc30c838a730157719df5258ad89a81e21f5ff9f9f200",
+    "size_bytes": 278418406,
+    "stratum": "dht_older_nonlatin|2026-08|audio_container|100mb_2gb",
+    "u_i": 0.213102,
+    "name_blake2b64": "fa85ead1d6a25aab",
+    "info_hash_blake2b64": "7b91ec8c0dd3c381"
+   },
+   {
+    "R_i": 1,
+    "difficulty_weight": 0.65,
+    "family_id": 1302419041,
+    "files": [
+     {
+      "path_blake2b64": "f4b16a0210f87593",
+      "size": 733890560
+     },
+     {
+      "path_blake2b64": "c2e5f068ccaed31b",
+      "size": 86178
+     },
+     {
+      "path_blake2b64": "5fd1bbb76b27af1f",
+      "size": 195
+     },
+     {
+      "path_blake2b64": "64dd48fb5f0e3397",
+      "size": 195
+     }
+    ],
+    "item_id": "lc-00926",
+    "pi_i": 0.461197,
+    "rng_seed_reserved_at": "seed=20261019@2026-10-19T00:00:00Z",
+    "selector_sha256": "d67369d0a1d34fe5e94fc30c838a730157719df5258ad89a81e21f5ff9f9f200",
+    "size_bytes": 733977128,
+    "stratum": "dht_recent_plain|2026-09|video_container|100mb_2gb",
+    "u_i": 0.169916,
+    "name_blake2b64": "11fd8f1744c13973",
+    "info_hash_blake2b64": "3dfb3f811dcbd4f2"
+   },
+   {
+    "R_i": 1,
+    "difficulty_weight": 0.65,
+    "family_id": 570509412,
+    "files": [
+     {
+      "path_blake2b64": "16822cf9e4a0019b",
+      "size": 2198142976
+     },
+     {
+      "path_blake2b64": "7b3876205b516bc8",
+      "size": 21852457
+     },
+     {
+      "path_blake2b64": "671a354829ae056a",
+      "size": 18238037
+     },
+     {
+      "path_blake2b64": "546c6aa3cf2db71d",
+      "size": 1422
+     }
+    ],
+    "item_id": "lc-00927",
+    "pi_i": 0.461197,
+    "rng_seed_reserved_at": "seed=20261019@2026-10-19T00:00:00Z",
+    "selector_sha256": "d67369d0a1d34fe5e94fc30c838a730157719df5258ad89a81e21f5ff9f9f200",
+    "size_bytes": 2238234892,
+    "stratum": "dht_older_exe_archive|2026-08|archive_or_binary|2gb_15gb",
+    "u_i": 0.068906,
+    "name_blake2b64": "6f8ea333324d62d5",
+    "info_hash_blake2b64": "b6958325a2c9d1cb"
+   },
+   {
+    "R_i": 1,
+    "difficulty_weight": 1.0,
+    "family_id": 926309546,
+    "files": [],
+    "item_id": "lc-00928",
+    "pi_i": 0.709534,
+    "rng_seed_reserved_at": "seed=20261019@2026-10-19T00:00:00Z",
+    "selector_sha256": "d67369d0a1d34fe5e94fc30c838a730157719df5258ad89a81e21f5ff9f9f200",
+    "size_bytes": 93088479,
+    "stratum": "dht_recent_exe_archive|2026-10|bare_title|lt_100mb",
+    "u_i": 0.652571,
+    "name_blake2b64": "19ad51a830fb9ec2",
+    "info_hash_blake2b64": "f9adabec8278538e"
+   },
+   {
+    "R_i": 0,
+    "difficulty_weight": 0.65,
+    "family_id": 1248139891,
+    "files": [
+     {
+      "path_blake2b64": "a090517f37e260af",
+      "size": 1151698944
+     },
+     {
+      "path_blake2b64": "9f29edeabbd5d69a",
+      "size": 271090
+     },
+     {
+      "path_blake2b64": "dc4168a9d408a9fa",
+      "size": 63970
+     },
+     {
+      "path_blake2b64": "b0fc929b20e4f89d",
+      "size": 50854
+     }
+    ],
+    "item_id": "lc-00929",
+    "pi_i": 0.461197,
+    "rng_seed_reserved_at": "seed=20261019@2026-10-19T00:00:00Z",
+    "selector_sha256": "d67369d0a1d34fe5e94fc30c838a730157719df5258ad89a81e21f5ff9f9f200",
+    "size_bytes": 1152084858,
+    "stratum": "dht_older_plain|2026-07|video_container|100mb_2gb",
+    "u_i": 0.48892,
+    "name_blake2b64": "b98ba5a0470949ee",
+    "info_hash_blake2b64": "c921057d450f08b8"
+   },
+   {
+    "R_i": 0,
+    "difficulty_weight": 0.65,
+    "family_id": 998816871,
+    "files": [
+     {
+      "path_blake2b64": "bffd7021b876c64a",
+      "size": 789534720
+     },
+     {
+      "path_blake2b64": "568a90407cdf122e",
+      "size": 788649984
+     },
+     {
+      "path_blake2b64": "24a55c4f866b93ab",
+      "size": 788338688
+     },
+     {
+      "path_blake2b64": "b4afd54de78aa924",
+      "size": 788166656
+     },
+     {
+      "path_blake2b64": "a5ac4cf46fb936f6",
+      "size": 786507776
+     },
+     {
+      "path_blake2b64": "213dd6abdb98db15",
+      "size": 786438144
+     }
+    ],
+    "item_id": "lc-00930",
+    "pi_i": 0.461197,
+    "rng_seed_reserved_at": "seed=20261019@2026-10-19T00:00:00Z",
+    "selector_sha256": "d67369d0a1d34fe5e94fc30c838a730157719df5258ad89a81e21f5ff9f9f200",
+    "size_bytes": 9370109952,
+    "stratum": "dht_recent_nonlatin|2026-09|video_container|2gb_15gb",
+    "u_i": 0.882764,
+    "name_blake2b64": "3222b56523d67534",
+    "info_hash_blake2b64": "48695ab9a839a851"
+   },
+   {
+    "R_i": 0,
+    "difficulty_weight": 1.0,
+    "family_id": 1894134059,
+    "files": [],
+    "item_id": "lc-00931",
+    "pi_i": 0.709534,
+    "rng_seed_reserved_at": "seed=20261019@2026-10-19T00:00:00Z",
+    "selector_sha256": "d67369d0a1d34fe5e94fc30c838a730157719df5258ad89a81e21f5ff9f9f200",
+    "size_bytes": 738283473,
+    "stratum": "dht_recent_anime|2026-09|bare_title|100mb_2gb",
+    "u_i": 0.861375,
+    "name_blake2b64": "5769f403f193a8be",
+    "info_hash_blake2b64": "6f6a645a1375671c"
+   },
+   {
+    "R_i": 1,
+    "difficulty_weight": 0.65,
+    "family_id": 1383123371,
+    "files": [
+     {
+      "path_blake2b64": "6931efffe16be75a",
+      "size": 7511084890
+     },
+     {
+      "path_blake2b64": "7c403f5930ac6079",
+      "size": 31
+     }
+    ],
+    "item_id": "lc-00932",
+    "pi_i": 0.461197,
+    "rng_seed_reserved_at": "seed=20261019@2026-10-19T00:00:00Z",
+    "selector_sha256": "d67369d0a1d34fe5e94fc30c838a730157719df5258ad89a81e21f5ff9f9f200",
+    "size_bytes": 7511084921,
+    "stratum": "dht_recent_plain|2026-09|video_container|2gb_15gb",
+    "u_i": 0.163263,
+    "name_blake2b64": "6e8dccceb6309663",
+    "info_hash_blake2b64": "7e714a3439099db6"
+   },
+   {
+    "R_i": 1,
+    "difficulty_weight": 1.0,
+    "family_id": 779374812,
+    "files": [],
+    "item_id": "lc-00933",
+    "pi_i": 0.709534,
+    "rng_seed_reserved_at": "seed=20261019@2026-10-19T00:00:00Z",
+    "selector_sha256": "d67369d0a1d34fe5e94fc30c838a730157719df5258ad89a81e21f5ff9f9f200",
+    "size_bytes": 1178557034,
+    "stratum": "dht_older_plain|2026-09|bare_title|100mb_2gb",
+    "u_i": 0.347462,
+    "name_blake2b64": "9f2cfade6e8ccd3c",
+    "info_hash_blake2b64": "596e7ac9d9c688b4"
+   },
+   {
+    "R_i": 1,
+    "difficulty_weight": 1.0,
+    "family_id": 950769965,
+    "files": [
+     {
+      "path_blake2b64": "2023240d82b57c08",
+      "size": 954849347
+     }
+    ],
+    "item_id": "lc-00934",
+    "pi_i": 0.709534,
+    "rng_seed_reserved_at": "seed=20261019@2026-10-19T00:00:00Z",
+    "selector_sha256": "d67369d0a1d34fe5e94fc30c838a730157719df5258ad89a81e21f5ff9f9f200",
+    "size_bytes": 954849347,
+    "stratum": "dht_older_adult|2026-09|video_container|100mb_2gb",
+    "u_i": 0.359188,
+    "name_blake2b64": "9a5f5b6ad5f75376",
+    "info_hash_blake2b64": "6162955a726f11a0"
+   },
+   {
+    "R_i": 1,
+    "difficulty_weight": 1.0,
+    "family_id": 839188822,
+    "files": [],
+    "item_id": "lc-00935",
+    "pi_i": 0.709534,
+    "rng_seed_reserved_at": "seed=20261019@2026-10-19T00:00:00Z",
+    "selector_sha256": "d67369d0a1d34fe5e94fc30c838a730157719df5258ad89a81e21f5ff9f9f200",
+    "size_bytes": 1763444076,
+    "stratum": "dht_older_exe_archive|2026-05|bare_title|100mb_2gb",
+    "u_i": 0.376164,
+    "name_blake2b64": "954216e0acc5ef44",
+    "info_hash_blake2b64": "0ec3b49d94341f2a"
+   },
+   {
+    "R_i": 1,
+    "difficulty_weight": 0.65,
+    "family_id": 11752204,
+    "files": [
+     {
+      "path_blake2b64": "09a25a00539153c8",
+      "size": 1038634300
+     },
+     {
+      "path_blake2b64": "79c9f5194e9585f6",
+      "size": 3398880
+     },
+     {
+      "path_blake2b64": "5a2511bbd7a36238",
+      "size": 223059
+     },
+     {
+      "path_blake2b64": "f9cfff619d7026d1",
+      "size": 172386
+     },
+     {
+      "path_blake2b64": "a2b01aad25a72c70",
+      "size": 99546
+     },
+     {
+      "path_blake2b64": "53c36265c99a93f2",
+      "size": 99546
+     }
+    ],
+    "item_id": "lc-00936",
+    "pi_i": 0.461197,
+    "rng_seed_reserved_at": "seed=20261019@2026-10-19T00:00:00Z",
+    "selector_sha256": "d67369d0a1d34fe5e94fc30c838a730157719df5258ad89a81e21f5ff9f9f200",
+    "size_bytes": 1042674186,
+    "stratum": "dht_recent_plain|2026-09|video_container|100mb_2gb",
+    "u_i": 0.169592,
+    "name_blake2b64": "5bee4cc5353e9ea9",
+    "info_hash_blake2b64": "42cb51356a051486"
+   },
+   {
+    "R_i": 0,
+    "difficulty_weight": 0.65,
+    "family_id": 895238593,
+    "files": [
+     {
+      "path_blake2b64": "3c246532bbd63539",
+      "size": 338575229
+     },
+     {
+      "path_blake2b64": "4deb5997aaec8fc3",
+      "size": 37460686
+     },
+     {
+      "path_blake2b64": "3c379d6755cfaddc",
+      "size": 5939
+     },
+     {
+      "path_blake2b64": "cbb5199f462d5489",
+      "size": 5939
+     },
+     {
+      "path_blake2b64": "7e37ad1ae939414d",
+      "size": 2671
+     },
+     {
+      "path_blake2b64": "399d78939c8a28a8",
+      "size": 2671
+     }
+    ],
+    "item_id": "lc-00937",
+    "pi_i": 0.461197,
+    "rng_seed_reserved_at": "seed=20261019@2026-10-19T00:00:00Z",
+    "selector_sha256": "d67369d0a1d34fe5e94fc30c838a730157719df5258ad89a81e21f5ff9f9f200",
+    "size_bytes": 376053135,
+    "stratum": "dht_older_nonlatin|2026-08|video_container|100mb_2gb",
+    "u_i": 0.463711,
+    "name_blake2b64": "74801331e44fc1f2",
+    "info_hash_blake2b64": "543c33cd1942f997"
+   },
+   {
+    "R_i": 1,
+    "difficulty_weight": 0.65,
+    "family_id": 714727231,
+    "files": [],
+    "item_id": "lc-00938",
+    "pi_i": 0.461197,
+    "rng_seed_reserved_at": "seed=20261019@2026-10-19T00:00:00Z",
+    "selector_sha256": "d67369d0a1d34fe5e94fc30c838a730157719df5258ad89a81e21f5ff9f9f200",
+    "size_bytes": 195597954,
+    "stratum": "dht_older_plain|2026-07|bare_title|100mb_2gb",
+    "u_i": 0.028497,
+    "name_blake2b64": "44d25e1772999518",
+    "info_hash_blake2b64": "12055f4344c8e244"
+   },
+   {
+    "R_i": 1,
+    "difficulty_weight": 1.0,
+    "family_id": 1805705342,
+    "files": [],
+    "item_id": "lc-00939",
+    "pi_i": 0.709534,
+    "rng_seed_reserved_at": "seed=20261019@2026-10-19T00:00:00Z",
+    "selector_sha256": "d67369d0a1d34fe5e94fc30c838a730157719df5258ad89a81e21f5ff9f9f200",
+    "size_bytes": 21117586,
+    "stratum": "dht_older_exe_archive|2026-08|bare_title|lt_100mb",
+    "u_i": 0.01871,
+    "name_blake2b64": "566daa0198ea0f52",
+    "info_hash_blake2b64": "7d4bd7f9110aa7ad"
+   },
+   {
+    "R_i": 1,
+    "difficulty_weight": 0.65,
+    "family_id": 70370617,
+    "files": [
+     {
+      "path_blake2b64": "4ff1d220aef2698e",
+      "size": 21706660
+     },
+     {
+      "path_blake2b64": "452e942dcef12850",
+      "size": 18117374
+     },
+     {
+      "path_blake2b64": "df0d22ef5ab7134b",
+      "size": 17553191
+     },
+     {
+      "path_blake2b64": "c06117db68c9e308",
+      "size": 16171764
+     },
+     {
+      "path_blake2b64": "cd1b4a072cfbb75a",
+      "size": 15880215
+     },
+     {
+      "path_blake2b64": "7dc6fafeba8c0117",
+      "size": 14855216
+     }
+    ],
+    "item_id": "lc-00940",
+    "pi_i": 0.461197,
+    "rng_seed_reserved_at": "seed=20261019@2026-10-19T00:00:00Z",
+    "selector_sha256": "d67369d0a1d34fe5e94fc30c838a730157719df5258ad89a81e21f5ff9f9f200",
+    "size_bytes": 382699199,
+    "stratum": "dht_recent_plain|2026-09|audio_container|100mb_2gb",
+    "u_i": 0.295856,
+    "name_blake2b64": "c883d2acd6045d49",
+    "info_hash_blake2b64": "cc42cab1d6f01b27"
+   },
+   {
+    "R_i": 0,
+    "difficulty_weight": 0.65,
+    "family_id": 242583045,
+    "files": [
+     {
+      "path_blake2b64": "3b80a6850e50a79c",
+      "size": 257097728
+     },
+     {
+      "path_blake2b64": "b3555b56be4d53f9",
+      "size": 251226112
+     },
+     {
+      "path_blake2b64": "ae6a6c5077d8680b",
+      "size": 248991744
+     },
+     {
+      "path_blake2b64": "842dfeb3bde65a35",
+      "size": 238268416
+     },
+     {
+      "path_blake2b64": "cf90a4622e5dc0ad",
+      "size": 237008896
+     }
+    ],
+    "item_id": "lc-00941",
+    "pi_i": 0.461197,
+    "rng_seed_reserved_at": "seed=20261019@2026-10-19T00:00:00Z",
+    "selector_sha256": "d67369d0a1d34fe5e94fc30c838a730157719df5258ad89a81e21f5ff9f9f200",
+    "size_bytes": 1232592896,
+    "stratum": "dht_older_pack|2026-05|video_container|100mb_2gb",
+    "u_i": 0.737142,
+    "name_blake2b64": "c0c214088458ae51",
+    "info_hash_blake2b64": "8ff4043a75654819"
+   },
+   {
+    "R_i": 0,
+    "difficulty_weight": 0.65,
+    "family_id": 1286576165,
+    "files": [
+     {
+      "path_blake2b64": "32ef54091543ad1e",
+      "size": 475
+     },
+     {
+      "path_blake2b64": "325b27236a7be9bb",
+      "size": 361
+     },
+     {
+      "path_blake2b64": "a41756090dffb311",
+      "size": 195
+     }
+    ],
+    "item_id": "lc-00942",
+    "pi_i": 0.461197,
+    "rng_seed_reserved_at": "seed=20261019@2026-10-19T00:00:00Z",
+    "selector_sha256": "d67369d0a1d34fe5e94fc30c838a730157719df5258ad89a81e21f5ff9f9f200",
+    "size_bytes": 1031,
+    "stratum": "dht_older_nonlatin|2026-08|other_ext|lt_100mb",
+    "u_i": 0.799769,
+    "name_blake2b64": "87f2feec9f274ef5",
+    "info_hash_blake2b64": "631012fbe4286935"
+   },
+   {
+    "R_i": 0,
+    "difficulty_weight": 1.0,
+    "family_id": 966870004,
+    "files": [],
+    "item_id": "lc-00943",
+    "pi_i": 0.709534,
+    "rng_seed_reserved_at": "seed=20261019@2026-10-19T00:00:00Z",
+    "selector_sha256": "d67369d0a1d34fe5e94fc30c838a730157719df5258ad89a81e21f5ff9f9f200",
+    "size_bytes": 5976416,
+    "stratum": "dht_older_exe_archive|2026-08|bare_title|lt_100mb",
+    "u_i": 0.714653,
+    "name_blake2b64": "93cb631e70f15ecc",
+    "info_hash_blake2b64": "3dffaf3ec96ff9e6"
+   },
+   {
+    "R_i": 0,
+    "difficulty_weight": 1.0,
+    "family_id": 638269822,
+    "files": [],
+    "item_id": "lc-00944",
+    "pi_i": 0.709534,
+    "rng_seed_reserved_at": "seed=20261019@2026-10-19T00:00:00Z",
+    "selector_sha256": "d67369d0a1d34fe5e94fc30c838a730157719df5258ad89a81e21f5ff9f9f200",
+    "size_bytes": 733659136,
+    "stratum": "dht_older_plain|2026-09|bare_title|100mb_2gb",
+    "u_i": 0.898696,
+    "name_blake2b64": "d3026507f7232784",
+    "info_hash_blake2b64": "16e2248e760c85b9"
+   },
+   {
+    "R_i": 0,
+    "difficulty_weight": 0.65,
+    "family_id": 849915194,
+    "files": [
+     {
+      "path_blake2b64": "8c4d63abe3264b7f",
+      "size": 18065625
+     },
+     {
+      "path_blake2b64": "edaa8d27f75ec6ab",
+      "size": 15066772
+     },
+     {
+      "path_blake2b64": "553f2be0bc750bbe",
+      "size": 13375127
+     },
+     {
+      "path_blake2b64": "2ecfdc68c7ae9980",
+      "size": 13367751
+     },
+     {
+      "path_blake2b64": "13b19b046872354c",
+      "size": 13148333
+     },
+     {
+      "path_blake2b64": "8b28e0be44bc4350",
+      "size": 13059524
+     }
+    ],
+    "item_id": "lc-00945",
+    "pi_i": 0.461197,
+    "rng_seed_reserved_at": "seed=20261019@2026-10-19T00:00:00Z",
+    "selector_sha256": "d67369d0a1d34fe5e94fc30c838a730157719df5258ad89a81e21f5ff9f9f200",
+    "size_bytes": 145451251,
+    "stratum": "dht_older_plain|2026-08|audio_container|100mb_2gb",
+    "u_i": 0.843589,
+    "name_blake2b64": "e38a5c6e1dc1a2d7",
+    "info_hash_blake2b64": "b2b357fbd8651854"
+   },
+   {
+    "R_i": 1,
+    "difficulty_weight": 0.65,
+    "family_id": 1723856486,
+    "files": [
+     {
+      "path_blake2b64": "d16c38e8e64ea6e8",
+      "size": 281991310
+     },
+     {
+      "path_blake2b64": "44eb54d684794028",
+      "size": 173821
+     },
+     {
+      "path_blake2b64": "30541f5569c23774",
+      "size": 36483
+     },
+     {
+      "path_blake2b64": "3d45147351a0a691",
+      "size": 651
+     },
+     {
+      "path_blake2b64": "d6b7a1272d32e5bf",
+      "size": 216
+     },
+     {
+      "path_blake2b64": "7729d9554ca3231e",
+      "size": 204
+     }
+    ],
+    "item_id": "lc-00946",
+    "pi_i": 0.461197,
+    "rng_seed_reserved_at": "seed=20261019@2026-10-19T00:00:00Z",
+    "selector_sha256": "d67369d0a1d34fe5e94fc30c838a730157719df5258ad89a81e21f5ff9f9f200",
+    "size_bytes": 282202685,
+    "stratum": "dht_recent_plain|2026-10|video_container|100mb_2gb",
+    "u_i": 0.240948,
+    "name_blake2b64": "b20674d1465d584d",
+    "info_hash_blake2b64": "a3ed9f82edecab28"
+   },
+   {
+    "R_i": 1,
+    "difficulty_weight": 1.0,
+    "family_id": 1967292409,
+    "files": [],
+    "item_id": "lc-00947",
+    "pi_i": 0.709534,
+    "rng_seed_reserved_at": "seed=20261019@2026-10-19T00:00:00Z",
+    "selector_sha256": "d67369d0a1d34fe5e94fc30c838a730157719df5258ad89a81e21f5ff9f9f200",
+    "size_bytes": 513229005,
+    "stratum": "dht_older_adult|2026-08|bare_title|100mb_2gb",
+    "u_i": 0.448564,
+    "name_blake2b64": "762d1017b3403e41",
+    "info_hash_blake2b64": "a948f373d34a8f91"
+   },
+   {
+    "R_i": 0,
+    "difficulty_weight": 0.65,
+    "family_id": 884901557,
+    "files": [
+     {
+      "path_blake2b64": "3c71c744dd652e4f",
+      "size": 1947343073
+     },
+     {
+      "path_blake2b64": "89e6a0ef05a0a8e0",
+      "size": 1169579639
+     },
+     {
+      "path_blake2b64": "47e055da404f26df",
+      "size": 4621648
+     },
+     {
+      "path_blake2b64": "3780a8f6b5d03798",
+      "size": 4539628
+     },
+     {
+      "path_blake2b64": "64c6fe97bde2773f",
+      "size": 4537604
+     },
+     {
+      "path_blake2b64": "df407d9f53720f67",
+      "size": 4398562
+     }
+    ],
+    "item_id": "lc-00948",
+    "pi_i": 0.461197,
+    "rng_seed_reserved_at": "seed=20261019@2026-10-19T00:00:00Z",
+    "selector_sha256": "d67369d0a1d34fe5e94fc30c838a730157719df5258ad89a81e21f5ff9f9f200",
+    "size_bytes": 3166699520,
+    "stratum": "dht_older_exe_archive|2026-09|archive_or_binary|2gb_15gb",
+    "u_i": 0.464467,
+    "name_blake2b64": "3f06431ca9d69f1a",
+    "info_hash_blake2b64": "d562e84d965705c9"
+   },
+   {
+    "R_i": 0,
+    "difficulty_weight": 0.65,
+    "family_id": 778465882,
+    "files": [
+     {
+      "path_blake2b64": "f94aed298abbaf62",
+      "size": 282841610
+     },
+     {
+      "path_blake2b64": "b75a87a0b4964d23",
+      "size": 254141
+     },
+     {
+      "path_blake2b64": "6be599ad938c4656",
+      "size": 146
+     },
+     {
+      "path_blake2b64": "f96370789d92baea",
+      "size": 130
+     }
+    ],
+    "item_id": "lc-00949",
+    "pi_i": 0.461197,
+    "rng_seed_reserved_at": "seed=20261019@2026-10-19T00:00:00Z",
+    "selector_sha256": "d67369d0a1d34fe5e94fc30c838a730157719df5258ad89a81e21f5ff9f9f200",
+    "size_bytes": 283096027,
+    "stratum": "dht_older_nonlatin|2026-09|other_ext|100mb_2gb",
+    "u_i": 0.597641,
+    "name_blake2b64": "4a7e77fddf4263ef",
+    "info_hash_blake2b64": "e56db56af9bad015"
+   },
+   {
+    "R_i": 1,
+    "difficulty_weight": 1.0,
+    "family_id": 1343480264,
+    "files": [],
+    "item_id": "lc-00950",
+    "pi_i": 0.709534,
+    "rng_seed_reserved_at": "seed=20261019@2026-10-19T00:00:00Z",
+    "selector_sha256": "d67369d0a1d34fe5e94fc30c838a730157719df5258ad89a81e21f5ff9f9f200",
+    "size_bytes": 244411089,
+    "stratum": "dht_recent_nonlatin|2026-10|bare_title|100mb_2gb",
+    "u_i": 0.622668,
+    "name_blake2b64": "e9c81f4c58f00d65",
+    "info_hash_blake2b64": "b1bad7bf6e035157"
+   },
+   {
+    "R_i": 1,
+    "difficulty_weight": 0.65,
+    "family_id": 1629328263,
+    "files": [],
+    "item_id": "lc-00951",
+    "pi_i": 0.461197,
+    "rng_seed_reserved_at": "seed=20261019@2026-10-19T00:00:00Z",
+    "selector_sha256": "d67369d0a1d34fe5e94fc30c838a730157719df5258ad89a81e21f5ff9f9f200",
+    "size_bytes": 2772669182,
+    "stratum": "dht_older_plain|2026-06|bare_title|2gb_15gb",
+    "u_i": 0.298196,
+    "name_blake2b64": "042c513db5335d32",
+    "info_hash_blake2b64": "1cae325f5a92590e"
+   },
+   {
+    "R_i": 1,
+    "difficulty_weight": 1.0,
+    "family_id": 2136399085,
+    "files": [],
+    "item_id": "lc-00952",
+    "pi_i": 0.709534,
+    "rng_seed_reserved_at": "seed=20261019@2026-10-19T00:00:00Z",
+    "selector_sha256": "d67369d0a1d34fe5e94fc30c838a730157719df5258ad89a81e21f5ff9f9f200",
+    "size_bytes": 273769736,
+    "stratum": "dht_older_adult|2026-09|bare_title|100mb_2gb",
+    "u_i": 0.113238,
+    "name_blake2b64": "cb2a1a58d9a9e510",
+    "info_hash_blake2b64": "11b09bc726738723"
+   },
+   {
+    "R_i": 1,
+    "difficulty_weight": 0.65,
+    "family_id": 1089641383,
+    "files": [
+     {
+      "path_blake2b64": "1ecb5695edd75258",
+      "size": 741310559
+     },
+     {
+      "path_blake2b64": "fa3921426c608703",
+      "size": 32
+     }
+    ],
+    "item_id": "lc-00953",
+    "pi_i": 0.461197,
+    "rng_seed_reserved_at": "seed=20261019@2026-10-19T00:00:00Z",
+    "selector_sha256": "d67369d0a1d34fe5e94fc30c838a730157719df5258ad89a81e21f5ff9f9f200",
+    "size_bytes": 741310591,
+    "stratum": "dht_older_adult|2026-08|video_container|100mb_2gb",
+    "u_i": 0.121929,
+    "name_blake2b64": "678d8436c238ae35",
+    "info_hash_blake2b64": "c75d52b3ac602eae"
+   },
+   {
+    "R_i": 1,
+    "difficulty_weight": 1.0,
+    "family_id": 1081965934,
+    "files": [],
+    "item_id": "lc-00954",
+    "pi_i": 0.709534,
+    "rng_seed_reserved_at": "seed=20261019@2026-10-19T00:00:00Z",
+    "selector_sha256": "d67369d0a1d34fe5e94fc30c838a730157719df5258ad89a81e21f5ff9f9f200",
+    "size_bytes": 4761656251,
+    "stratum": "dht_recent_exe_archive|2026-09|bare_title|2gb_15gb",
+    "u_i": 0.14417,
+    "name_blake2b64": "60acbbddd9821140",
+    "info_hash_blake2b64": "3c7eced567e2a9d6"
+   },
+   {
+    "R_i": 1,
+    "difficulty_weight": 1.0,
+    "family_id": 1763592169,
+    "files": [],
+    "item_id": "lc-00955",
+    "pi_i": 0.709534,
+    "rng_seed_reserved_at": "seed=20261019@2026-10-19T00:00:00Z",
+    "selector_sha256": "d67369d0a1d34fe5e94fc30c838a730157719df5258ad89a81e21f5ff9f9f200",
+    "size_bytes": 16417337,
+    "stratum": "dht_recent_exe_archive|2026-10|bare_title|lt_100mb",
+    "u_i": 0.57878,
+    "name_blake2b64": "d861ee705cebf3a2",
+    "info_hash_blake2b64": "a2c09b3960f8f6b9"
+   },
+   {
+    "R_i": 1,
+    "difficulty_weight": 0.65,
+    "family_id": 1209085749,
+    "files": [
+     {
+      "path_blake2b64": "dee8dba2f986f6f5",
+      "size": 1764425084
+     },
+     {
+      "path_blake2b64": "f5a4a7552e05551f",
+      "size": 1642543040
+     },
+     {
+      "path_blake2b64": "c6ec95eec642c133",
+      "size": 1571112656
+     },
+     {
+      "path_blake2b64": "256ef58f9a9a61bd",
+      "size": 1519210105
+     },
+     {
+      "path_blake2b64": "8091f62660bf3a99",
+      "size": 1453975787
+     },
+     {
+      "path_blake2b64": "7c403f5930ac6079",
+      "size": 31
+     }
+    ],
+    "item_id": "lc-00956",
+    "pi_i": 0.461197,
+    "rng_seed_reserved_at": "seed=20261019@2026-10-19T00:00:00Z",
+    "selector_sha256": "d67369d0a1d34fe5e94fc30c838a730157719df5258ad89a81e21f5ff9f9f200",
+    "size_bytes": 7951266703,
+    "stratum": "dht_older_pack|2026-05|video_container|2gb_15gb",
+    "u_i": 0.167707,
+    "name_blake2b64": "1d57270e681f2101",
+    "info_hash_blake2b64": "67b2e9adce987b6a"
+   },
+   {
+    "R_i": 0,
+    "difficulty_weight": 0.65,
+    "family_id": 354857960,
+    "files": [
+     {
+      "path_blake2b64": "30d81991f8a7dcdb",
+      "size": 2464406159
+     },
+     {
+      "path_blake2b64": "1ef071aad8e23445",
+      "size": 2241177302
+     }
+    ],
+    "item_id": "lc-00957",
+    "pi_i": 0.461197,
+    "rng_seed_reserved_at": "seed=20261019@2026-10-19T00:00:00Z",
+    "selector_sha256": "d67369d0a1d34fe5e94fc30c838a730157719df5258ad89a81e21f5ff9f9f200",
+    "size_bytes": 4705583461,
+    "stratum": "dht_older_plain|2026-08|video_container|2gb_15gb",
+    "u_i": 0.834209,
+    "name_blake2b64": "2f2a214e58ec76f0",
+    "info_hash_blake2b64": "aaa5167d892c7d38"
+   },
+   {
+    "R_i": 0,
+    "difficulty_weight": 0.65,
+    "family_id": 1646791448,
+    "files": [
+     {
+      "path_blake2b64": "80d1aa41098fb60c",
+      "size": 228830626
+     },
+     {
+      "path_blake2b64": "1b3a2effc4adf9f0",
+      "size": 34
+     }
+    ],
+    "item_id": "lc-00958",
+    "pi_i": 0.461197,
+    "rng_seed_reserved_at": "seed=20261019@2026-10-19T00:00:00Z",
+    "selector_sha256": "d67369d0a1d34fe5e94fc30c838a730157719df5258ad89a81e21f5ff9f9f200",
+    "size_bytes": 228830660,
+    "stratum": "dht_recent_adult|2026-09|video_container|100mb_2gb",
+    "u_i": 0.912839,
+    "name_blake2b64": "cdb8fb84d19cef83",
+    "info_hash_blake2b64": "f8a19dc23a277e34"
+   },
+   {
+    "R_i": 1,
+    "difficulty_weight": 1.0,
+    "family_id": 1146074051,
+    "files": [],
+    "item_id": "lc-00959",
+    "pi_i": 0.709534,
+    "rng_seed_reserved_at": "seed=20261019@2026-10-19T00:00:00Z",
+    "selector_sha256": "d67369d0a1d34fe5e94fc30c838a730157719df5258ad89a81e21f5ff9f9f200",
+    "size_bytes": 472875225,
+    "stratum": "dht_older_adult|2026-08|bare_title|100mb_2gb",
+    "u_i": 0.055429,
+    "name_blake2b64": "d98e68911e110ace",
+    "info_hash_blake2b64": "079d2a43ae32e9d4"
+   },
+   {
+    "R_i": 1,
+    "difficulty_weight": 1.0,
+    "family_id": 1408158388,
+    "files": [],
+    "item_id": "lc-00960",
+    "pi_i": 0.709534,
+    "rng_seed_reserved_at": "seed=20261019@2026-10-19T00:00:00Z",
+    "selector_sha256": "d67369d0a1d34fe5e94fc30c838a730157719df5258ad89a81e21f5ff9f9f200",
+    "size_bytes": 56241483,
+    "stratum": "dht_older_exe_archive|2026-08|bare_title|lt_100mb",
+    "u_i": 0.200661,
+    "name_blake2b64": "aa9de7195c55337d",
+    "info_hash_blake2b64": "e38f1f8599fe5fff"
+   },
+   {
+    "R_i": 1,
+    "difficulty_weight": 1.0,
+    "family_id": 1700405728,
+    "files": [],
+    "item_id": "lc-00961",
+    "pi_i": 0.709534,
+    "rng_seed_reserved_at": "seed=20261019@2026-10-19T00:00:00Z",
+    "selector_sha256": "d67369d0a1d34fe5e94fc30c838a730157719df5258ad89a81e21f5ff9f9f200",
+    "size_bytes": 4792875157,
+    "stratum": "dht_older_exe_archive|2026-08|bare_title|2gb_15gb",
+    "u_i": 0.121453,
+    "name_blake2b64": "c23ebb8b00aba152",
+    "info_hash_blake2b64": "444bf7011534d30c"
+   },
+   {
+    "R_i": 1,
+    "difficulty_weight": 0.65,
+    "family_id": 1436569932,
+    "files": [
+     {
+      "path_blake2b64": "032365bf463314f6",
+      "size": 1431995220
+     },
+     {
+      "path_blake2b64": "127baa53a1361831",
+      "size": 1289
+     },
+     {
+      "path_blake2b64": "75140793b689164b",
+      "size": 1275
+     },
+     {
+      "path_blake2b64": "94007549f4c30aee",
+      "size": 1241
+     },
+     {
+      "path_blake2b64": "821312c7357cb155",
+      "size": 104
+     },
+     {
+      "path_blake2b64": "3c4edcc0cfc0b9b2",
+      "size": 57
+     }
+    ],
+    "item_id": "lc-00962",
+    "pi_i": 0.461197,
+    "rng_seed_reserved_at": "seed=20261019@2026-10-19T00:00:00Z",
+    "selector_sha256": "d67369d0a1d34fe5e94fc30c838a730157719df5258ad89a81e21f5ff9f9f200",
+    "size_bytes": 1431999186,
+    "stratum": "dht_older_nonlatin|2026-09|video_container|100mb_2gb",
+    "u_i": 0.318924,
+    "name_blake2b64": "41d11ec828981250",
+    "info_hash_blake2b64": "eed31b2a9adcfc84"
+   },
+   {
+    "R_i": 0,
+    "difficulty_weight": 0.65,
+    "family_id": 7522072,
+    "files": [
+     {
+      "path_blake2b64": "19d7cd9471f766e9",
+      "size": 551378901
+     },
+     {
+      "path_blake2b64": "a885d7193fe6a6f6",
+      "size": 497433570
+     },
+     {
+      "path_blake2b64": "2a9918eef912dfce",
+      "size": 15089802
+     },
+     {
+      "path_blake2b64": "8cd5b65c92150687",
+      "size": 13890047
+     },
+     {
+      "path_blake2b64": "84d08ec1e8d43618",
+      "size": 145
+     },
+     {
+      "path_blake2b64": "961fdfb251852510",
+      "size": 136
+     }
+    ],
+    "item_id": "lc-00963",
+    "pi_i": 0.461197,
+    "rng_seed_reserved_at": "seed=20261019@2026-10-19T00:00:00Z",
+    "selector_sha256": "d67369d0a1d34fe5e94fc30c838a730157719df5258ad89a81e21f5ff9f9f200",
+    "size_bytes": 1077792601,
+    "stratum": "dht_recent_nonlatin|2026-09|video_container|100mb_2gb",
+    "u_i": 0.578676,
+    "name_blake2b64": "286b7d402f2e8d0d",
+    "info_hash_blake2b64": "0d26c7e5574f62d7"
+   },
+   {
+    "R_i": 1,
+    "difficulty_weight": 1.0,
+    "family_id": 219268340,
+    "files": [],
+    "item_id": "lc-00964",
+    "pi_i": 0.709534,
+    "rng_seed_reserved_at": "seed=20261019@2026-10-19T00:00:00Z",
+    "selector_sha256": "d67369d0a1d34fe5e94fc30c838a730157719df5258ad89a81e21f5ff9f9f200",
+    "size_bytes": 228152224,
+    "stratum": "dht_recent_exe_archive|2026-09|bare_title|100mb_2gb",
+    "u_i": 0.51367,
+    "name_blake2b64": "b5884592b3093c45",
+    "info_hash_blake2b64": "9c973eab64cfae21"
+   },
+   {
+    "R_i": 1,
+    "difficulty_weight": 0.65,
+    "family_id": 1518271199,
+    "files": [
+     {
+      "path_blake2b64": "f4db82ffd59ffcac",
+      "size": 652058280
+     },
+     {
+      "path_blake2b64": "0ce28449f3e48e04",
+      "size": 18424
+     },
+     {
+      "path_blake2b64": "2a4036794d61b065",
+      "size": 18343
+     },
+     {
+      "path_blake2b64": "687124320118bacf",
+      "size": 18341
+     },
+     {
+      "path_blake2b64": "511d3f20c637af14",
+      "size": 18341
+     },
+     {
+      "path_blake2b64": "6f3e0f6053c1da95",
+      "size": 18340
+     }
+    ],
+    "item_id": "lc-00966",
+    "pi_i": 0.461197,
+    "rng_seed_reserved_at": "seed=20261019@2026-10-19T00:00:00Z",
+    "selector_sha256": "d67369d0a1d34fe5e94fc30c838a730157719df5258ad89a81e21f5ff9f9f200",
+    "size_bytes": 652315065,
+    "stratum": "dht_older_nonlatin|2026-09|video_container|100mb_2gb",
+    "u_i": 0.447411,
+    "name_blake2b64": "9333e616f391a547",
+    "info_hash_blake2b64": "fbae9f8f4d3df006"
+   },
+   {
+    "R_i": 0,
+    "difficulty_weight": 0.65,
+    "family_id": 1241528327,
+    "files": [
+     {
+      "path_blake2b64": "7f8eb7d32b5493fe",
+      "size": 2630573978
+     },
+     {
+      "path_blake2b64": "f1559b9d69c7aaac",
+      "size": 860888
+     },
+     {
+      "path_blake2b64": "eb986fcd0de31d18",
+      "size": 269061
+     },
+     {
+      "path_blake2b64": "a5350286bca928ad",
+      "size": 191978
+     },
+     {
+      "path_blake2b64": "2094608e854af34c",
+      "size": 109879
+     },
+     {
+      "path_blake2b64": "65dda1f3ff2e1030",
+      "size": 105372
+     }
+    ],
+    "item_id": "lc-00967",
+    "pi_i": 0.461197,
+    "rng_seed_reserved_at": "seed=20261019@2026-10-19T00:00:00Z",
+    "selector_sha256": "d67369d0a1d34fe5e94fc30c838a730157719df5258ad89a81e21f5ff9f9f200",
+    "size_bytes": 2632114873,
+    "stratum": "dht_recent_plain|2026-09|video_container|2gb_15gb",
+    "u_i": 0.988692,
+    "name_blake2b64": "5d261d3a4632d531",
+    "info_hash_blake2b64": "9ec5bdd5914c7142"
+   },
+   {
+    "R_i": 0,
+    "difficulty_weight": 0.65,
+    "family_id": 336374507,
+    "files": [
+     {
+      "path_blake2b64": "f742f01a7189ba3b",
+      "size": 636245556
+     },
+     {
+      "path_blake2b64": "09dc1ee542df250f",
+      "size": 396710496
+     },
+     {
+      "path_blake2b64": "772c15104e9c194b",
+      "size": 294832282
+     },
+     {
+      "path_blake2b64": "5ac9d1d6828301ae",
+      "size": 280189418
+     },
+     {
+      "path_blake2b64": "ecf2891bbd030aa8",
+      "size": 259888048
+     },
+     {
+      "path_blake2b64": "09aea9d80806dd36",
+      "size": 201423588
+     }
+    ],
+    "item_id": "lc-00968",
+    "pi_i": 0.461197,
+    "rng_seed_reserved_at": "seed=20261019@2026-10-19T00:00:00Z",
+    "selector_sha256": "d67369d0a1d34fe5e94fc30c838a730157719df5258ad89a81e21f5ff9f9f200",
+    "size_bytes": 2176446151,
+    "stratum": "dht_older_plain|2026-03|video_container|2gb_15gb",
+    "u_i": 0.913492,
+    "name_blake2b64": "66377ace8f33e9dd",
+    "info_hash_blake2b64": "bcf3d245434c713d"
+   },
+   {
+    "R_i": 0,
+    "difficulty_weight": 1.0,
+    "family_id": 696247001,
+    "files": [],
+    "item_id": "lc-00969",
+    "pi_i": 0.709534,
+    "rng_seed_reserved_at": "seed=20261019@2026-10-19T00:00:00Z",
+    "selector_sha256": "d67369d0a1d34fe5e94fc30c838a730157719df5258ad89a81e21f5ff9f9f200",
+    "size_bytes": 124947818,
+    "stratum": "dht_older_nonlatin|2026-08|bare_title|100mb_2gb",
+    "u_i": 0.778586,
+    "name_blake2b64": "532664d29296b152",
+    "info_hash_blake2b64": "5c61641b698b01bb"
+   },
+   {
+    "R_i": 1,
+    "difficulty_weight": 0.65,
+    "family_id": 1908684074,
+    "files": [
+     {
+      "path_blake2b64": "c2b577cb246fe0da",
+      "size": 2087412398
+     },
+     {
+      "path_blake2b64": "e84b3ee02ac49e65",
+      "size": 1308684016
+     },
+     {
+      "path_blake2b64": "a4a059b7fb4e1c5f",
+      "size": 1061042226
+     },
+     {
+      "path_blake2b64": "a08ba777731fa7e9",
+      "size": 563726504
+     },
+     {
+      "path_blake2b64": "13eda835d18e72bf",
+      "size": 297066128
+     },
+     {
+      "path_blake2b64": "831ca7406e63e1d7",
+      "size": 2097162
+     }
+    ],
+    "item_id": "lc-00970",
+    "pi_i": 0.461197,
+    "rng_seed_reserved_at": "seed=20261019@2026-10-19T00:00:00Z",
+    "selector_sha256": "d67369d0a1d34fe5e94fc30c838a730157719df5258ad89a81e21f5ff9f9f200",
+    "size_bytes": 5322762425,
+    "stratum": "dht_older_exe_archive|2026-07|video_container|2gb_15gb",
+    "u_i": 0.057045,
+    "name_blake2b64": "53ab7ad9dc063013",
+    "info_hash_blake2b64": "b9e8917d01dffc98"
+   },
+   {
+    "R_i": 1,
+    "difficulty_weight": 0.65,
+    "family_id": 944959385,
+    "files": [
+     {
+      "path_blake2b64": "e27912a190383b8a",
+      "size": 45862809
+     },
+     {
+      "path_blake2b64": "100c9f6d93676d76",
+      "size": 38721874
+     },
+     {
+      "path_blake2b64": "8f4a2f8ec3e16c33",
+      "size": 33152378
+     },
+     {
+      "path_blake2b64": "485ce26bcd92c406",
+      "size": 32483328
+     },
+     {
+      "path_blake2b64": "d080dd1bc9c29005",
+      "size": 32441601
+     },
+     {
+      "path_blake2b64": "76b37900ad2f1a5c",
+      "size": 31846124
+     }
+    ],
+    "item_id": "lc-00971",
+    "pi_i": 0.461197,
+    "rng_seed_reserved_at": "seed=20261019@2026-10-19T00:00:00Z",
+    "selector_sha256": "d67369d0a1d34fe5e94fc30c838a730157719df5258ad89a81e21f5ff9f9f200",
+    "size_bytes": 4718379925,
+    "stratum": "dht_older_nonlatin|2026-09|audio_container|2gb_15gb",
+    "u_i": 0.228271,
+    "name_blake2b64": "1b3ddf8cf0fb2f93",
+    "info_hash_blake2b64": "b554de8964c7fd33"
+   },
+   {
+    "R_i": 0,
+    "difficulty_weight": 0.65,
+    "family_id": 797336833,
+    "files": [
+     {
+      "path_blake2b64": "0c9b0efe0f7f5ded",
+      "size": 39522624
+     },
+     {
+      "path_blake2b64": "8546431b49b2be40",
+      "size": 25621696
+     },
+     {
+      "path_blake2b64": "7f341881337756b1",
+      "size": 23058496
+     },
+     {
+      "path_blake2b64": "f8a9628e80d00383",
+      "size": 22480406
+     },
+     {
+      "path_blake2b64": "fef2be60b9d90380",
+      "size": 20096064
+     },
+     {
+      "path_blake2b64": "1d942f956e2a23c4",
+      "size": 20095936
+     }
+    ],
+    "item_id": "lc-00973",
+    "pi_i": 0.461197,
+    "rng_seed_reserved_at": "seed=20261019@2026-10-19T00:00:00Z",
+    "selector_sha256": "d67369d0a1d34fe5e94fc30c838a730157719df5258ad89a81e21f5ff9f9f200",
+    "size_bytes": 1659678199,
+    "stratum": "dht_older_nonlatin|2026-08|audio_container|100mb_2gb",
+    "u_i": 0.857463,
+    "name_blake2b64": "2fd098467f461855",
+    "info_hash_blake2b64": "05aca610736129cc"
+   },
+   {
+    "R_i": 0,
+    "difficulty_weight": 0.65,
+    "family_id": 313966234,
+    "files": [
+     {
+      "path_blake2b64": "c3484892ea77df13",
+      "size": 1343005839
+     },
+     {
+      "path_blake2b64": "0c26d86cac750229",
+      "size": 73138389
+     },
+     {
+      "path_blake2b64": "9caf64e7df49aa99",
+      "size": 6977
+     },
+     {
+      "path_blake2b64": "ae5541bdfcd0bbf2",
+      "size": 34
+     }
+    ],
+    "item_id": "lc-00974",
+    "pi_i": 0.461197,
+    "rng_seed_reserved_at": "seed=20261019@2026-10-19T00:00:00Z",
+    "selector_sha256": "d67369d0a1d34fe5e94fc30c838a730157719df5258ad89a81e21f5ff9f9f200",
+    "size_bytes": 1416151239,
+    "stratum": "dht_older_adult|2026-09|video_container|100mb_2gb",
+    "u_i": 0.853555,
+    "name_blake2b64": "8398b63cfb878661",
+    "info_hash_blake2b64": "cd96e289f85afb92"
+   },
+   {
+    "R_i": 0,
+    "difficulty_weight": 1.0,
+    "family_id": 781900497,
+    "files": [],
+    "item_id": "lc-00975",
+    "pi_i": 0.709534,
+    "rng_seed_reserved_at": "seed=20261019@2026-10-19T00:00:00Z",
+    "selector_sha256": "d67369d0a1d34fe5e94fc30c838a730157719df5258ad89a81e21f5ff9f9f200",
+    "size_bytes": 8445158085,
+    "stratum": "dht_older_exe_archive|2026-09|bare_title|2gb_15gb",
+    "u_i": 0.897861,
+    "name_blake2b64": "b4e0c96b6cbd0221",
+    "info_hash_blake2b64": "8b3a747e42662117"
+   },
+   {
+    "R_i": 1,
+    "difficulty_weight": 1.0,
+    "family_id": 1799277254,
+    "files": [],
+    "item_id": "lc-00976",
+    "pi_i": 0.709534,
+    "rng_seed_reserved_at": "seed=20261019@2026-10-19T00:00:00Z",
+    "selector_sha256": "d67369d0a1d34fe5e94fc30c838a730157719df5258ad89a81e21f5ff9f9f200",
+    "size_bytes": 21717425,
+    "stratum": "dht_older_exe_archive|2026-08|bare_title|lt_100mb",
+    "u_i": 0.243826,
+    "name_blake2b64": "8c197c53c9e546db",
+    "info_hash_blake2b64": "02bb1067635d01f8"
+   },
+   {
+    "R_i": 0,
+    "difficulty_weight": 0.65,
+    "family_id": 1887552432,
+    "files": [
+     {
+      "path_blake2b64": "904f2326ec7de030",
+      "size": 129654441
+     },
+     {
+      "path_blake2b64": "99405e1a907d1cd8",
+      "size": 118620611
+     },
+     {
+      "path_blake2b64": "cf243e7e4dc9b6b0",
+      "size": 112285333
+     },
+     {
+      "path_blake2b64": "6fbeae3e46f3b39d",
+      "size": 109947225
+     },
+     {
+      "path_blake2b64": "b7c3770801aa9520",
+      "size": 106620127
+     },
+     {
+      "path_blake2b64": "705018eec67f311c",
+      "size": 99351601
+     }
+    ],
+    "item_id": "lc-00977",
+    "pi_i": 0.461197,
+    "rng_seed_reserved_at": "seed=20261019@2026-10-19T00:00:00Z",
+    "selector_sha256": "d67369d0a1d34fe5e94fc30c838a730157719df5258ad89a81e21f5ff9f9f200",
+    "size_bytes": 1288681499,
+    "stratum": "dht_older_nonlatin|2026-08|other_ext|100mb_2gb",
+    "u_i": 0.749004,
+    "name_blake2b64": "7947b92e0bbf85a0",
+    "info_hash_blake2b64": "b0903e0287a7a21a"
+   },
+   {
+    "R_i": 1,
+    "difficulty_weight": 0.65,
+    "family_id": 1515306205,
+    "files": [
+     {
+      "path_blake2b64": "538ed16415f799ef",
+      "size": 1726895301
+     },
+     {
+      "path_blake2b64": "563fbf31dae2f6ba",
+      "size": 21478465
+     },
+     {
+      "path_blake2b64": "d20f168aa1e1c4ab",
+      "size": 20920967
+     },
+     {
+      "path_blake2b64": "70f63aacbd526879",
+      "size": 19728161
+     },
+     {
+      "path_blake2b64": "16aa1caaf3145891",
+      "size": 10556090
+     },
+     {
+      "path_blake2b64": "862d2ae7205462c8",
+      "size": 10040569
+     }
+    ],
+    "item_id": "lc-00978",
+    "pi_i": 0.461197,
+    "rng_seed_reserved_at": "seed=20261019@2026-10-19T00:00:00Z",
+    "selector_sha256": "d67369d0a1d34fe5e94fc30c838a730157719df5258ad89a81e21f5ff9f9f200",
+    "size_bytes": 1828730210,
+    "stratum": "dht_recent_nonlatin|2026-09|video_container|100mb_2gb",
+    "u_i": 0.299932,
+    "name_blake2b64": "c48ef5e3884b85b1",
+    "info_hash_blake2b64": "2321a46d5fd9ebbc"
+   },
+   {
+    "R_i": 0,
+    "difficulty_weight": 0.35,
+    "family_id": 288362939,
+    "files": [
+     {
+      "path_blake2b64": "07103e189984ea06",
+      "size": 3119047872
+     },
+     {
+      "path_blake2b64": "b8f2c52077e733bb",
+      "size": 340184
+     },
+     {
+      "path_blake2b64": "ab69d2f621b2c496",
+      "size": 152839
+     },
+     {
+      "path_blake2b64": "435818cc7ec4a39c",
+      "size": 106479
+     },
+     {
+      "path_blake2b64": "dcdb585e70f189d1",
+      "size": 93455
+     },
+     {
+      "path_blake2b64": "de56b6e5727c9353",
+      "size": 91647
+     }
+    ],
+    "item_id": "lc-00979",
+    "pi_i": 0.248337,
+    "rng_seed_reserved_at": "seed=20261019@2026-10-19T00:00:00Z",
+    "selector_sha256": "d67369d0a1d34fe5e94fc30c838a730157719df5258ad89a81e21f5ff9f9f200",
+    "size_bytes": 3119833744,
+    "stratum": "dht_older_plain|2026-08|video_container|2gb_15gb",
+    "u_i": 0.578189,
+    "name_blake2b64": "b5a36ff8c49c370a",
+    "info_hash_blake2b64": "258849486dbf0ef1"
+   },
+   {
+    "R_i": 0,
+    "difficulty_weight": 0.65,
+    "family_id": 1093794055,
+    "files": [],
+    "item_id": "lc-00980",
+    "pi_i": 0.461197,
+    "rng_seed_reserved_at": "seed=20261019@2026-10-19T00:00:00Z",
+    "selector_sha256": "d67369d0a1d34fe5e94fc30c838a730157719df5258ad89a81e21f5ff9f9f200",
+    "size_bytes": 1727933966,
+    "stratum": "dht_recent_nonlatin|2026-10|bare_title|100mb_2gb",
+    "u_i": 0.737324,
+    "name_blake2b64": "32031ac409b4a63d",
+    "info_hash_blake2b64": "f7538cc80507e97f"
+   },
+   {
+    "R_i": 1,
+    "difficulty_weight": 1.0,
+    "family_id": 1659157469,
+    "files": [
+     {
+      "path_blake2b64": "7953839f9fd2a8d3",
+      "size": 388378089
+     }
+    ],
+    "item_id": "lc-00981",
+    "pi_i": 0.709534,
+    "rng_seed_reserved_at": "seed=20261019@2026-10-19T00:00:00Z",
+    "selector_sha256": "d67369d0a1d34fe5e94fc30c838a730157719df5258ad89a81e21f5ff9f9f200",
+    "size_bytes": 388378089,
+    "stratum": "dht_older_nonlatin|2026-09|video_container|100mb_2gb",
+    "u_i": 0.583908,
+    "name_blake2b64": "95daefe86e1a5e49",
+    "info_hash_blake2b64": "e68c4f095a318fec"
+   },
+   {
+    "R_i": 1,
+    "difficulty_weight": 0.65,
+    "family_id": 165085677,
+    "files": [
+     {
+      "path_blake2b64": "50bbfa49d8989dec",
+      "size": 29238314
+     },
+     {
+      "path_blake2b64": "997422d2a4c0a1a7",
+      "size": 26965870
+     },
+     {
+      "path_blake2b64": "74dda74b0b946ca6",
+      "size": 24207339
+     },
+     {
+      "path_blake2b64": "799b4dca76e226d9",
+      "size": 23633482
+     },
+     {
+      "path_blake2b64": "38c96fb5ae6cab60",
+      "size": 22604048
+     },
+     {
+      "path_blake2b64": "961bad9a9ee46c7d",
+      "size": 19847190
+     }
+    ],
+    "item_id": "lc-00982",
+    "pi_i": 0.461197,
+    "rng_seed_reserved_at": "seed=20261019@2026-10-19T00:00:00Z",
+    "selector_sha256": "d67369d0a1d34fe5e94fc30c838a730157719df5258ad89a81e21f5ff9f9f200",
+    "size_bytes": 557442490,
+    "stratum": "dht_older_nonlatin|2026-09|audio_container|100mb_2gb",
+    "u_i": 0.16712,
+    "name_blake2b64": "c265603d35d77057",
+    "info_hash_blake2b64": "0ef86509f7716042"
+   },
+   {
+    "R_i": 1,
+    "difficulty_weight": 0.65,
+    "family_id": 697516825,
+    "files": [
+     {
+      "path_blake2b64": "e67aa750cde2e685",
+      "size": 1073739776
+     },
+     {
+      "path_blake2b64": "b51b02c670d6da26",
+      "size": 1073739776
+     },
+     {
+      "path_blake2b64": "09e6d8c8041e0173",
+      "size": 1073739776
+     },
+     {
+      "path_blake2b64": "b0bc3fce88258777",
+      "size": 1073739776
+     },
+     {
+      "path_blake2b64": "bd90cff1be6cdb4a",
+      "size": 690767872
+     },
+     {
+      "path_blake2b64": "2749cdbbd7ed527c",
+      "size": 546957312
+     }
+    ],
+    "item_id": "lc-00983",
+    "pi_i": 0.461197,
+    "rng_seed_reserved_at": "seed=20261019@2026-10-19T00:00:00Z",
+    "selector_sha256": "d67369d0a1d34fe5e94fc30c838a730157719df5258ad89a81e21f5ff9f9f200",
+    "size_bytes": 7675973454,
+    "stratum": "dht_older_plain|2026-07|other_ext|2gb_15gb",
+    "u_i": 0.000855,
+    "name_blake2b64": "f994e7889d5ab413",
+    "info_hash_blake2b64": "4b08b5e424fd6805"
+   },
+   {
+    "R_i": 1,
+    "difficulty_weight": 1.0,
+    "family_id": 1323306943,
+    "files": [],
+    "item_id": "lc-00984",
+    "pi_i": 0.709534,
+    "rng_seed_reserved_at": "seed=20261019@2026-10-19T00:00:00Z",
+    "selector_sha256": "d67369d0a1d34fe5e94fc30c838a730157719df5258ad89a81e21f5ff9f9f200",
+    "size_bytes": 241534563,
+    "stratum": "dht_older_exe_archive|2026-08|bare_title|100mb_2gb",
+    "u_i": 0.397747,
+    "name_blake2b64": "23fabebdb2fff8de",
+    "info_hash_blake2b64": "737d03319a9b89f1"
+   },
+   {
+    "R_i": 1,
+    "difficulty_weight": 0.65,
+    "family_id": 1190481461,
+    "files": [
+     {
+      "path_blake2b64": "0376d12312caefe3",
+      "size": 183353126
+     },
+     {
+      "path_blake2b64": "f658f887f2a33397",
+      "size": 513
+     },
+     {
+      "path_blake2b64": "2d232acbe619893e",
+      "size": 513
+     },
+     {
+      "path_blake2b64": "88fcf67e99369232",
+      "size": 290
+     }
+    ],
+    "item_id": "lc-00985",
+    "pi_i": 0.461197,
+    "rng_seed_reserved_at": "seed=20261019@2026-10-19T00:00:00Z",
+    "selector_sha256": "d67369d0a1d34fe5e94fc30c838a730157719df5258ad89a81e21f5ff9f9f200",
+    "size_bytes": 183354442,
+    "stratum": "dht_older_plain|2026-04|video_container|100mb_2gb",
+    "u_i": 0.240032,
+    "name_blake2b64": "f9818351aeff0b84",
+    "info_hash_blake2b64": "47bffde444a78b63"
+   },
+   {
+    "R_i": 1,
+    "difficulty_weight": 1.0,
+    "family_id": 869985479,
+    "files": [],
+    "item_id": "lc-00987",
+    "pi_i": 0.709534,
+    "rng_seed_reserved_at": "seed=20261019@2026-10-19T00:00:00Z",
+    "selector_sha256": "d67369d0a1d34fe5e94fc30c838a730157719df5258ad89a81e21f5ff9f9f200",
+    "size_bytes": 690340518,
+    "stratum": "dht_older_plain|2026-09|bare_title|100mb_2gb",
+    "u_i": 0.578858,
+    "name_blake2b64": "a7a3c1ad528423dc",
+    "info_hash_blake2b64": "738325aa926e208a"
+   },
+   {
+    "R_i": 1,
+    "difficulty_weight": 0.65,
+    "family_id": 1309121250,
+    "files": [],
+    "item_id": "lc-00988",
+    "pi_i": 0.461197,
+    "rng_seed_reserved_at": "seed=20261019@2026-10-19T00:00:00Z",
+    "selector_sha256": "d67369d0a1d34fe5e94fc30c838a730157719df5258ad89a81e21f5ff9f9f200",
+    "size_bytes": 507593272,
+    "stratum": "dht_older_exe_archive|2026-09|bare_title|100mb_2gb",
+    "u_i": 0.269179,
+    "name_blake2b64": "cf46167fded1a11d",
+    "info_hash_blake2b64": "04181fea98da6d1d"
+   },
+   {
+    "R_i": 1,
+    "difficulty_weight": 0.65,
+    "family_id": 467920805,
+    "files": [
+     {
+      "path_blake2b64": "3b9dc58619385038",
+      "size": 6799118656
+     },
+     {
+      "path_blake2b64": "2a9918eef912dfce",
+      "size": 15089802
+     },
+     {
+      "path_blake2b64": "572fa02970895e01",
+      "size": 12673081
+     },
+     {
+      "path_blake2b64": "84d08ec1e8d43618",
+      "size": 145
+     },
+     {
+      "path_blake2b64": "a780064b1482858a",
+      "size": 143
+     },
+     {
+      "path_blake2b64": "37475a6549b1fb12",
+      "size": 136
+     }
+    ],
+    "item_id": "lc-00989",
+    "pi_i": 0.461197,
+    "rng_seed_reserved_at": "seed=20261019@2026-10-19T00:00:00Z",
+    "selector_sha256": "d67369d0a1d34fe5e94fc30c838a730157719df5258ad89a81e21f5ff9f9f200",
+    "size_bytes": 6826881963,
+    "stratum": "dht_older_plain|2026-09|video_container|2gb_15gb",
+    "u_i": 0.349919,
+    "name_blake2b64": "3ca3993d959e2b92",
+    "info_hash_blake2b64": "a40fec00841e2a57"
+   },
+   {
+    "R_i": 1,
+    "difficulty_weight": 0.65,
+    "family_id": 1052432049,
+    "files": [
+     {
+      "path_blake2b64": "542045010d061849",
+      "size": 14590574997
+     },
+     {
+      "path_blake2b64": "3266ebd190136f38",
+      "size": 0
+     },
+     {
+      "path_blake2b64": "d1d7c3b61288839e",
+      "size": 0
+     }
+    ],
+    "item_id": "lc-00990",
+    "pi_i": 0.461197,
+    "rng_seed_reserved_at": "seed=20261019@2026-10-19T00:00:00Z",
+    "selector_sha256": "d67369d0a1d34fe5e94fc30c838a730157719df5258ad89a81e21f5ff9f9f200",
+    "size_bytes": 14590574997,
+    "stratum": "dht_older_plain|2026-07|video_container|2gb_15gb",
+    "u_i": 0.241607,
+    "name_blake2b64": "1b56f225acb28dfd",
+    "info_hash_blake2b64": "0206c5323024cb8a"
+   },
+   {
+    "R_i": 1,
+    "difficulty_weight": 0.65,
+    "family_id": 87859474,
+    "files": [
+     {
+      "path_blake2b64": "958b55683e97f4a6",
+      "size": 133713252
+     },
+     {
+      "path_blake2b64": "67866de03f687b96",
+      "size": 61566280
+     },
+     {
+      "path_blake2b64": "ad458266670c7a93",
+      "size": 47362988
+     },
+     {
+      "path_blake2b64": "b94dd5e608f8b19d",
+      "size": 43941135
+     },
+     {
+      "path_blake2b64": "59d24999cc0add93",
+      "size": 41829103
+     },
+     {
+      "path_blake2b64": "6c96c51315502996",
+      "size": 553902
+     }
+    ],
+    "item_id": "lc-00991",
+    "pi_i": 0.461197,
+    "rng_seed_reserved_at": "seed=20261019@2026-10-19T00:00:00Z",
+    "selector_sha256": "d67369d0a1d34fe5e94fc30c838a730157719df5258ad89a81e21f5ff9f9f200",
+    "size_bytes": 329895300,
+    "stratum": "dht_recent_nonlatin|2026-09|video_container|100mb_2gb",
+    "u_i": 0.228051,
+    "name_blake2b64": "3fada31d88f89167",
+    "info_hash_blake2b64": "d4f2200204c819ec"
+   },
+   {
+    "R_i": 1,
+    "difficulty_weight": 1.0,
+    "family_id": 2041948667,
+    "files": [],
+    "item_id": "lc-00992",
+    "pi_i": 0.709534,
+    "rng_seed_reserved_at": "seed=20261019@2026-10-19T00:00:00Z",
+    "selector_sha256": "d67369d0a1d34fe5e94fc30c838a730157719df5258ad89a81e21f5ff9f9f200",
+    "size_bytes": 27316533,
+    "stratum": "dht_older_exe_archive|2026-08|bare_title|lt_100mb",
+    "u_i": 0.657067,
+    "name_blake2b64": "38f66a40c982254a",
+    "info_hash_blake2b64": "ed4d1735250a8f14"
+   },
+   {
+    "R_i": 0,
+    "difficulty_weight": 0.65,
+    "family_id": 1521046443,
+    "files": [
+     {
+      "path_blake2b64": "4bab48b08af50b28",
+      "size": 1252551678
+     },
+     {
+      "path_blake2b64": "c1cfdf451fe3035b",
+      "size": 392078
+     },
+     {
+      "path_blake2b64": "ffb3dcf3f0f92a20",
+      "size": 152395
+     },
+     {
+      "path_blake2b64": "96c110375c4781e6",
+      "size": 121214
+     }
+    ],
+    "item_id": "lc-00993",
+    "pi_i": 0.461197,
+    "rng_seed_reserved_at": "seed=20261019@2026-10-19T00:00:00Z",
+    "selector_sha256": "d67369d0a1d34fe5e94fc30c838a730157719df5258ad89a81e21f5ff9f9f200",
+    "size_bytes": 1253217365,
+    "stratum": "dht_older_adult|2026-09|video_container|100mb_2gb",
+    "u_i": 0.765032,
+    "name_blake2b64": "64823967c42b6ffc",
+    "info_hash_blake2b64": "2dc9cb1dfc2ac282"
+   },
+   {
+    "R_i": 0,
+    "difficulty_weight": 1.0,
+    "family_id": 672202083,
+    "files": [],
+    "item_id": "lc-00994",
+    "pi_i": 0.709534,
+    "rng_seed_reserved_at": "seed=20261019@2026-10-19T00:00:00Z",
+    "selector_sha256": "d67369d0a1d34fe5e94fc30c838a730157719df5258ad89a81e21f5ff9f9f200",
+    "size_bytes": 774097568,
+    "stratum": "dht_older_nonlatin|2026-08|bare_title|100mb_2gb",
+    "u_i": 0.838435,
+    "name_blake2b64": "f4cc80ecd84db207",
+    "info_hash_blake2b64": "9e58ec991e3e1d02"
+   },
+   {
+    "R_i": 0,
+    "difficulty_weight": 0.65,
+    "family_id": 744073945,
+    "files": [
+     {
+      "path_blake2b64": "cbc577f927464924",
+      "size": 22556817677
+     },
+     {
+      "path_blake2b64": "99ca6657c0276824",
+      "size": 197921689
+     },
+     {
+      "path_blake2b64": "dc030ccb474e8455",
+      "size": 1014
+     },
+     {
+      "path_blake2b64": "da1d51401e4849e8",
+      "size": 99
+     },
+     {
+      "path_blake2b64": "7c403f5930ac6079",
+      "size": 30
+     }
+    ],
+    "item_id": "lc-00995",
+    "pi_i": 0.461197,
+    "rng_seed_reserved_at": "seed=20261019@2026-10-19T00:00:00Z",
+    "selector_sha256": "d67369d0a1d34fe5e94fc30c838a730157719df5258ad89a81e21f5ff9f9f200",
+    "size_bytes": 22754740509,
+    "stratum": "dht_older_exe_archive|2026-09|video_container|ge_15gb",
+    "u_i": 0.604785,
+    "name_blake2b64": "1adda5d165ecf173",
+    "info_hash_blake2b64": "9994fed9794bcac9"
+   },
+   {
+    "R_i": 0,
+    "difficulty_weight": 0.65,
+    "family_id": 1198247484,
+    "files": [
+     {
+      "path_blake2b64": "35edc394ba16157d",
+      "size": 733437952
+     },
+     {
+      "path_blake2b64": "1b2e2a0567eb5317",
+      "size": 728143872
+     },
+     {
+      "path_blake2b64": "0565a41660b6afa1",
+      "size": 454961
+     },
+     {
+      "path_blake2b64": "0d96b1ffdb6768e3",
+      "size": 443605
+     },
+     {
+      "path_blake2b64": "e52b28eca16e9c12",
+      "size": 381068
+     }
+    ],
+    "item_id": "lc-00997",
+    "pi_i": 0.461197,
+    "rng_seed_reserved_at": "seed=20261019@2026-10-19T00:00:00Z",
+    "selector_sha256": "d67369d0a1d34fe5e94fc30c838a730157719df5258ad89a81e21f5ff9f9f200",
+    "size_bytes": 1462861458,
+    "stratum": "dht_older_adult|2026-08|video_container|100mb_2gb",
+    "u_i": 0.855196,
+    "name_blake2b64": "b02cfcddf443ac76",
+    "info_hash_blake2b64": "2516398cfefd3f68"
+   },
+   {
+    "R_i": 1,
+    "difficulty_weight": 1.0,
+    "family_id": 230294417,
+    "files": [],
+    "item_id": "lc-00998",
+    "pi_i": 0.709534,
+    "rng_seed_reserved_at": "seed=20261019@2026-10-19T00:00:00Z",
+    "selector_sha256": "d67369d0a1d34fe5e94fc30c838a730157719df5258ad89a81e21f5ff9f9f200",
+    "size_bytes": 24096496,
+    "stratum": "dht_older_exe_archive|2026-08|bare_title|lt_100mb",
+    "u_i": 0.24904,
+    "name_blake2b64": "6372138aa4d79a87",
+    "info_hash_blake2b64": "c7d390c23e48ec5d"
+   },
+   {
+    "R_i": 1,
+    "difficulty_weight": 0.65,
+    "family_id": 1597003865,
+    "files": [
+     {
+      "path_blake2b64": "3f29839c8aa287dc",
+      "size": 18952799
+     },
+     {
+      "path_blake2b64": "d32c4037f749eea6",
+      "size": 18215100
+     },
+     {
+      "path_blake2b64": "5005a59e6e3a7fc5",
+      "size": 16120290
+     },
+     {
+      "path_blake2b64": "806fbf1ad574300f",
+      "size": 13655583
+     },
+     {
+      "path_blake2b64": "8f319ec3dd71e9df",
+      "size": 13282347
+     },
+     {
+      "path_blake2b64": "05fdbb81cc52b0d3",
+      "size": 13276076
+     }
+    ],
+    "item_id": "lc-00999",
+    "pi_i": 0.461197,
+    "rng_seed_reserved_at": "seed=20261019@2026-10-19T00:00:00Z",
+    "selector_sha256": "d67369d0a1d34fe5e94fc30c838a730157719df5258ad89a81e21f5ff9f9f200",
+    "size_bytes": 176583195,
+    "stratum": "dht_older_nonlatin|2026-08|audio_container|100mb_2gb",
+    "u_i": 0.130453,
+    "name_blake2b64": "0ee7dd7b216ae889",
+    "info_hash_blake2b64": "7c31411cf88bf9bd"
+   },
+   {
+    "R_i": 1,
+    "difficulty_weight": 0.65,
+    "family_id": 2023066867,
+    "files": [
+     {
+      "path_blake2b64": "1e368ad9c7b279c6",
+      "size": 5407530673
+     },
+     {
+      "path_blake2b64": "c9375907430dbf4c",
+      "size": 98564785
+     },
+     {
+      "path_blake2b64": "7d8e9c3a49377358",
+      "size": 690
+     }
+    ],
+    "item_id": "lc-01000",
+    "pi_i": 0.461197,
+    "rng_seed_reserved_at": "seed=20261019@2026-10-19T00:00:00Z",
+    "selector_sha256": "d67369d0a1d34fe5e94fc30c838a730157719df5258ad89a81e21f5ff9f9f200",
+    "size_bytes": 5506096148,
+    "stratum": "dht_older_plain|2026-08|video_container|2gb_15gb",
+    "u_i": 0.199736,
+    "name_blake2b64": "b00ba86a90bf3d09",
+    "info_hash_blake2b64": "bd621e282f89f21c"
+   },
+   {
+    "R_i": 1,
+    "difficulty_weight": 0.65,
+    "family_id": 555158428,
+    "files": [
+     {
+      "path_blake2b64": "9b8597ed68dada02",
+      "size": 1541853184
+     },
+     {
+      "path_blake2b64": "8917279ec9931fc9",
+      "size": 105858
+     },
+     {
+      "path_blake2b64": "43eabfe30d665ca9",
+      "size": 93798
+     }
+    ],
+    "item_id": "lc-01001",
+    "pi_i": 0.461197,
+    "rng_seed_reserved_at": "seed=20261019@2026-10-19T00:00:00Z",
+    "selector_sha256": "d67369d0a1d34fe5e94fc30c838a730157719df5258ad89a81e21f5ff9f9f200",
+    "size_bytes": 1542052840,
+    "stratum": "dht_older_plain|2026-07|video_container|100mb_2gb",
+    "u_i": 0.364125,
+    "name_blake2b64": "4684aec5d2469d64",
+    "info_hash_blake2b64": "4ade56d54b0d0f80"
+   },
+   {
+    "R_i": 1,
+    "difficulty_weight": 1.0,
+    "family_id": 530410109,
+    "files": [],
+    "item_id": "lc-01002",
+    "pi_i": 0.709534,
+    "rng_seed_reserved_at": "seed=20261019@2026-10-19T00:00:00Z",
+    "selector_sha256": "d67369d0a1d34fe5e94fc30c838a730157719df5258ad89a81e21f5ff9f9f200",
+    "size_bytes": 118679353,
+    "stratum": "dht_older_exe_archive|2026-09|bare_title|100mb_2gb",
+    "u_i": 0.656918,
+    "name_blake2b64": "06db925625acb2ff",
+    "info_hash_blake2b64": "c6a9cb3ce81872c2"
+   },
+   {
+    "R_i": 1,
+    "difficulty_weight": 0.65,
+    "family_id": 379395230,
+    "files": [
+     {
+      "path_blake2b64": "f9c6154ba9751cad",
+      "size": 647052018
+     },
+     {
+      "path_blake2b64": "8e242623545051f9",
+      "size": 783902
+     },
+     {
+      "path_blake2b64": "25b31fe09fa917f1",
+      "size": 418512
+     },
+     {
+      "path_blake2b64": "fde5edd465ce3fba",
+      "size": 328515
+     },
+     {
+      "path_blake2b64": "daf584e7f629beab",
+      "size": 263931
+     },
+     {
+      "path_blake2b64": "2d324daaa4dbbf6b",
+      "size": 51249
+     }
+    ],
+    "item_id": "lc-01003",
+    "pi_i": 0.461197,
+    "rng_seed_reserved_at": "seed=20261019@2026-10-19T00:00:00Z",
+    "selector_sha256": "d67369d0a1d34fe5e94fc30c838a730157719df5258ad89a81e21f5ff9f9f200",
+    "size_bytes": 648899075,
+    "stratum": "dht_older_nonlatin|2026-09|video_container|100mb_2gb",
+    "u_i": 0.383003,
+    "name_blake2b64": "71a1be0450d6d21c",
+    "info_hash_blake2b64": "129e11af9bdecc5e"
+   },
+   {
+    "R_i": 1,
+    "difficulty_weight": 1.0,
+    "family_id": 1575544139,
+    "files": [],
+    "item_id": "lc-01004",
+    "pi_i": 0.709534,
+    "rng_seed_reserved_at": "seed=20261019@2026-10-19T00:00:00Z",
+    "selector_sha256": "d67369d0a1d34fe5e94fc30c838a730157719df5258ad89a81e21f5ff9f9f200",
+    "size_bytes": 12659188,
+    "stratum": "dht_recent_exe_archive|2026-10|bare_title|lt_100mb",
+    "u_i": 0.305126,
+    "name_blake2b64": "f28c075cd3bdd6a8",
+    "info_hash_blake2b64": "2a50cdc89c31f2c4"
+   },
+   {
+    "R_i": 1,
+    "difficulty_weight": 0.65,
+    "family_id": 1195547710,
+    "files": [
+     {
+      "path_blake2b64": "aa2dd211151f991c",
+      "size": 320066897
+     },
+     {
+      "path_blake2b64": "694ca3c21fb2ec73",
+      "size": 14169327
+     },
+     {
+      "path_blake2b64": "5de5bdc1488e7a0f",
+      "size": 116599
+     },
+     {
+      "path_blake2b64": "f7859a6f92ad8c67",
+      "size": 158
+     },
+     {
+      "path_blake2b64": "7093847f1e19b7a5",
+      "size": 121
+     }
+    ],
+    "item_id": "lc-01005",
+    "pi_i": 0.461197,
+    "rng_seed_reserved_at": "seed=20261019@2026-10-19T00:00:00Z",
+    "selector_sha256": "d67369d0a1d34fe5e94fc30c838a730157719df5258ad89a81e21f5ff9f9f200",
+    "size_bytes": 334353102,
+    "stratum": "dht_older_exe_archive|2026-09|video_container|100mb_2gb",
+    "u_i": 0.426141,
+    "name_blake2b64": "1741fee793fa40d6",
+    "info_hash_blake2b64": "359a9bdfb9147368"
+   },
+   {
+    "R_i": 0,
+    "difficulty_weight": 0.65,
+    "family_id": 167493917,
+    "files": [
+     {
+      "path_blake2b64": "78e6d9daec50c699",
+      "size": 1557110774
+     },
+     {
+      "path_blake2b64": "3dc7b164f6599781",
+      "size": 37705
+     },
+     {
+      "path_blake2b64": "78b9a65b9f401544",
+      "size": 32392
+     },
+     {
+      "path_blake2b64": "9c2bd84bdf9aaef9",
+      "size": 31540
+     },
+     {
+      "path_blake2b64": "6db3995e7d9403ef",
+      "size": 31475
+     },
+     {
+      "path_blake2b64": "a42c00b8932f5191",
+      "size": 31371
+     }
+    ],
+    "item_id": "lc-01006",
+    "pi_i": 0.461197,
+    "rng_seed_reserved_at": "seed=20261019@2026-10-19T00:00:00Z",
+    "selector_sha256": "d67369d0a1d34fe5e94fc30c838a730157719df5258ad89a81e21f5ff9f9f200",
+    "size_bytes": 1557362145,
+    "stratum": "dht_recent_exe_archive|2026-09|video_container|100mb_2gb",
+    "u_i": 0.720515,
+    "name_blake2b64": "610fe27fe1391710",
+    "info_hash_blake2b64": "a5ec1d6631fabf1b"
+   },
+   {
+    "R_i": 0,
+    "difficulty_weight": 0.65,
+    "family_id": 1127684276,
+    "files": [
+     {
+      "path_blake2b64": "91729492c506b4a1",
+      "size": 3870652
+     },
+     {
+      "path_blake2b64": "4110bca4d5f38978",
+      "size": 21738
+     },
+     {
+      "path_blake2b64": "b561356f680d19af",
+      "size": 21738
+     },
+     {
+      "path_blake2b64": "f84b1d7646d05c30",
+      "size": 21738
+     },
+     {
+      "path_blake2b64": "bb1c14ddc665f204",
+      "size": 21738
+     },
+     {
+      "path_blake2b64": "30dfb196693b3b0b",
+      "size": 21738
+     }
+    ],
+    "item_id": "lc-01007",
+    "pi_i": 0.461197,
+    "rng_seed_reserved_at": "seed=20261019@2026-10-19T00:00:00Z",
+    "selector_sha256": "d67369d0a1d34fe5e94fc30c838a730157719df5258ad89a81e21f5ff9f9f200",
+    "size_bytes": 4096020,
+    "stratum": "dht_recent_nonlatin|2026-09|video_container|lt_100mb",
+    "u_i": 0.60413,
+    "name_blake2b64": "56067b4a9d5aeca7",
+    "info_hash_blake2b64": "b542fd8c192dd3c2"
+   },
+   {
+    "R_i": 1,
+    "difficulty_weight": 1.0,
+    "family_id": 1442648414,
+    "files": [],
+    "item_id": "lc-01008",
+    "pi_i": 0.709534,
+    "rng_seed_reserved_at": "seed=20261019@2026-10-19T00:00:00Z",
+    "selector_sha256": "d67369d0a1d34fe5e94fc30c838a730157719df5258ad89a81e21f5ff9f9f200",
+    "size_bytes": 67815121,
+    "stratum": "dht_older_exe_archive|2026-08|bare_title|lt_100mb",
+    "u_i": 0.323875,
+    "name_blake2b64": "8d462de56669c007",
+    "info_hash_blake2b64": "5d1e6a6dffe2806a"
+   },
+   {
+    "R_i": 1,
+    "difficulty_weight": 1.0,
+    "family_id": 836940529,
+    "files": [],
+    "item_id": "lc-01010",
+    "pi_i": 0.709534,
+    "rng_seed_reserved_at": "seed=20261019@2026-10-19T00:00:00Z",
+    "selector_sha256": "d67369d0a1d34fe5e94fc30c838a730157719df5258ad89a81e21f5ff9f9f200",
+    "size_bytes": 24329817,
+    "stratum": "dht_older_exe_archive|2026-08|bare_title|lt_100mb",
+    "u_i": 0.274322,
+    "name_blake2b64": "989f73bc62f77e0d",
+    "info_hash_blake2b64": "ee3482ce7e843986"
+   },
+   {
+    "R_i": 1,
+    "difficulty_weight": 0.65,
+    "family_id": 128455166,
+    "files": [
+     {
+      "path_blake2b64": "a05374df42e834a8",
+      "size": 1069628841
+     },
+     {
+      "path_blake2b64": "dd93ff64848f3d35",
+      "size": 1966
+     },
+     {
+      "path_blake2b64": "da1d51401e4849e8",
+      "size": 99
+     },
+     {
+      "path_blake2b64": "7c403f5930ac6079",
+      "size": 30
+     }
+    ],
+    "item_id": "lc-01012",
+    "pi_i": 0.461197,
+    "rng_seed_reserved_at": "seed=20261019@2026-10-19T00:00:00Z",
+    "selector_sha256": "d67369d0a1d34fe5e94fc30c838a730157719df5258ad89a81e21f5ff9f9f200",
+    "size_bytes": 1069630936,
+    "stratum": "dht_older_exe_archive|2026-06|video_container|100mb_2gb",
+    "u_i": 0.195401,
+    "name_blake2b64": "df32b921c017c8e3",
+    "info_hash_blake2b64": "4e64f9aa18a52053"
+   },
+   {
+    "R_i": 0,
+    "difficulty_weight": 0.65,
+    "family_id": 263958083,
+    "files": [
+     {
+      "path_blake2b64": "86c4522aa9443eb6",
+      "size": 1237432752
+     },
+     {
+      "path_blake2b64": "a5996ab03933577a",
+      "size": 270571
+     },
+     {
+      "path_blake2b64": "1c1f0a5715f20840",
+      "size": 245900
+     },
+     {
+      "path_blake2b64": "e511f2bf8c67d0ab",
+      "size": 162882
+     },
+     {
+      "path_blake2b64": "3083cfc38735d570",
+      "size": 86153
+     },
+     {
+      "path_blake2b64": "dc456bfe087191ce",
+      "size": 83541
+     }
+    ],
+    "item_id": "lc-01013",
+    "pi_i": 0.461197,
+    "rng_seed_reserved_at": "seed=20261019@2026-10-19T00:00:00Z",
+    "selector_sha256": "d67369d0a1d34fe5e94fc30c838a730157719df5258ad89a81e21f5ff9f9f200",
+    "size_bytes": 1238597319,
+    "stratum": "dht_older_nonlatin|2026-09|video_container|100mb_2gb",
+    "u_i": 0.64704,
+    "name_blake2b64": "598be528676fb40f",
+    "info_hash_blake2b64": "c9abe1b45a7df6c2"
+   },
+   {
+    "R_i": 1,
+    "difficulty_weight": 0.65,
+    "family_id": 772358165,
+    "files": [
+     {
+      "path_blake2b64": "bd93ca947b352454",
+      "size": 29320603986
+     },
+     {
+      "path_blake2b64": "3266ebd190136f38",
+      "size": 0
+     },
+     {
+      "path_blake2b64": "d1d7c3b61288839e",
+      "size": 0
+     }
+    ],
+    "item_id": "lc-01014",
+    "pi_i": 0.461197,
+    "rng_seed_reserved_at": "seed=20261019@2026-10-19T00:00:00Z",
+    "selector_sha256": "d67369d0a1d34fe5e94fc30c838a730157719df5258ad89a81e21f5ff9f9f200",
+    "size_bytes": 29320603986,
+    "stratum": "dht_recent_plain|2026-10|video_container|ge_15gb",
+    "u_i": 0.260575,
+    "name_blake2b64": "4c72b59c125f1fa5",
+    "info_hash_blake2b64": "05cbed308738f6e4"
+   },
+   {
+    "R_i": 1,
+    "difficulty_weight": 0.65,
+    "family_id": 1969201890,
+    "files": [
+     {
+      "path_blake2b64": "b2274d590ffbf1e0",
+      "size": 15000000
+     },
+     {
+      "path_blake2b64": "c77c9b3bea74422c",
+      "size": 15000000
+     },
+     {
+      "path_blake2b64": "b7f6f2f0197ee4e8",
+      "size": 15000000
+     },
+     {
+      "path_blake2b64": "92bde6b127379dbe",
+      "size": 15000000
+     },
+     {
+      "path_blake2b64": "72a2d30c36714fab",
+      "size": 15000000
+     },
+     {
+      "path_blake2b64": "d2f1accb3cd42b3d",
+      "size": 15000000
+     }
+    ],
+    "item_id": "lc-01015",
+    "pi_i": 0.461197,
+    "rng_seed_reserved_at": "seed=20261019@2026-10-19T00:00:00Z",
+    "selector_sha256": "d67369d0a1d34fe5e94fc30c838a730157719df5258ad89a81e21f5ff9f9f200",
+    "size_bytes": 453762480,
+    "stratum": "dht_recent_exe_archive|2026-09|archive_or_binary|100mb_2gb",
+    "u_i": 0.141657,
+    "name_blake2b64": "502b44238afd588f",
+    "info_hash_blake2b64": "667d8262cb891853"
+   },
+   {
+    "R_i": 1,
+    "difficulty_weight": 1.0,
+    "family_id": 1793376767,
+    "files": [],
+    "item_id": "lc-01016",
+    "pi_i": 0.709534,
+    "rng_seed_reserved_at": "seed=20261019@2026-10-19T00:00:00Z",
+    "selector_sha256": "d67369d0a1d34fe5e94fc30c838a730157719df5258ad89a81e21f5ff9f9f200",
+    "size_bytes": 56273796,
+    "stratum": "dht_recent_exe_archive|2026-09|bare_title|lt_100mb",
+    "u_i": 0.545413,
+    "name_blake2b64": "d3dcbd961667f98e",
+    "info_hash_blake2b64": "a5c1aa62c3cca104"
+   },
+   {
+    "R_i": 1,
+    "difficulty_weight": 1.0,
+    "family_id": 234128511,
+    "files": [],
+    "item_id": "lc-01017",
+    "pi_i": 0.709534,
+    "rng_seed_reserved_at": "seed=20261019@2026-10-19T00:00:00Z",
+    "selector_sha256": "d67369d0a1d34fe5e94fc30c838a730157719df5258ad89a81e21f5ff9f9f200",
+    "size_bytes": 32044664,
+    "stratum": "dht_older_exe_archive|2026-08|bare_title|lt_100mb",
+    "u_i": 0.687461,
+    "name_blake2b64": "693ab9916e78a3df",
+    "info_hash_blake2b64": "170642e6f6ff9c09"
+   },
+   {
+    "R_i": 1,
+    "difficulty_weight": 1.0,
+    "family_id": 1798479557,
+    "files": [],
+    "item_id": "lc-01018",
+    "pi_i": 0.709534,
+    "rng_seed_reserved_at": "seed=20261019@2026-10-19T00:00:00Z",
+    "selector_sha256": "d67369d0a1d34fe5e94fc30c838a730157719df5258ad89a81e21f5ff9f9f200",
+    "size_bytes": 65513632,
+    "stratum": "dht_recent_exe_archive|2026-09|bare_title|lt_100mb",
+    "u_i": 0.599294,
+    "name_blake2b64": "86d73b2a12372334",
+    "info_hash_blake2b64": "fe0a8713382f2ac6"
+   },
+   {
+    "R_i": 1,
+    "difficulty_weight": 1.0,
+    "family_id": 890547446,
+    "files": [
+     {
+      "path_blake2b64": "3ae912e67ad7140b",
+      "size": 257407926
+     }
+    ],
+    "item_id": "lc-01019",
+    "pi_i": 0.709534,
+    "rng_seed_reserved_at": "seed=20261019@2026-10-19T00:00:00Z",
+    "selector_sha256": "d67369d0a1d34fe5e94fc30c838a730157719df5258ad89a81e21f5ff9f9f200",
+    "size_bytes": 257407926,
+    "stratum": "dht_recent_nonlatin|2026-09|audio_container|100mb_2gb",
+    "u_i": 0.373364,
+    "name_blake2b64": "d022142cf58c2ee5",
+    "info_hash_blake2b64": "9eb1ed800cab8e8e"
+   },
+   {
+    "R_i": 0,
+    "difficulty_weight": 0.65,
+    "family_id": 1133688755,
+    "files": [
+     {
+      "path_blake2b64": "45cff854d2410036",
+      "size": 3421650944
+     },
+     {
+      "path_blake2b64": "452d89d47ae222e9",
+      "size": 1246397
+     },
+     {
+      "path_blake2b64": "2c03acc46051e564",
+      "size": 1063142
+     },
+     {
+      "path_blake2b64": "f17cae3941e1e918",
+      "size": 842907
+     },
+     {
+      "path_blake2b64": "5c93ff441a46196a",
+      "size": 230
+     }
+    ],
+    "item_id": "lc-01020",
+    "pi_i": 0.461197,
+    "rng_seed_reserved_at": "seed=20261019@2026-10-19T00:00:00Z",
+    "selector_sha256": "d67369d0a1d34fe5e94fc30c838a730157719df5258ad89a81e21f5ff9f9f200",
+    "size_bytes": 3424803620,
+    "stratum": "dht_older_exe_archive|2026-08|archive_or_binary|2gb_15gb",
+    "u_i": 0.966585,
+    "name_blake2b64": "2caa1db0bc31248c",
+    "info_hash_blake2b64": "6fbae9e6fa6fd3ce"
+   },
+   {
+    "R_i": 0,
+    "difficulty_weight": 0.65,
+    "family_id": 1950541664,
+    "files": [
+     {
+      "path_blake2b64": "80dd1b6b9d5bcc14",
+      "size": 3233972507
+     },
+     {
+      "path_blake2b64": "33e5dd77cbeb1ad5",
+      "size": 105
+     }
+    ],
+    "item_id": "lc-01021",
+    "pi_i": 0.461197,
+    "rng_seed_reserved_at": "seed=20261019@2026-10-19T00:00:00Z",
+    "selector_sha256": "d67369d0a1d34fe5e94fc30c838a730157719df5258ad89a81e21f5ff9f9f200",
+    "size_bytes": 3233972612,
+    "stratum": "dht_older_plain|2026-09|video_container|2gb_15gb",
+    "u_i": 0.488152,
+    "name_blake2b64": "d509da63b05746e6",
+    "info_hash_blake2b64": "30525b11644299e7"
+   },
+   {
+    "R_i": 1,
+    "difficulty_weight": 0.65,
+    "family_id": 1851137498,
+    "files": [
+     {
+      "path_blake2b64": "efeca3df9b7f2204",
+      "size": 3450476203
+     },
+     {
+      "path_blake2b64": "771e724c5d2d2882",
+      "size": 210
+     },
+     {
+      "path_blake2b64": "b396772b94422e9d",
+      "size": 12
+     }
+    ],
+    "item_id": "lc-01022",
+    "pi_i": 0.461197,
+    "rng_seed_reserved_at": "seed=20261019@2026-10-19T00:00:00Z",
+    "selector_sha256": "d67369d0a1d34fe5e94fc30c838a730157719df5258ad89a81e21f5ff9f9f200",
+    "size_bytes": 3450476425,
+    "stratum": "dht_older_plain|2026-08|video_container|2gb_15gb",
+    "u_i": 0.113053,
+    "name_blake2b64": "463efbb01da0b669",
+    "info_hash_blake2b64": "13f57fd06dbc43b1"
+   },
+   {
+    "R_i": 0,
+    "difficulty_weight": 0.65,
+    "family_id": 838846148,
+    "files": [],
+    "item_id": "lc-01023",
+    "pi_i": 0.461197,
+    "rng_seed_reserved_at": "seed=20261019@2026-10-19T00:00:00Z",
+    "selector_sha256": "d67369d0a1d34fe5e94fc30c838a730157719df5258ad89a81e21f5ff9f9f200",
+    "size_bytes": 1173632956,
+    "stratum": "dht_older_nonlatin|2026-09|bare_title|100mb_2gb",
+    "u_i": 0.95977,
+    "name_blake2b64": "38109fdb4e4044ba",
+    "info_hash_blake2b64": "c4341021e4edef86"
+   }
+  ],
+  "n_sampled_realized": 136,
+  "n_universe_disjoint_families": 236,
+  "overlap_with_packed_benchmarks_v6": 0,
+  "pi_min": 0.05,
+  "scored_by_any_armiger_checkpoint": false,
+  "selector_sha256": "d67369d0a1d34fe5e94fc30c838a730157719df5258ad89a81e21f5ff9f9f200",
+  "selector_spec": "frozen_parser_disagreement_selector_v1:rtn_ptt_guessit",
+  "source_inputs_path": "acquisition-inputs.json",
+  "source_inputs_sha256": "14db349d5f412103bf32c4f0fc387931e6095fd524469503a0757b051d89eedd",
+  "strata_counts": {
+   "dht_older_adult|2026-08|bare_title|100mb_2gb": 3,
+   "dht_older_adult|2026-08|video_container|100mb_2gb": 3,
+   "dht_older_adult|2026-09|bare_title|100mb_2gb": 2,
+   "dht_older_adult|2026-09|other_ext|100mb_2gb": 1,
+   "dht_older_adult|2026-09|video_container|100mb_2gb": 4,
+   "dht_older_anime|2026-09|bare_title|100mb_2gb": 1,
+   "dht_older_exe_archive|2026-05|bare_title|100mb_2gb": 1,
+   "dht_older_exe_archive|2026-06|video_container|100mb_2gb": 1,
+   "dht_older_exe_archive|2026-07|video_container|2gb_15gb": 1,
+   "dht_older_exe_archive|2026-08|archive_or_binary|2gb_15gb": 2,
+   "dht_older_exe_archive|2026-08|bare_title|100mb_2gb": 2,
+   "dht_older_exe_archive|2026-08|bare_title|2gb_15gb": 2,
+   "dht_older_exe_archive|2026-08|bare_title|lt_100mb": 10,
+   "dht_older_exe_archive|2026-08|other_ext|ge_15gb": 1,
+   "dht_older_exe_archive|2026-08|video_container|100mb_2gb": 1,
+   "dht_older_exe_archive|2026-08|video_container|2gb_15gb": 2,
+   "dht_older_exe_archive|2026-08|video_container|lt_100mb": 1,
+   "dht_older_exe_archive|2026-09|archive_or_binary|2gb_15gb": 1,
+   "dht_older_exe_archive|2026-09|audio_container|100mb_2gb": 1,
+   "dht_older_exe_archive|2026-09|bare_title|100mb_2gb": 3,
+   "dht_older_exe_archive|2026-09|bare_title|2gb_15gb": 1,
+   "dht_older_exe_archive|2026-09|video_container|100mb_2gb": 2,
+   "dht_older_exe_archive|2026-09|video_container|ge_15gb": 2,
+   "dht_older_nonlatin|2026-08|audio_container|100mb_2gb": 4,
+   "dht_older_nonlatin|2026-08|bare_title|100mb_2gb": 3,
+   "dht_older_nonlatin|2026-08|other_ext|100mb_2gb": 2,
+   "dht_older_nonlatin|2026-08|other_ext|lt_100mb": 1,
+   "dht_older_nonlatin|2026-08|video_container|100mb_2gb": 3,
+   "dht_older_nonlatin|2026-08|video_container|2gb_15gb": 1,
+   "dht_older_nonlatin|2026-08|video_container|ge_15gb": 1,
+   "dht_older_nonlatin|2026-09|audio_container|100mb_2gb": 2,
+   "dht_older_nonlatin|2026-09|audio_container|2gb_15gb": 1,
+   "dht_older_nonlatin|2026-09|bare_title|100mb_2gb": 3,
+   "dht_older_nonlatin|2026-09|other_ext|100mb_2gb": 2,
+   "dht_older_nonlatin|2026-09|video_container|100mb_2gb": 7,
+   "dht_older_nonlatin|2026-09|video_container|2gb_15gb": 2,
+   "dht_older_nonlatin|2026-09|video_container|ge_15gb": 1,
+   "dht_older_nonlatin|2026-09|video_container|lt_100mb": 1,
+   "dht_older_pack|2026-05|video_container|100mb_2gb": 1,
+   "dht_older_pack|2026-05|video_container|2gb_15gb": 1,
+   "dht_older_plain|2025-08|video_container|2gb_15gb": 1,
+   "dht_older_plain|2025-10|bare_title|100mb_2gb": 1,
+   "dht_older_plain|2025-10|video_container|100mb_2gb": 1,
+   "dht_older_plain|2026-02|bare_title|100mb_2gb": 1,
+   "dht_older_plain|2026-03|video_container|2gb_15gb": 1,
+   "dht_older_plain|2026-04|bare_title|100mb_2gb": 1,
+   "dht_older_plain|2026-04|video_container|100mb_2gb": 2,
+   "dht_older_plain|2026-05|video_container|100mb_2gb": 1,
+   "dht_older_plain|2026-06|bare_title|100mb_2gb": 1,
+   "dht_older_plain|2026-06|bare_title|2gb_15gb": 1,
+   "dht_older_plain|2026-06|video_container|100mb_2gb": 1,
+   "dht_older_plain|2026-06|video_container|2gb_15gb": 1,
+   "dht_older_plain|2026-07|bare_title|100mb_2gb": 3,
+   "dht_older_plain|2026-07|bare_title|2gb_15gb": 2,
+   "dht_older_plain|2026-07|other_ext|2gb_15gb": 1,
+   "dht_older_plain|2026-07|video_container|100mb_2gb": 2,
+   "dht_older_plain|2026-07|video_container|2gb_15gb": 1,
+   "dht_older_plain|2026-08|audio_container|100mb_2gb": 3,
+   "dht_older_plain|2026-08|bare_title|100mb_2gb": 2,
+   "dht_older_plain|2026-08|other_ext|lt_100mb": 1,
+   "dht_older_plain|2026-08|video_container|100mb_2gb": 4,
+   "dht_older_plain|2026-08|video_container|2gb_15gb": 5,
+   "dht_older_plain|2026-09|audio_container|100mb_2gb": 4,
+   "dht_older_plain|2026-09|audio_container|lt_100mb": 2,
+   "dht_older_plain|2026-09|bare_title|100mb_2gb": 9,
+   "dht_older_plain|2026-09|bare_title|lt_100mb": 1,
+   "dht_older_plain|2026-09|other_ext|100mb_2gb": 1,
+   "dht_older_plain|2026-09|video_container|100mb_2gb": 9,
+   "dht_older_plain|2026-09|video_container|2gb_15gb": 5,
+   "dht_recent_adult|2026-09|bare_title|lt_100mb": 1,
+   "dht_recent_adult|2026-09|video_container|100mb_2gb": 2,
+   "dht_recent_adult|2026-10|video_container|100mb_2gb": 2,
+   "dht_recent_anime|2026-09|bare_title|100mb_2gb": 1,
+   "dht_recent_exe_archive|2026-09|archive_or_binary|100mb_2gb": 1,
+   "dht_recent_exe_archive|2026-09|archive_or_binary|2gb_15gb": 1,
+   "dht_recent_exe_archive|2026-09|bare_title|100mb_2gb": 4,
+   "dht_recent_exe_archive|2026-09|bare_title|2gb_15gb": 1,
+   "dht_recent_exe_archive|2026-09|bare_title|lt_100mb": 4,
+   "dht_recent_exe_archive|2026-09|other_ext|ge_15gb": 1,
+   "dht_recent_exe_archive|2026-09|video_container|100mb_2gb": 1,
+   "dht_recent_exe_archive|2026-10|archive_or_binary|100mb_2gb": 1,
+   "dht_recent_exe_archive|2026-10|bare_title|2gb_15gb": 1,
+   "dht_recent_exe_archive|2026-10|bare_title|lt_100mb": 3,
+   "dht_recent_exe_archive|2026-10|video_container|100mb_2gb": 2,
+   "dht_recent_nonlatin|2026-09|audio_container|100mb_2gb": 1,
+   "dht_recent_nonlatin|2026-09|bare_title|100mb_2gb": 1,
+   "dht_recent_nonlatin|2026-09|bare_title|2gb_15gb": 1,
+   "dht_recent_nonlatin|2026-09|other_ext|100mb_2gb": 1,
+   "dht_recent_nonlatin|2026-09|other_ext|ge_15gb": 1,
+   "dht_recent_nonlatin|2026-09|other_ext|lt_100mb": 2,
+   "dht_recent_nonlatin|2026-09|video_container|100mb_2gb": 3,
+   "dht_recent_nonlatin|2026-09|video_container|2gb_15gb": 2,
+   "dht_recent_nonlatin|2026-09|video_container|ge_15gb": 1,
+   "dht_recent_nonlatin|2026-09|video_container|lt_100mb": 2,
+   "dht_recent_nonlatin|2026-10|bare_title|100mb_2gb": 2,
+   "dht_recent_nonlatin|2026-10|other_ext|100mb_2gb": 1,
+   "dht_recent_nonlatin|2026-10|video_container|2gb_15gb": 1,
+   "dht_recent_plain|2026-09|audio_container|100mb_2gb": 2,
+   "dht_recent_plain|2026-09|audio_container|lt_100mb": 1,
+   "dht_recent_plain|2026-09|bare_title|100mb_2gb": 2,
+   "dht_recent_plain|2026-09|bare_title|lt_100mb": 1,
+   "dht_recent_plain|2026-09|other_ext|100mb_2gb": 1,
+   "dht_recent_plain|2026-09|other_ext|2gb_15gb": 1,
+   "dht_recent_plain|2026-09|video_container|100mb_2gb": 9,
+   "dht_recent_plain|2026-09|video_container|2gb_15gb": 5,
+   "dht_recent_plain|2026-09|video_container|lt_100mb": 1,
+   "dht_recent_plain|2026-10|audio_container|100mb_2gb": 2,
+   "dht_recent_plain|2026-10|audio_container|lt_100mb": 1,
+   "dht_recent_plain|2026-10|bare_title|100mb_2gb": 3,
+   "dht_recent_plain|2026-10|bare_title|2gb_15gb": 2,
+   "dht_recent_plain|2026-10|other_ext|2gb_15gb": 2,
+   "dht_recent_plain|2026-10|video_container|100mb_2gb": 4,
+   "dht_recent_plain|2026-10|video_container|2gb_15gb": 1,
+   "dht_recent_plain|2026-10|video_container|ge_15gb": 1
+  },
+  "target_budget": 128.0
+ },
+ "tombstoned_eval_family_count": 26911,
+ "public_scrub": {
+  "note": "Raw release names, file paths, and infohashes replaced with BLAKE2b-64 (person=b'ArmigZCC') digests for public release; all counts, sizes, sampling weights, and selector commitments unchanged.",
+  "pre_scrub_file_sha256": "51bf9857ff38a6e8a9663667d6f26f7080ede1fc496c33aacff8480dd79959ba",
+  "scrubbed_utc": "2026-10-21"
+ }
+}

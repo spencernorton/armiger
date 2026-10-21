@@ -1,0 +1,63 @@
+{
+ "receipt": "Fresh non-teacher LLM baselines scored for the v3.0.0 release on identical inputs. These models did not contribute to reference-label curation, so no leave-one-teacher-out adjustment applies.",
+ "split": "beyond_confirmation labelled subset: 982 input records sampled from the N=1,025 beyond_confirmation split; category scored on the N=967 records with a category ground-truth label (adult N=952, junk N=913).",
+ "prompt": "teacher prompt-v3 (12-label prompt taxonomy incl. other|unknown; off-taxonomy answers such as 'other'/'book' map to the unknown class index for scoring, identical rule for every LLM)",
+ "models": {
+  "anthropic/claude-haiku-4.5 (OpenRouter)": {
+   "n_scored": 982,
+   "n_labeled": 967,
+   "cat_acc_pct": 92.45,
+   "cat_bal_pct": 91.63,
+   "wilson95": [
+    90.61,
+    93.95
+   ],
+   "adult": {
+    "n": 952,
+    "acc_pct": 98.63
+   },
+   "junk": {
+    "n": 913,
+    "acc_pct": 98.03
+   }
+  },
+  "Qwen3-8B (local GPU serving)": {
+   "n_scored": 982,
+   "n_labeled": 967,
+   "cat_acc_pct": 47.67,
+   "cat_bal_pct": 55.89,
+   "wilson95": [
+    44.54,
+    50.82
+   ],
+   "adult": {
+    "n": 952,
+    "acc_pct": 94.22
+   },
+   "junk": {
+    "n": 913,
+    "acc_pct": 99.56
+   }
+  }
+ },
+ "armiger_same_subset_hybrid": {
+  "v3.0.0 (Gold mit3)": {
+   "n_labeled": 967,
+   "cat_acc_pct": 92.76
+  },
+  "v3.0 Pre-Gold": {
+   "n_labeled": 967,
+   "cat_acc_pct": 94.62
+  },
+  "v3.0 Gold r5-clean (superseded candidate)": {
+   "n_labeled": 967,
+   "cat_acc_pct": 82.01
+  }
+ },
+ "notes": [
+  "Qwen3-8B is the local 8B-class baseline measured for this release; it is reported under its own name.",
+  "Qwen3-8B coverage: 982/982 records (352,233 total tokens across resume runs). Claude Haiku 4.5 coverage: 982/982 records.",
+  "Category accuracy is 11-class top-1 against unmutated ground-truth keys; Wilson intervals are 95%.",
+  "Off-taxonomy mapping was audited: ground truth for 'other'/'unknown' LLM answers is spread across real classes, so the mapping does not manufacture the local-8B gap."
+ ]
+}

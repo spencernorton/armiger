@@ -1,0 +1,62 @@
+{
+ "bundle_1_catalog": {
+  "bundle_path": "benchmarks/receipts/dht_seq3006/catalog_db_sync_v3_gold_mit3_seq3006.bundle.json",
+  "bundle_sha256": "8123de31464ab0f577a72646f72c1ec77b8902502e0f5664cbb7f86a3fe5b88b",
+  "removals": 0,
+  "total_entries": 931142,
+  "upserts": 0,
+  "xmss_root": "31ae0d1a3de238b7d41e3289a4d4ebccc0d0bcc2c974421f1aceb59f7cc502a7",
+  "zcb3_lzma_bytes": 6462868,
+  "zcb3_lzma_sha256": "26a5534a245262dd9403bbcdd391870d9bb6739904c1d7dd199298582c99341b",
+  "zcb3_sha256": "4e600ec847d6e14d0be707eb30a3af8b2aa95d1de2bfe5e267656ecf72c15e01"
+ },
+ "bundle_2_delta": {
+  "base_trunk_sha256": "3cd9549a8947502cd7e39405140f43de38110854bb1063ae0e4c6047adfe08d0",
+  "changed_heads": [
+   "adult",
+   "anime",
+   "category",
+   "english_subs",
+   "junk",
+   "lang",
+   "owner_scope",
+   "span_bio",
+   "title_language"
+  ],
+  "direct_lzma_bytes": 701280,
+  "direct_lzma_path": "benchmarks/receipts/dht_seq3006/head_delta_mit3_seq3006.bundle.lzma",
+  "direct_lzma_sha256": "eb51b68282ec0b0f2690b6e51ee60faf1d847ba3d89d4146cea42b3e41b2c47a",
+  "note": "residual_* fields alias the direct bundle for schema compat; trunk changed so no residual exists",
+  "residual_lzma_bytes": 701280,
+  "residual_lzma_path": "benchmarks/receipts/dht_seq3006/head_delta_mit3_seq3006.bundle.lzma",
+  "residual_lzma_sha256": "eb51b68282ec0b0f2690b6e51ee60faf1d847ba3d89d4146cea42b3e41b2c47a",
+  "trunk_sha256": "a2eeba8e3a5daa87b252c86ca40b51f87605b86e06cc78f6a177b184d0feea7f",
+  "xmss_direct_root": "d2474dd511a5492d7a5ece1feee80f4260d7a2992bc11cef298ee83e7b6da560",
+  "xmss_residual_root": "f994068639af0dc55e8d5e05d33502ba44dfb984d84532d40e1b942bd78f09ea"
+ },
+ "bundle_3_manifest": {
+  "manifest_sha256": "e77614db6da8483c05a35c62de2c46d45b2be029de74727846c65bb91f5a49b5",
+  "xmss_root": "2821c1409d043b722089141bb052976b1f21a167723d556ac15aa8cedf798ed8"
+ },
+ "canary": "500-item gate mit3: category .81 both views; junk FN bare 7/file 10 (pre-gold 8/10, r5clean 5/9); owner file .57 vs pregold .62 disclosed; degraded calibration rolled back, benign accepted (canary_mit3_report).",
+ "ed25519_authority_pubkey_hex": "5ab95992ae2abac444e1caaf45e03fc386f53d3c902348492231d3d4c887aaa6",
+ "key_rotation": "Fresh OS-RNG production authority (2026-10-21); supersedes deterministic r1-r4 test seeds. Private keys are held offline by the release authority and are never distributed.",
+ "model_version": "v3.0-gold-mit3",
+ "pq_scheme": "xmss-shake256-w16-h10 (H=10)",
+ "prev_seq": 3005,
+ "schema": "armiger.dht.release-receipt/v3",
+ "seq": 3006,
+ "timestamp_utc": "2026-10-21T20:37:16Z",
+ "udp_sync": {
+  "delta_ih": "7af84111a1b0f7e1ef36b26eda9a376cf3df4037",
+  "full_pointer_json": "benchmarks/receipts/dht_seq3006/full_model_release_pointer_v3_gold_mit3_seq3006.json",
+  "leaf_index": 957,
+  "pointer_json": "benchmarks/receipts/dht_seq3006/bep44_mutable_pointer_v3_gold_mit3_seq3006.json",
+  "signed_manifest": "benchmarks/receipts/dht_seq3006/signed_dht_manifest_seq3006.json",
+  "signed_manifest_sha256": "2e216970bbf4fa2d05354c08a650423c9ab5feed7ca77e1a9821c2c93abf55d2",
+  "wire_bytes": 762,
+  "xmss_root": "e942e72beb12adb41b772292efb34518971eaba014d28ec57633a4e879cb0ff2"
+ },
+ "version": "3.0.0",
+ "xmss_leaf_index": 957
+}

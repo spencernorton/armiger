@@ -755,7 +755,10 @@ def reconstruct_from_head_delta(
     if xmss_root_hex is not None:
         if not bundle.xmss_signature_hex:
             raise ValueError("missing_xmss_signature_on_head_delta")
-        from armiger.pq_xmss_merkle import XMSSSignature, verify_xmss_signature
+        try:
+            from armiger.pq_xmss_merkle import XMSSSignature, verify_xmss_signature
+        except ImportError:
+            from pq_xmss_merkle import XMSSSignature, verify_xmss_signature
 
         try:
             xsig = XMSSSignature.from_bytes(bytes.fromhex(bundle.xmss_signature_hex))
