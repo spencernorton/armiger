@@ -24,6 +24,15 @@ BIO_B_YEAR = 3
 BIO_I_YEAR = 4
 BIO_B_EP = 5
 BIO_I_EP = 6
+SPAN_BIO_CLASSES: tuple[str, ...] = (
+    "O",
+    "B-TITLE",
+    "I-TITLE",
+    "B-YEAR",
+    "I-YEAR",
+    "B-EP",
+    "I-EP",
+)
 
 LEADING_PREFIX_RE = re.compile(
     r"^(?:\s*(?:\[[^\]]{1,48}\]|\([^\)]{1,36}\)|【[^】]{1,36}】|★[^★]{1,36}★)\s*[\.\-_ ]*)+"
@@ -35,7 +44,7 @@ LEADING_SITE_RE = re.compile(
 BOUNDARY_RE = re.compile(
     r"(?i)(?:"
     r"[\.\s_\-\(\[\{]+(?:19[2-9]\d|20[0-2]\d)(?:[\.\s_\-\)\]\}]|$)"
-    r"|[\.\s_\-\(\[\{]+(?:S\d{1,2}(?:E\d{1,3})?|S\d{1,2}[\.\s_\-]*-[\.\s_\-]*S?\d{1,2}|\d{1,2}x\d{2}|Season[\.\s_\-]*\d+|Complete[\.\s_\-]+Series|Mini[\.\s_\-]*Series|E\d{2,3}\b|Ep\.?\s*\d{1,4}\b|Episode[\.\s_\-]*\d{1,4}\b|Cap\.\d{2,4}\b|Temporada[\.\s_\-]*\d+)"
+    r"|[\.\s_\-\(\[\{]+(?:S\d{1,2}[\.\s_\-]*-[\.\s_\-]*S?\d{1,2}|S\d{1,2}(?:E\d{1,3})?|\d{1,2}x\d{2}|Season[\.\s_\-]*\d+|Complete[\.\s_\-]+Series|Mini[\.\s_\-]*Series|E\d{2,3}\b|Ep\.?\s*\d{1,4}\b|Episode[\.\s_\-]*\d{1,4}\b|Cap\.\d{2,4}\b|Temporada[\.\s_\-]*\d+)"
     r"|[\.\s_\-]+-\s*(?:0\d|[1-9]\d{0,2})(?:v\d)?(?:[\.\s_\-\[\(]|$)"
     r"|[\.\s_\-\(\[\{]+v\d+\.\d+(?:\.\d+)?\b"
     r"|[\.\s_\-\(\[\{]+(?:2160p|1080p|1080i|720p|576p|480p|4k|uhd|bluray|blu-ray|bdrip|brrip|remux|web-dl|webdl|webrip|hdtv|dvdrip|hdrip|dvdr|dvd9|dvd5|x264|x265|h264|h265|h\.264|h\.265|hevc|av1|xvid|divx|proper|repack|rerip|extended|unrated|directors[\.\s_\-]*cut|remastered|multi|dual[\.\s_\-]*audio|dual[\.\s_\-]*lat|truefrench|vff|vfq|vfi|sub[\.\s_\-]*ita|ita[\.\s_\-]*eng|rus|castellano|latino|german|french|italian|spanish|hindi)\b"
@@ -46,7 +55,7 @@ BOUNDARY_RE = re.compile(
 YEAR_SPAN_RE = re.compile(r"(?:^|[\.\s_\-\(\[\{])((?:19[2-9]\d|20[0-2]\d))(?=[\.\s_\-\)\]\}]|$)")
 EPISODE_SPAN_RE = re.compile(
     r"(?i)(?:^|[\.\s_\-\(\[\{])("
-    r"S\d{1,2}(?:E\d{1,3}(?:[\-E]\d{1,3})?)?|S\d{1,2}[\.\s_\-]*-[\.\s_\-]*S?\d{1,2}|\d{1,2}x\d{2}|"
+    r"S\d{1,2}[\.\s_\-]*-[\.\s_\-]*S?\d{1,2}|S\d{1,2}(?:E\d{1,3}(?:[\-E]\d{1,3})?)?|\d{1,2}x\d{2}|"
     r"Season[\.\s_\-]*\d+(?:[\.\s_\-]*-[\.\s_\-]*\d+)?|Episode[\.\s_\-]*\d{1,4}|Ep\.?\s*\d{1,4}|Cap\.\d{2,4}|Temporada[\.\s_\-]*\d+"
     r")(?=[\.\s_\-\)\]\}]|$)"
 )
@@ -146,11 +155,20 @@ def extract_byte_spans_v3(raw_name: str, max_bytes: int = 256) -> dict[str, Any]
             c_end = c_start + pos
             break
 
-    raw_title_slice = work[c_start:c_end].strip(" ._-([{|:")
-    raw_title_slice = TRAILING_JUNK_RE.sub("", raw_title_slice).strip(" ._-([{|:")
-    words = re.sub(r"[\._]+", " ", raw_title_slice).split()
-    while len(words) > 1 and key_norm(words[-1]) in TECH_TOKEN_SET:
-        words.pop()
+    while c_end > c_start and work[c_end - 1] in " ._-([{|:/":
+        c_end -= 1
+    m_junk = TRAILING_JUNK_RE.search(work[c_start:c_end])
+    if m_junk:
+        c_end = c_start + m_junk.start()
+        while c_end > c_start and work[c_end - 1] in " ._-([{|:/":
+            c_end -= 1
+    token_spans = list(re.finditer(r"[^\._\s]+", work[c_start:c_end]))
+    while len(token_spans) > 1 and key_norm(token_spans[-1].group(0)) in TECH_TOKEN_SET:
+        token_spans.pop()
+        c_end = c_start + token_spans[-1].end()
+        while c_end > c_start and work[c_end - 1] in " ._-([{|:/":
+            c_end -= 1
+    words = [m.group(0).strip(" ._-([{|:") for m in token_spans if m.group(0).strip(" ._-([{|:") != ""]
     clean_title = " ".join(words).strip()
 
     if len(key_norm(clean_title)) < 2:

@@ -14,16 +14,20 @@ from __future__ import annotations
 
 import dataclasses
 import enum
+import fcntl
 import functools
 import hashlib
 import hmac
 import json
 import math
 import os
+import pathlib
 import re
+import tempfile
+import threading
 import time
 import unicodedata
-from typing import Any, List, Optional, Sequence, Tuple
+from typing import Any, Dict, List, Optional, Sequence, Set, Tuple, Union
 
 try:
     from cryptography.exceptions import InvalidSignature
@@ -1164,14 +1168,692 @@ MLKEM768._init_tables()
 
 
 class WOTSPlusSHAKE256:
-    """Post-Quantum Winternitz Hash-Based Signature over SHAKE-256 (RFC 8391 / NIST FIPS 205 building block)."""
+    """Post-Quantum Winternitz Hash-Based Signature over SHAKE-256 with Merkle One-Time Leaf Trees (AWM2)."""
 
     N = 32
     W = 16
+    LEN1 = 64
+    LEN2 = 3
     CHAINS = 67
     PRIV_BYTES = 64
     PUB_BYTES = 32
     SIG_BYTES = 2176
+    TREE_HEIGHT = 4
+    TREE_LEAVES = 16
+    USABLE_LEAVES_PER_SUBTREE = 15
+    MAX_SUBTREE_HOPS = 64
+    MAX_SUPPORTED_LEAVES = MAX_SUBTREE_HOPS * USABLE_LEAVES_PER_SUBTREE
+    AWM2_MAGIC = b"AWM2"
+    HOP_BYTES = 4 + 32 + 32 + 128 + 2176  # subtree_id(4) + merkle_root(32) + hop_leaf_pub(32) + auth_path(128) + cert_sig(2176)
+
+    _LOCK = threading.RLock()
+    _STATE_DIR: Optional[pathlib.Path] = None
+    _SEAL_DIR: Optional[pathlib.Path] = None
+    _REQUIRE_EXPLICIT_STATE_DIR: bool = False
+    _REQUIRE_EXISTING_STATE: bool = False
+    _IN_MEM_NEXT_LEAF: Dict[str, int] = {}
+    _IN_MEM_USED_LEAVES: Dict[str, Dict[int, str]] = {}
+    _IN_MEM_MSG_TO_LEAF: Dict[Tuple[str, str], int] = {}
+    _IN_MEM_GENERATION: Dict[str, int] = {}
+    _IN_MEM_NONCE: Dict[str, str] = {}
+    _IN_MEM_BOUND_DIR: Dict[str, str] = {}
+    _VERIFIED_ONE_TIME_KEYS: Dict[str, bytes] = {}
+    _ED25519_TO_WOTS_PUBS: dict[str, set[str]] = {}
+    _ED25519_ROOT_WOTS_PUB: dict[str, str] = {}
+    _ED25519_SEQ_TO_WOTS_PUB: dict[tuple[str, int], str] = {}
+    _WOTS_TO_ED25519_PUB: dict[str, str] = {}
+
+    @classmethod
+    def set_state_dir(
+        cls,
+        state_dir: Optional[Union[str, pathlib.Path]],
+        *,
+        seal_dir: Optional[Union[str, pathlib.Path]] = None,
+    ) -> None:
+        with cls._LOCK:
+            cls._STATE_DIR = pathlib.Path(state_dir) if state_dir is not None else None
+            if seal_dir is not None:
+                cls._SEAL_DIR = pathlib.Path(seal_dir)
+
+    @classmethod
+    def set_seal_dir(cls, seal_dir: Optional[Union[str, pathlib.Path]]) -> None:
+        with cls._LOCK:
+            cls._SEAL_DIR = pathlib.Path(seal_dir) if seal_dir is not None else None
+
+    @classmethod
+    def set_require_explicit_state_dir(cls, required: bool = True) -> None:
+        with cls._LOCK:
+            cls._REQUIRE_EXPLICIT_STATE_DIR = bool(required)
+
+    @classmethod
+    def set_require_existing_state(cls, required: bool = True) -> None:
+        with cls._LOCK:
+            cls._REQUIRE_EXISTING_STATE = bool(required)
+
+    @classmethod
+    def get_state_dir(cls) -> pathlib.Path:
+        """Resolve the durable WOTS+ signing-state directory (never defaulting to temporary storage)."""
+        env_dir = os.environ.get("ARMIGER_WOTS_STATE_DIR", "").strip()
+        req_explicit = cls._REQUIRE_EXPLICIT_STATE_DIR or (
+            os.environ.get("ARMIGER_WOTS_REQUIRE_EXPLICIT_STATE_DIR", "").strip() in ("1", "true", "yes")
+        )
+        if cls._STATE_DIR is not None:
+            d = cls._STATE_DIR
+        elif env_dir:
+            d = pathlib.Path(env_dir)
+        elif req_explicit:
+            raise RuntimeError(
+                "wots_explicit_durable_state_dir_required: configure ARMIGER_WOTS_STATE_DIR or call "
+                "WOTSPlusSHAKE256.set_state_dir(...) on a persistent volume before signing"
+            )
+        else:
+            xdg_state = os.environ.get("XDG_STATE_HOME", "").strip()
+            base_state = pathlib.Path(xdg_state) if xdg_state else (pathlib.Path.home() / ".local" / "state")
+            d = base_state / "armiger" / f"wots_state_{os.getuid()}"
+        d.mkdir(parents=True, exist_ok=True)
+        return d
+
+    @classmethod
+    def get_seal_dir(cls, state_dir: pathlib.Path) -> pathlib.Path:
+        """Resolve an independent durable freshness-checkpoint directory distinct from `state_dir`."""
+        env_seal = os.environ.get("ARMIGER_WOTS_SEAL_DIR", "").strip()
+        if cls._SEAL_DIR is not None:
+            sdir = cls._SEAL_DIR
+        elif env_seal:
+            sdir = pathlib.Path(env_seal)
+        else:
+            xdg_state = os.environ.get("XDG_STATE_HOME", "").strip()
+            base_state = pathlib.Path(xdg_state) if xdg_state else (pathlib.Path.home() / ".local" / "state")
+            sdir = base_state / "armiger" / f"wots_freshness_seals_{os.getuid()}"
+            if sdir.resolve() == state_dir.resolve():
+                sdir = state_dir.resolve().parent / f".{state_dir.name}_freshness_seals"
+        sdir.mkdir(parents=True, exist_ok=True)
+        if sdir.resolve() == state_dir.resolve():
+            raise RuntimeError(
+                "wots_independent_seal_dir_required: seal_dir must not be the same directory as state_dir"
+            )
+        return sdir
+
+    @staticmethod
+    def _sync_dir(dir_path: pathlib.Path) -> None:
+        dir_fd = os.open(str(dir_path), os.O_RDONLY)
+        try:
+            os.fsync(dir_fd)
+        finally:
+            os.close(dir_fd)
+
+    @staticmethod
+    def _compute_wots_state_mac(
+        norm_root: str,
+        next_leaf_index: int,
+        used_map: Mapping[str, str],
+        state_generation: int,
+        state_nonce: str,
+        bound_state_dir: str = "",
+        domain: bytes = b"armiger-wots-durable-state-mac-v1:",
+    ) -> str:
+        mac_key = hashlib.shake_256(domain + norm_root.encode("ascii")).digest(32)
+        doc_obj: Dict[str, Any] = {
+            "root_pq_pub_hex": norm_root,
+            "next_leaf_index": int(next_leaf_index),
+            "used_leaves": {str(k): str(v) for k, v in sorted(used_map.items())},
+            "state_generation": int(state_generation),
+            "state_nonce": str(state_nonce),
+        }
+        if bound_state_dir:
+            doc_obj["bound_state_dir"] = str(bound_state_dir)
+        canonical = json.dumps(
+            doc_obj,
+            sort_keys=True,
+            separators=(",", ":"),
+        ).encode("utf-8")
+        return hmac.new(mac_key, canonical, hashlib.sha256).hexdigest()
+
+    @classmethod
+    def _read_and_verify_wots_seal(
+        cls,
+        seal_path: pathlib.Path,
+        norm_root: str,
+        expected_bound_dir: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        try:
+            raw_s = seal_path.read_text(encoding="utf-8")
+            sdoc = json.loads(raw_s)
+        except Exception as exc:
+            raise RuntimeError(f"wots_durable_seal_corrupted:{seal_path}:{exc}") from exc
+        if (
+            not isinstance(sdoc, dict)
+            or sdoc.get("root_pq_pub_hex") != norm_root
+            or isinstance(sdoc.get("next_leaf_index"), bool)
+            or not isinstance(sdoc.get("next_leaf_index"), int)
+            or isinstance(sdoc.get("state_generation"), bool)
+            or not isinstance(sdoc.get("state_generation"), int)
+            or int(sdoc["state_generation"]) < 1
+            or not isinstance(sdoc.get("state_nonce"), str)
+            or not sdoc["state_nonce"]
+            or not isinstance(sdoc.get("used_leaves"), dict)
+        ):
+            raise RuntimeError(f"wots_durable_seal_invalid_schema:{seal_path}")
+        s_next = int(sdoc["next_leaf_index"])
+        s_gen = int(sdoc["state_generation"])
+        s_nonce = str(sdoc["state_nonce"])
+        s_bound_dir = str(sdoc.get("bound_state_dir", ""))
+        s_used = {str(k): str(v) for k, v in sdoc["used_leaves"].items()}
+        exp_mac = cls._compute_wots_state_mac(
+            norm_root,
+            s_next,
+            s_used,
+            s_gen,
+            s_nonce,
+            bound_state_dir=s_bound_dir,
+            domain=b"armiger-wots-freshness-seal-mac-v1:",
+        )
+        if not hmac.compare_digest(str(sdoc.get("seal_mac", "")), exp_mac):
+            raise RuntimeError(f"wots_durable_seal_mac_mismatch:{seal_path}")
+        if expected_bound_dir is not None and s_bound_dir and s_bound_dir != expected_bound_dir:
+            raise RuntimeError(
+                f"wots_durable_state_directory_mismatch:{expected_bound_dir}!={s_bound_dir}"
+            )
+        return {
+            "next_leaf_index": s_next,
+            "state_generation": s_gen,
+            "state_nonce": s_nonce,
+            "bound_state_dir": s_bound_dir,
+            "used_leaves": s_used,
+        }
+
+    @classmethod
+    def provision_state(
+        cls,
+        priv_seed: bytes,
+        *,
+        state_dir: Optional[Union[str, pathlib.Path]] = None,
+        seal_dir: Optional[Union[str, pathlib.Path]] = None,
+    ) -> pathlib.Path:
+        """Explicitly provision durable initial WOTS+ state and independent freshness checkpoint for a new root key."""
+        _, root_pq_pub = cls._normalize_root_priv(priv_seed)
+        norm_root = root_pq_pub.hex().strip().lower()
+        sdir = pathlib.Path(state_dir) if state_dir is not None else cls.get_state_dir()
+        sdir.mkdir(parents=True, exist_ok=True)
+        resolved_sdir = sdir.resolve()
+        ext_sdir = pathlib.Path(seal_dir) if seal_dir is not None else cls.get_seal_dir(sdir)
+        ext_sdir.mkdir(parents=True, exist_ok=True)
+        if ext_sdir.resolve() == resolved_sdir:
+            raise RuntimeError("wots_independent_seal_dir_required")
+        state_path = sdir / f"wots_state_{norm_root[:32]}.json"
+        sibling_seal_path = sdir / f".wots_state_{norm_root[:32]}.json.seal"
+        ext_seal_path = ext_sdir / f"wots_seal_{norm_root[:32]}.seal"
+        if (
+            state_path.exists()
+            or sibling_seal_path.exists()
+            or ext_seal_path.exists()
+            or norm_root in cls._IN_MEM_GENERATION
+        ):
+            raise RuntimeError(f"wots_state_already_provisioned:{state_path}")
+        cls._load_and_update_durable_state(
+            norm_root,
+            explicit_leaf_index=None,
+            reserve_fresh=False,
+            state_dir=sdir,
+            seal_dir=ext_sdir,
+            _provision_only=True,
+        )
+        return state_path
+
+    @classmethod
+    def migrate_legacy_state(
+        cls,
+        priv_seed: bytes,
+        *,
+        state_dir: Optional[Union[str, pathlib.Path]] = None,
+        seal_dir: Optional[Union[str, pathlib.Path]] = None,
+    ) -> pathlib.Path:
+        """Explicitly upgrade a legacy generation-less WOTS+ state file to MAC-authenticated state + freshness seals."""
+        _, root_pq_pub = cls._normalize_root_priv(priv_seed)
+        norm_root = root_pq_pub.hex().strip().lower()
+        sdir = pathlib.Path(state_dir) if state_dir is not None else cls.get_state_dir()
+        sdir.mkdir(parents=True, exist_ok=True)
+        resolved_sdir = sdir.resolve()
+        ext_sdir = pathlib.Path(seal_dir) if seal_dir is not None else cls.get_seal_dir(sdir)
+        ext_sdir.mkdir(parents=True, exist_ok=True)
+        if ext_sdir.resolve() == resolved_sdir:
+            raise RuntimeError("wots_independent_seal_dir_required")
+        state_path = sdir / f"wots_state_{norm_root[:32]}.json"
+        sibling_seal_path = sdir / f".wots_state_{norm_root[:32]}.json.seal"
+        ext_seal_path = ext_sdir / f"wots_seal_{norm_root[:32]}.seal"
+        if not state_path.exists():
+            raise RuntimeError(f"wots_legacy_state_not_found:{state_path}")
+        if sibling_seal_path.exists() or ext_seal_path.exists() or norm_root in cls._IN_MEM_GENERATION:
+            raise RuntimeError(f"wots_state_already_established_cannot_downgrade_via_legacy_migration:{state_path}")
+        raw_txt = state_path.read_text(encoding="utf-8")
+        parsed = json.loads(raw_txt)
+        if (
+            not isinstance(parsed, dict)
+            or isinstance(parsed.get("next_leaf_index"), bool)
+            or not isinstance(parsed.get("next_leaf_index"), int)
+            or not isinstance(parsed.get("used_leaves", {}), dict)
+        ):
+            raise ValueError("invalid_legacy_wots_state_schema")
+        if "state_generation" in parsed or "state_mac" in parsed:
+            raise RuntimeError("wots_state_is_not_legacy")
+        next_idx = int(parsed["next_leaf_index"])
+        used_map = {str(k): str(v) for k, v in parsed.get("used_leaves", {}).items()}
+        next_gen = 1
+        next_nonce = os.urandom(16).hex()
+        bound_dir_str = str(resolved_sdir)
+        state_mac = cls._compute_wots_state_mac(
+            norm_root, next_idx, used_map, next_gen, next_nonce, bound_state_dir=bound_dir_str
+        )
+        state_bytes = json.dumps(
+            {
+                "root_pq_pub_hex": norm_root,
+                "next_leaf_index": next_idx,
+                "used_leaves": used_map,
+                "state_generation": next_gen,
+                "state_nonce": next_nonce,
+                "bound_state_dir": bound_dir_str,
+                "state_mac": state_mac,
+            },
+            sort_keys=True,
+            separators=(",", ":"),
+        ).encode("utf-8")
+        state_path.write_bytes(state_bytes)
+        seal_mac = cls._compute_wots_state_mac(
+            norm_root,
+            next_idx,
+            used_map,
+            next_gen,
+            next_nonce,
+            bound_state_dir=bound_dir_str,
+            domain=b"armiger-wots-freshness-seal-mac-v1:",
+        )
+        seal_bytes = json.dumps(
+            {
+                "root_pq_pub_hex": norm_root,
+                "next_leaf_index": next_idx,
+                "used_leaves": used_map,
+                "state_generation": next_gen,
+                "state_nonce": next_nonce,
+                "bound_state_dir": bound_dir_str,
+                "seal_mac": seal_mac,
+            },
+            sort_keys=True,
+            separators=(",", ":"),
+        ).encode("utf-8")
+        sibling_seal_path.write_bytes(seal_bytes)
+        ext_seal_path.write_bytes(seal_bytes)
+        cls._IN_MEM_GENERATION[norm_root] = next_gen
+        cls._IN_MEM_NONCE[norm_root] = next_nonce
+        cls._IN_MEM_BOUND_DIR[norm_root] = bound_dir_str
+        return state_path
+
+    @classmethod
+    def migrate_state_directory(
+        cls,
+        priv_seed: bytes,
+        old_state_dir: Union[str, pathlib.Path],
+        new_state_dir: Union[str, pathlib.Path],
+        *,
+        seal_dir: Optional[Union[str, pathlib.Path]] = None,
+    ) -> pathlib.Path:
+        """Explicitly migrate an established WOTS+ state directory to `new_state_dir`, re-binding seals and high-water marks."""
+        _, root_pq_pub = cls._normalize_root_priv(priv_seed)
+        norm_root = root_pq_pub.hex().strip().lower()
+        old_sdir = pathlib.Path(old_state_dir)
+        new_sdir = pathlib.Path(new_state_dir)
+        new_sdir.mkdir(parents=True, exist_ok=True)
+        old_resolved = old_sdir.resolve()
+        new_resolved = new_sdir.resolve()
+        ext_sdir = pathlib.Path(seal_dir) if seal_dir is not None else cls.get_seal_dir(new_sdir)
+        ext_sdir.mkdir(parents=True, exist_ok=True)
+        if ext_sdir.resolve() == new_resolved:
+            raise RuntimeError("wots_independent_seal_dir_required")
+        old_state_path = old_sdir / f"wots_state_{norm_root[:32]}.json"
+        old_sibling_seal = old_sdir / f".wots_state_{norm_root[:32]}.json.seal"
+        ext_seal_path = ext_sdir / f"wots_seal_{norm_root[:32]}.seal"
+        if not old_state_path.exists() or not old_sibling_seal.exists() or not ext_seal_path.exists():
+            raise RuntimeError(f"wots_migration_source_state_or_seal_missing:{old_state_path}")
+        s_info = cls._read_and_verify_wots_seal(ext_seal_path, norm_root, expected_bound_dir=str(old_resolved))
+        cls._read_and_verify_wots_seal(old_sibling_seal, norm_root, expected_bound_dir=str(old_resolved))
+        next_idx = int(s_info["next_leaf_index"])
+        used_map = dict(s_info["used_leaves"])
+        next_gen = max(int(s_info["state_generation"]), cls._IN_MEM_GENERATION.get(norm_root, 0)) + 1
+        next_nonce = os.urandom(16).hex()
+        new_bound_str = str(new_resolved)
+        state_mac = cls._compute_wots_state_mac(
+            norm_root, next_idx, used_map, next_gen, next_nonce, bound_state_dir=new_bound_str
+        )
+        new_state_path = new_sdir / f"wots_state_{norm_root[:32]}.json"
+        new_sibling_seal = new_sdir / f".wots_state_{norm_root[:32]}.json.seal"
+        new_state_path.write_bytes(
+            json.dumps(
+                {
+                    "root_pq_pub_hex": norm_root,
+                    "next_leaf_index": next_idx,
+                    "used_leaves": used_map,
+                    "state_generation": next_gen,
+                    "state_nonce": next_nonce,
+                    "bound_state_dir": new_bound_str,
+                    "state_mac": state_mac,
+                },
+                sort_keys=True,
+                separators=(",", ":"),
+            ).encode("utf-8")
+        )
+        seal_mac = cls._compute_wots_state_mac(
+            norm_root,
+            next_idx,
+            used_map,
+            next_gen,
+            next_nonce,
+            bound_state_dir=new_bound_str,
+            domain=b"armiger-wots-freshness-seal-mac-v1:",
+        )
+        seal_bytes = json.dumps(
+            {
+                "root_pq_pub_hex": norm_root,
+                "next_leaf_index": next_idx,
+                "used_leaves": used_map,
+                "state_generation": next_gen,
+                "state_nonce": next_nonce,
+                "bound_state_dir": new_bound_str,
+                "seal_mac": seal_mac,
+            },
+            sort_keys=True,
+            separators=(",", ":"),
+        ).encode("utf-8")
+        new_sibling_seal.write_bytes(seal_bytes)
+        ext_seal_path.write_bytes(seal_bytes)
+        old_state_path.unlink(missing_ok=True)
+        old_sibling_seal.unlink(missing_ok=True)
+        cls._IN_MEM_GENERATION[norm_root] = next_gen
+        cls._IN_MEM_NONCE[norm_root] = next_nonce
+        cls._IN_MEM_BOUND_DIR[norm_root] = new_bound_str
+        return new_state_path
+
+    @classmethod
+    def _load_and_update_durable_state(
+        cls,
+        root_pq_pub_hex: str,
+        *,
+        msg_sha256_hex: Optional[str] = None,
+        explicit_leaf_index: Optional[int] = None,
+        reserve_fresh: bool = False,
+        state_dir: Optional[Union[str, pathlib.Path]] = None,
+        seal_dir: Optional[Union[str, pathlib.Path]] = None,
+        require_existing_state: Optional[bool] = None,
+        _provision_only: bool = False,
+    ) -> int:
+        norm_root = root_pq_pub_hex.strip().lower()
+        sdir = pathlib.Path(state_dir) if state_dir is not None else cls.get_state_dir()
+        sdir.mkdir(parents=True, exist_ok=True)
+        resolved_sdir = sdir.resolve()
+        bound_dir_str = str(resolved_sdir)
+        ext_sdir = pathlib.Path(seal_dir) if seal_dir is not None else cls.get_seal_dir(sdir)
+        ext_sdir.mkdir(parents=True, exist_ok=True)
+        if ext_sdir.resolve() == resolved_sdir:
+            raise RuntimeError("wots_independent_seal_dir_required")
+
+        state_path = sdir / f"wots_state_{norm_root[:32]}.json"
+        sibling_seal_path = sdir / f".wots_state_{norm_root[:32]}.json.seal"
+        ext_seal_path = ext_sdir / f"wots_seal_{norm_root[:32]}.seal"
+        lock_path = sdir / f"wots_state_{norm_root[:32]}.lock"
+        req_existing = (
+            bool(require_existing_state)
+            if require_existing_state is not None
+            else (
+                cls._REQUIRE_EXISTING_STATE
+                or os.environ.get("ARMIGER_WOTS_REQUIRE_EXISTING_STATE", "").strip() in ("1", "true", "yes")
+            )
+        )
+
+        with cls._LOCK:
+            lock_fd = os.open(str(lock_path), os.O_CREAT | os.O_RDWR, 0o600)
+            try:
+                fcntl.flock(lock_fd, fcntl.LOCK_EX)
+                persisted_next = 0
+                persisted_gen = 0
+                persisted_nonce = ""
+                used_map: Dict[str, str] = {}
+                mem_bound_dir = cls._IN_MEM_BOUND_DIR.get(norm_root)
+                if mem_bound_dir is not None and mem_bound_dir != bound_dir_str:
+                    raise RuntimeError(
+                        f"wots_durable_state_directory_mismatch:{bound_dir_str}!={mem_bound_dir}"
+                    )
+                if not state_path.exists():
+                    if (
+                        req_existing
+                        or sibling_seal_path.exists()
+                        or ext_seal_path.exists()
+                        or norm_root in cls._IN_MEM_GENERATION
+                    ):
+                        raise RuntimeError(
+                            f"wots_durable_state_missing_after_establishment:{state_path}"
+                        )
+                else:
+                    try:
+                        raw_txt = state_path.read_text(encoding="utf-8")
+                        parsed = json.loads(raw_txt)
+                        if (
+                            not isinstance(parsed, dict)
+                            or isinstance(parsed.get("next_leaf_index"), bool)
+                            or not isinstance(parsed.get("next_leaf_index"), int)
+                        ):
+                            raise ValueError("invalid_wots_state_schema")
+                        persisted_next = int(parsed["next_leaf_index"])
+                        raw_used = parsed.get("used_leaves", {})
+                        if not isinstance(raw_used, dict):
+                            raise ValueError("invalid_wots_used_leaves")
+                        used_map = {str(k): str(v) for k, v in raw_used.items()}
+                        if (
+                            "state_generation" not in parsed
+                            or "state_nonce" not in parsed
+                            or "state_mac" not in parsed
+                        ):
+                            raise ValueError("unauthenticated_legacy_wots_state_requires_migration")
+                        raw_gen = parsed.get("state_generation")
+                        raw_nonce = parsed.get("state_nonce")
+                        if (
+                            isinstance(raw_gen, bool)
+                            or not isinstance(raw_gen, int)
+                            or int(raw_gen) < 1
+                            or not isinstance(raw_nonce, str)
+                            or not raw_nonce
+                        ):
+                            raise ValueError("invalid_wots_state_generation_or_nonce")
+                        persisted_gen = int(raw_gen)
+                        persisted_nonce = str(raw_nonce)
+                        persisted_bound_dir = str(parsed.get("bound_state_dir", ""))
+                        if persisted_bound_dir and persisted_bound_dir != bound_dir_str:
+                            raise ValueError(
+                                f"wots_state_bound_dir_mismatch:{bound_dir_str}!={persisted_bound_dir}"
+                            )
+                        exp_state_mac = cls._compute_wots_state_mac(
+                            norm_root,
+                            persisted_next,
+                            used_map,
+                            persisted_gen,
+                            persisted_nonce,
+                            bound_state_dir=persisted_bound_dir,
+                        )
+                        if not hmac.compare_digest(str(parsed.get("state_mac", "")), exp_state_mac):
+                            raise ValueError("wots_state_mac_verification_failed")
+                    except Exception as exc:
+                        raise RuntimeError(f"wots_durable_state_corrupted:{state_path}:{exc}") from exc
+
+                    # Verify against in-process high-water mark and independent durable freshness checkpoint
+                    mem_gen = cls._IN_MEM_GENERATION.get(norm_root, 0)
+                    mem_nonce = cls._IN_MEM_NONCE.get(norm_root, "")
+                    if persisted_gen < mem_gen or (
+                        persisted_gen == mem_gen and mem_nonce and persisted_nonce != mem_nonce
+                    ):
+                        raise RuntimeError(f"wots_durable_state_rollback_detected:in_memory_hwm:{state_path}")
+
+                    if not ext_seal_path.exists():
+                        raise RuntimeError(
+                            f"wots_durable_state_missing_independent_seal:{ext_seal_path}"
+                        )
+                    if not sibling_seal_path.exists():
+                        raise RuntimeError(
+                            f"wots_durable_state_missing_sibling_seal:{sibling_seal_path}"
+                        )
+                    for sp in (ext_seal_path, sibling_seal_path):
+                        s_info = cls._read_and_verify_wots_seal(
+                            sp, norm_root, expected_bound_dir=bound_dir_str
+                        )
+                        if (
+                            persisted_next < s_info["next_leaf_index"]
+                            or persisted_gen < s_info["state_generation"]
+                            or (
+                                persisted_gen == s_info["state_generation"]
+                                and persisted_nonce != s_info["state_nonce"]
+                            )
+                            or any(used_map.get(k) != v for k, v in s_info["used_leaves"].items())
+                        ):
+                            raise RuntimeError(
+                                f"wots_durable_state_rollback_detected:freshness_seal_mismatch:{sp}"
+                            )
+
+                persisted_used_map = dict(used_map)
+                staged_used_int: Dict[int, str] = {}
+                for k_str, v_hex in used_map.items():
+                    staged_used_int[int(k_str)] = v_hex
+
+                next_idx = max(
+                    persisted_next,
+                    (max(staged_used_int.keys()) + 1) if staged_used_int else 0,
+                )
+
+                staged_msg_leaf: Optional[Tuple[Tuple[str, str], int]] = None
+                if _provision_only:
+                    idx = 0
+                elif explicit_leaf_index is not None:
+                    if isinstance(explicit_leaf_index, bool) or not isinstance(explicit_leaf_index, int):
+                        raise ValueError("leaf_index must be an integer")
+                    idx = int(explicit_leaf_index)
+                    if idx < 0:
+                        raise ValueError("leaf_index must be non-negative")
+                    if idx >= cls.MAX_SUPPORTED_LEAVES:
+                        raise ValueError(f"wots_leaf_index_exhausted:{idx}>={cls.MAX_SUPPORTED_LEAVES}")
+                    prev_msg = used_map.get(str(idx))
+                    if prev_msg is not None and msg_sha256_hex is not None and prev_msg != msg_sha256_hex:
+                        raise ValueError(f"wots_leaf_index_already_used:{idx}")
+                    if msg_sha256_hex is not None:
+                        used_map[str(idx)] = msg_sha256_hex
+                        staged_used_int[idx] = msg_sha256_hex
+                        staged_msg_leaf = ((norm_root, msg_sha256_hex), idx)
+                    next_idx = max(next_idx, idx + 1)
+                elif not reserve_fresh and msg_sha256_hex is not None:
+                    existing_idx = next(
+                        (int(k) for k, v in persisted_used_map.items() if v == msg_sha256_hex),
+                        None,
+                    )
+                    if existing_idx is not None:
+                        if existing_idx < 0 or existing_idx >= cls.MAX_SUPPORTED_LEAVES:
+                            raise ValueError(f"wots_leaf_index_exhausted:{existing_idx}>={cls.MAX_SUPPORTED_LEAVES}")
+                        cls._IN_MEM_MSG_TO_LEAF[(norm_root, msg_sha256_hex)] = existing_idx
+                        return existing_idx
+                    idx = next_idx
+                    if idx < 0 or idx >= cls.MAX_SUPPORTED_LEAVES:
+                        raise ValueError(f"wots_leaf_index_exhausted:{idx}>={cls.MAX_SUPPORTED_LEAVES}")
+                    next_idx = idx + 1
+                    used_map[str(idx)] = msg_sha256_hex
+                    staged_used_int[idx] = msg_sha256_hex
+                    staged_msg_leaf = ((norm_root, msg_sha256_hex), idx)
+                else:
+                    idx = next_idx
+                    if idx < 0 or idx >= cls.MAX_SUPPORTED_LEAVES:
+                        raise ValueError(f"wots_leaf_index_exhausted:{idx}>={cls.MAX_SUPPORTED_LEAVES}")
+                    next_idx = idx + 1
+                    if msg_sha256_hex is not None:
+                        used_map[str(idx)] = msg_sha256_hex
+                        staged_used_int[idx] = msg_sha256_hex
+                        staged_msg_leaf = ((norm_root, msg_sha256_hex), idx)
+
+                next_gen = max(persisted_gen, cls._IN_MEM_GENERATION.get(norm_root, 0)) + 1
+                next_nonce = os.urandom(16).hex()
+                state_mac = cls._compute_wots_state_mac(
+                    norm_root,
+                    next_idx,
+                    used_map,
+                    next_gen,
+                    next_nonce,
+                    bound_state_dir=bound_dir_str,
+                )
+                payload_bytes = json.dumps(
+                    {
+                        "root_pq_pub_hex": norm_root,
+                        "next_leaf_index": next_idx,
+                        "used_leaves": used_map,
+                        "state_generation": next_gen,
+                        "state_nonce": next_nonce,
+                        "bound_state_dir": bound_dir_str,
+                        "state_mac": state_mac,
+                    },
+                    sort_keys=True,
+                    separators=(",", ":"),
+                ).encode("utf-8")
+
+                tmp_path = sdir / f".wots_state_{norm_root[:32]}_{os.getpid()}_{threading.get_ident()}.tmp"
+                fd = os.open(str(tmp_path), os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+                try:
+                    os.write(fd, payload_bytes)
+                    os.fsync(fd)
+                finally:
+                    os.close(fd)
+                os.replace(str(tmp_path), str(state_path))
+                cls._sync_dir(sdir)
+
+                seal_mac = cls._compute_wots_state_mac(
+                    norm_root,
+                    next_idx,
+                    used_map,
+                    next_gen,
+                    next_nonce,
+                    bound_state_dir=bound_dir_str,
+                    domain=b"armiger-wots-freshness-seal-mac-v1:",
+                )
+                seal_bytes = json.dumps(
+                    {
+                        "root_pq_pub_hex": norm_root,
+                        "next_leaf_index": next_idx,
+                        "used_leaves": used_map,
+                        "state_generation": next_gen,
+                        "state_nonce": next_nonce,
+                        "bound_state_dir": bound_dir_str,
+                        "seal_mac": seal_mac,
+                    },
+                    sort_keys=True,
+                    separators=(",", ":"),
+                ).encode("utf-8")
+                for target_seal in (sibling_seal_path, ext_seal_path):
+                    target_seal.parent.mkdir(parents=True, exist_ok=True)
+                    stmp = target_seal.with_name(
+                        f".{target_seal.name}_{os.getpid()}_{threading.get_ident()}.tmp"
+                    )
+                    sfd = os.open(str(stmp), os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+                    try:
+                        os.write(sfd, seal_bytes)
+                        os.fsync(sfd)
+                    finally:
+                        os.close(sfd)
+                    os.replace(str(stmp), str(target_seal))
+                    cls._sync_dir(target_seal.parent)
+
+                # Commit in-memory caches ONLY after durable persistence succeeds
+                cls._IN_MEM_USED_LEAVES[norm_root] = staged_used_int
+                cls._IN_MEM_NEXT_LEAF[norm_root] = next_idx
+                cls._IN_MEM_GENERATION[norm_root] = next_gen
+                cls._IN_MEM_NONCE[norm_root] = next_nonce
+                cls._IN_MEM_BOUND_DIR[norm_root] = bound_dir_str
+                if staged_msg_leaf is not None:
+                    cls._IN_MEM_MSG_TO_LEAF[staged_msg_leaf[0]] = staged_msg_leaf[1]
+                return idx
+            finally:
+                try:
+                    fcntl.flock(lock_fd, fcntl.LOCK_UN)
+                finally:
+                    os.close(lock_fd)
 
     @staticmethod
     def _chain(x: bytes, start: int, steps: int, pub_seed: bytes, chain_idx: int) -> bytes:
@@ -1199,7 +1881,7 @@ class WOTSPlusSHAKE256:
         return cls._generate_keypair_from_seed(raw)
 
     @classmethod
-    @functools.lru_cache(maxsize=256)
+    @functools.lru_cache(maxsize=512)
     def _generate_keypair_from_seed(cls, raw: bytes) -> Tuple[bytes, bytes]:
         if len(raw) == 32:
             raw = hashlib.shake_256(b"armiger-wots-keygen-v1:" + raw).digest(64)
@@ -1213,19 +1895,122 @@ class WOTSPlusSHAKE256:
         pk = hashlib.shake_256(pub_seed + b"".join(ends)).digest(32)
         return raw, pk
 
-    _ED25519_TO_WOTS_PUBS: dict[str, set[str]] = {}
-    _WOTS_TO_ED25519_PUB: dict[str, str] = {}
+    @classmethod
+    def _raw_sign(cls, priv_seed_64: bytes, message: bytes) -> bytes:
+        raw, pk = cls._generate_keypair_from_seed(priv_seed_64)
+        sk_seed, pub_seed = raw[:32], raw[32:]
+        digest = hashlib.shake_256(b"armiger-wots-msg-v2:" + pub_seed + pk + message).digest(32)
+        digits = cls._msg_to_base_w(digest)
+        sig_parts = [pub_seed]
+        for i, d in enumerate(digits):
+            sk_i = hashlib.shake_256(sk_seed + bytes([i])).digest(32)
+            sig_parts.append(cls._chain(sk_i, 0, d, pub_seed, i))
+        return b"".join(sig_parts)
 
     @classmethod
-    def _register_binding(cls, ed_pub_hex: str, wots_pub_hex: str) -> None:
+    def _raw_verify(cls, pub_key_32: bytes, message: bytes, sig_2176: bytes) -> bool:
+        if len(pub_key_32) != cls.PUB_BYTES or len(sig_2176) != cls.SIG_BYTES:
+            return False
+        pub_seed = sig_2176[:32]
+        digest = hashlib.shake_256(b"armiger-wots-msg-v2:" + pub_seed + pub_key_32 + message).digest(32)
+        digits = cls._msg_to_base_w(digest)
+        ends: List[bytes] = []
+        for i, d in enumerate(digits):
+            sig_i = sig_2176[32 * (i + 1) : 32 * (i + 2)]
+            ends.append(cls._chain(sig_i, d, 15 - d, pub_seed, i))
+        computed_pk = hashlib.shake_256(pub_seed + b"".join(ends)).digest(32)
+        return hmac.compare_digest(computed_pk, pub_key_32)
+
+    @classmethod
+    @functools.lru_cache(maxsize=256)
+    def _build_subtree(cls, root_priv_64: bytes, subtree_id: int) -> Dict[str, Any]:
+        leaf_privs: List[bytes] = []
+        leaf_pubs: List[bytes] = []
+        level0: List[bytes] = []
+        sub_bytes = int(subtree_id).to_bytes(4, "big")
+        for j in range(cls.TREE_LEAVES):
+            j_bytes = j.to_bytes(4, "big")
+            l_seed = hashlib.shake_256(
+                b"armiger-wots-merkle-leaf-v1:" + root_priv_64 + sub_bytes + j_bytes
+            ).digest(64)
+            l_priv, l_pub = cls._generate_keypair_from_seed(l_seed)
+            leaf_privs.append(l_priv)
+            leaf_pubs.append(l_pub)
+            level0.append(
+                hashlib.sha256(b"armiger-wots-leaf-node-v1:" + sub_bytes + j_bytes + l_pub).digest()
+            )
+        levels: List[List[bytes]] = [level0]
+        cur = level0
+        for lvl in range(cls.TREE_HEIGHT):
+            nxt: List[bytes] = []
+            for k in range(0, len(cur), 2):
+                nxt.append(
+                    hashlib.sha256(b"armiger-wots-int-node-v1:" + bytes([lvl]) + cur[k] + cur[k + 1]).digest()
+                )
+            levels.append(nxt)
+            cur = nxt
+        merkle_root = levels[-1][0]
+        cert_msg = b"armiger-wots-tree-root-v1:" + sub_bytes + merkle_root
+        if subtree_id == 0:
+            cert_sig = cls._raw_sign(root_priv_64, cert_msg)
+        else:
+            prev_tree = cls._build_subtree(root_priv_64, subtree_id - 1)
+            cert_sig = cls._raw_sign(prev_tree["leaf_privs"][cls.USABLE_LEAVES_PER_SUBTREE], cert_msg)
+        return {
+            "merkle_root": merkle_root,
+            "levels": levels,
+            "leaf_privs": leaf_privs,
+            "leaf_pubs": leaf_pubs,
+            "cert_sig": cert_sig,
+        }
+
+    @classmethod
+    def _auth_path_bytes(cls, levels: List[List[bytes]], leaf_offset: int) -> bytes:
+        parts: List[bytes] = []
+        idx = int(leaf_offset)
+        for lvl in range(cls.TREE_HEIGHT):
+            sib = idx ^ 1
+            parts.append(levels[lvl][sib])
+            idx >>= 1
+        return b"".join(parts)
+
+    @classmethod
+    def _normalize_root_priv(cls, priv_seed: bytes) -> Tuple[bytes, bytes]:
+        if len(priv_seed) == 32:
+            return cls.derive_keypair_from_ed25519_priv(priv_seed, seq=0)
+        return cls.generate_keypair(priv_seed)
+
+    @classmethod
+    def _register_binding(cls, ed_pub_hex: str, wots_pub_hex: str, seq: int | None = None) -> None:
         ed_norm = ed_pub_hex.strip().lower()
         pq_norm = wots_pub_hex.strip().lower()
         cls._ED25519_TO_WOTS_PUBS.setdefault(ed_norm, set()).add(pq_norm)
         cls._WOTS_TO_ED25519_PUB[pq_norm] = ed_norm
+        if seq is None or int(seq) == 0:
+            cls._ED25519_ROOT_WOTS_PUB[ed_norm] = pq_norm
+        elif int(seq) > 0:
+            cls._ED25519_SEQ_TO_WOTS_PUB[(ed_norm, int(seq))] = pq_norm
 
     @classmethod
-    def is_bound_to_ed25519_pub(cls, ed_pub_hex: str, wots_pub_hex: str) -> bool:
-        return wots_pub_hex.strip().lower() in cls._ED25519_TO_WOTS_PUBS.get(ed_pub_hex.strip().lower(), set())
+    def get_root_wots_pub(cls, ed_pub_hex: str) -> Optional[str]:
+        return cls._ED25519_ROOT_WOTS_PUB.get(ed_pub_hex.strip().lower())
+
+    @classmethod
+    def derive_pq_root_pubkey(cls, ed25519_priv_bytes: bytes) -> bytes:
+        _, pk0 = cls.derive_keypair_from_ed25519_priv(ed25519_priv_bytes, seq=0)
+        return pk0
+
+    @classmethod
+    def derive_pq_root_pubkey_hex(cls, ed25519_priv_bytes: bytes) -> str:
+        return cls.derive_pq_root_pubkey(ed25519_priv_bytes).hex()
+
+    @classmethod
+    def is_bound_to_ed25519_pub(cls, ed_pub_hex: str, wots_pub_hex: str, seq: int | None = None) -> bool:
+        ed_norm = ed_pub_hex.strip().lower()
+        pq_norm = wots_pub_hex.strip().lower()
+        if seq is not None and (ed_norm, int(seq)) in cls._ED25519_SEQ_TO_WOTS_PUB:
+            return cls._ED25519_SEQ_TO_WOTS_PUB[(ed_norm, int(seq))] == pq_norm
+        return pq_norm in cls._ED25519_TO_WOTS_PUBS.get(ed_norm, set())
 
     @classmethod
     def get_bound_wots_pubs(cls, ed_pub_hex: str) -> set[str]:
@@ -1241,43 +2026,330 @@ class WOTSPlusSHAKE256:
             ed_pub = Ed25519PrivateKey.from_private_bytes(ed25519_priv_bytes).public_key().public_bytes(
                 Encoding.Raw, PublicFormat.Raw
             ).hex()
-            cls._register_binding(ed_pub, pk.hex())
+            cls._register_binding(ed_pub, pk.hex(), seq=int(seq) if seq else 0)
             if seq != 0:
                 ctx0 = b"armiger-hybrid-ed25519-wots-v1:" + ed25519_priv_bytes
                 _, pk0 = cls.generate_keypair(hashlib.shake_256(ctx0).digest(64))
-                cls._register_binding(ed_pub, pk0.hex())
+                cls._register_binding(ed_pub, pk0.hex(), seq=0)
         except Exception:
             pass
         return raw, pk
 
     @classmethod
-    def sign(cls, priv_seed: bytes, message: bytes) -> bytes:
-        if len(priv_seed) == 32:
-            priv_seed, pk = cls.derive_keypair_from_ed25519_priv(priv_seed)
-        else:
-            _, pk = cls.generate_keypair(priv_seed)
-        sk_seed, pub_seed = priv_seed[:32], priv_seed[32:]
-        digest = hashlib.shake_256(b"armiger-wots-msg-v2:" + pub_seed + pk + message).digest(32)
-        digits = cls._msg_to_base_w(digest)
-        sig_parts = [pub_seed]
-        for i, d in enumerate(digits):
-            sk_i = hashlib.shake_256(sk_seed + bytes([i])).digest(32)
-            sig_parts.append(cls._chain(sk_i, 0, d, pub_seed, i))
-        return b"".join(sig_parts)
+    def reserve_next_leaf(
+        cls,
+        priv_seed: bytes,
+        *,
+        state_dir: Optional[Union[str, pathlib.Path]] = None,
+        seal_dir: Optional[Union[str, pathlib.Path]] = None,
+        require_existing_state: Optional[bool] = None,
+    ) -> Tuple[int, bytes, bytes]:
+        """Atomically reserve and persist the next unused one-time leaf index, returning (leaf_index, leaf_pub_32B, root_pq_pub_32B)."""
+        root_priv_64, root_pq_pub = cls._normalize_root_priv(priv_seed)
+        leaf_idx = cls._load_and_update_durable_state(
+            root_pq_pub.hex(),
+            reserve_fresh=True,
+            state_dir=state_dir,
+            seal_dir=seal_dir,
+            require_existing_state=require_existing_state,
+        )
+        subtree_id = leaf_idx // cls.USABLE_LEAVES_PER_SUBTREE
+        leaf_offset = leaf_idx % cls.USABLE_LEAVES_PER_SUBTREE
+        tree = cls._build_subtree(root_priv_64, subtree_id)
+        leaf_pub = tree["leaf_pubs"][leaf_offset]
+        return leaf_idx, leaf_pub, root_pq_pub
+
+    @classmethod
+    def sign_reserved_leaf(
+        cls,
+        priv_seed: bytes,
+        leaf_index: int,
+        message: bytes,
+        *,
+        state_dir: Optional[Union[str, pathlib.Path]] = None,
+        seal_dir: Optional[Union[str, pathlib.Path]] = None,
+        require_existing_state: Optional[bool] = None,
+    ) -> bytes:
+        """Sign `message` using a reserved `leaf_index` and bind `(root_pq_pub, leaf_index)` to `SHA-256(message)`."""
+        return cls.sign(
+            priv_seed,
+            message,
+            leaf_index=leaf_index,
+            state_dir=state_dir,
+            seal_dir=seal_dir,
+            require_existing_state=require_existing_state,
+        )
+
+    @classmethod
+    def allocate_and_sign(
+        cls,
+        priv_seed: bytes,
+        message: bytes,
+        *,
+        leaf_index: Optional[int] = None,
+        reserve_fresh: bool = True,
+        state_dir: Optional[Union[str, pathlib.Path]] = None,
+        seal_dir: Optional[Union[str, pathlib.Path]] = None,
+        require_existing_state: Optional[bool] = None,
+    ) -> Tuple[bytes, bytes, int, bytes]:
+        """Allocate a fresh one-time leaf and sign `message`, returning (leaf_pub_32B, sig_bytes, leaf_index, root_pq_pub_32B)."""
+        root_priv_64, root_pq_pub = cls._normalize_root_priv(priv_seed)
+        msg_sha = hashlib.sha256(message).hexdigest()
+        idx = cls._load_and_update_durable_state(
+            root_pq_pub.hex(),
+            msg_sha256_hex=msg_sha,
+            explicit_leaf_index=leaf_index,
+            reserve_fresh=reserve_fresh if leaf_index is None else False,
+            state_dir=state_dir,
+            seal_dir=seal_dir,
+            require_existing_state=require_existing_state,
+        )
+        sig_bytes = cls._build_awm2_signature(root_priv_64, root_pq_pub, idx, message)
+        subtree_id = idx // cls.USABLE_LEAVES_PER_SUBTREE
+        leaf_offset = idx % cls.USABLE_LEAVES_PER_SUBTREE
+        leaf_pub = cls._build_subtree(root_priv_64, subtree_id)["leaf_pubs"][leaf_offset]
+        return leaf_pub, sig_bytes, idx, root_pq_pub
+
+    @classmethod
+    def _build_awm2_signature(
+        cls,
+        root_priv_64: bytes,
+        root_pq_pub: bytes,
+        leaf_index: int,
+        message: bytes,
+    ) -> bytes:
+        if isinstance(leaf_index, bool) or not isinstance(leaf_index, int) or leaf_index < 0:
+            raise ValueError("leaf_index must be a non-negative integer")
+        if leaf_index >= cls.MAX_SUPPORTED_LEAVES:
+            raise ValueError(f"wots_leaf_index_exhausted:{leaf_index}>={cls.MAX_SUPPORTED_LEAVES}")
+        subtree_id = int(leaf_index) // cls.USABLE_LEAVES_PER_SUBTREE
+        leaf_offset = int(leaf_index) % cls.USABLE_LEAVES_PER_SUBTREE
+        num_hops = subtree_id + 1
+        if num_hops < 1 or num_hops > cls.MAX_SUBTREE_HOPS:
+            raise ValueError(f"wots_num_hops_out_of_range:{num_hops}")
+        hop_blobs: List[bytes] = []
+        for s in range(num_hops):
+            t = cls._build_subtree(root_priv_64, s)
+            target_offset = cls.USABLE_LEAVES_PER_SUBTREE if s < subtree_id else leaf_offset
+            hop_leaf_pub = t["leaf_pubs"][target_offset]
+            auth_path = cls._auth_path_bytes(t["levels"], target_offset)
+            hop_blobs.append(
+                s.to_bytes(4, "big") + t["merkle_root"] + hop_leaf_pub + auth_path + t["cert_sig"]
+            )
+        final_tree = cls._build_subtree(root_priv_64, subtree_id)
+        leaf_priv = final_tree["leaf_privs"][leaf_offset]
+        leaf_pub = final_tree["leaf_pubs"][leaf_offset]
+        leaf_sig = cls._raw_sign(leaf_priv, message)
+        return (
+            cls.AWM2_MAGIC
+            + bytes([num_hops])
+            + root_pq_pub
+            + int(leaf_index).to_bytes(4, "big")
+            + leaf_pub
+            + b"".join(hop_blobs)
+            + leaf_sig
+        )
+
+    @classmethod
+    def sign(
+        cls,
+        priv_seed: bytes,
+        message: bytes,
+        *,
+        leaf_index: Optional[int] = None,
+        raw_one_time: bool = False,
+        state_dir: Optional[Union[str, pathlib.Path]] = None,
+        seal_dir: Optional[Union[str, pathlib.Path]] = None,
+        require_existing_state: Optional[bool] = None,
+    ) -> bytes:
+        """Sign `message` using a Merkle-authenticated one-time WOTS+ leaf key (or raw 2,176B mode if `raw_one_time=True`)."""
+        root_priv_64, root_pq_pub = cls._normalize_root_priv(priv_seed)
+        if raw_one_time:
+            return cls._raw_sign(root_priv_64, message)
+        msg_sha = hashlib.sha256(message).hexdigest()
+        idx = cls._load_and_update_durable_state(
+            root_pq_pub.hex(),
+            msg_sha256_hex=msg_sha,
+            explicit_leaf_index=leaf_index,
+            reserve_fresh=False,
+            state_dir=state_dir,
+            seal_dir=seal_dir,
+            require_existing_state=require_existing_state,
+        )
+        return cls._build_awm2_signature(root_priv_64, root_pq_pub, idx, message)
+
+    @classmethod
+    def extract_signature_metadata(
+        cls,
+        pub_key_or_hex: Union[bytes, str],
+        sig_or_hex: Union[bytes, str],
+    ) -> Optional[Dict[str, Any]]:
+        try:
+            pub_bytes = bytes.fromhex(pub_key_or_hex.strip()) if isinstance(pub_key_or_hex, str) else bytes(pub_key_or_hex)
+            sig_bytes = bytes.fromhex(sig_or_hex.strip()) if isinstance(sig_or_hex, str) else bytes(sig_or_hex)
+        except ValueError:
+            return None
+        if len(pub_bytes) != cls.PUB_BYTES:
+            return None
+        if len(sig_bytes) == cls.SIG_BYTES:
+            return {
+                "mode": "raw",
+                "root_pq_pub": pub_bytes,
+                "root_pq_pub_hex": pub_bytes.hex().lower(),
+                "leaf_index": None,
+                "leaf_pub": pub_bytes,
+                "leaf_pub_hex": pub_bytes.hex().lower(),
+                "one_time_key_id": f"raw:{pub_bytes.hex().lower()}",
+            }
+        if sig_bytes.startswith(cls.AWM2_MAGIC) and len(sig_bytes) >= 73:
+            num_hops = sig_bytes[4]
+            expected_len = 73 + num_hops * cls.HOP_BYTES + cls.SIG_BYTES
+            if num_hops < 1 or num_hops > 64 or len(sig_bytes) != expected_len:
+                return None
+            root_pq_pub = sig_bytes[5:37]
+            leaf_index = int.from_bytes(sig_bytes[37:41], "big")
+            leaf_pub = sig_bytes[41:73]
+            return {
+                "mode": "awm2",
+                "root_pq_pub": root_pq_pub,
+                "root_pq_pub_hex": root_pq_pub.hex().lower(),
+                "leaf_index": leaf_index,
+                "leaf_pub": leaf_pub,
+                "leaf_pub_hex": leaf_pub.hex().lower(),
+                "one_time_key_id": f"awm2:{root_pq_pub.hex().lower()}:leaf:{leaf_index}",
+            }
+        return None
+
+    @classmethod
+    def verify_against_trusted_roots(
+        cls,
+        trusted_pq_roots: Sequence[bytes],
+        claimed_pq_pub: bytes,
+        message: bytes,
+        signature: bytes,
+        *,
+        used_keys: Optional[Dict[str, bytes]] = None,
+    ) -> Tuple[bool, str]:
+        if not trusted_pq_roots:
+            return False, "untrusted_pq_root_pubkey"
+        meta = cls.extract_signature_metadata(claimed_pq_pub, signature)
+        if meta is None:
+            return False, "pq_wots_signature_verification_failed"
+        if meta["root_pq_pub"] not in trusted_pq_roots:
+            return False, "untrusted_pq_root_pubkey"
+        if claimed_pq_pub not in (meta["leaf_pub"], meta["root_pq_pub"]):
+            return False, "untrusted_pq_root_pubkey"
+
+        msg_digest = hashlib.sha256(message).digest()
+        key_ids = (meta["leaf_pub_hex"], meta["one_time_key_id"])
+        if used_keys is not None:
+            for kid in key_ids:
+                prev = used_keys.get(kid)
+                if prev is not None and prev != msg_digest:
+                    return False, "wots_one_time_key_reused"
+        with cls._LOCK:
+            for kid in key_ids:
+                prev_g = cls._VERIFIED_ONE_TIME_KEYS.get(kid)
+                if prev_g is not None and prev_g != msg_digest:
+                    return False, "wots_one_time_key_reused"
+
+        if not cls.verify(claimed_pq_pub, message, signature):
+            return False, "pq_wots_signature_verification_failed"
+
+        if used_keys is not None:
+            for kid in key_ids:
+                used_keys[kid] = msg_digest
+        return True, "verified"
 
     @classmethod
     def verify(cls, pub_key: bytes, message: bytes, signature: bytes) -> bool:
-        if len(pub_key) != cls.PUB_BYTES or len(signature) != cls.SIG_BYTES:
+        if len(pub_key) != cls.PUB_BYTES:
             return False
-        pub_seed = signature[:32]
-        digest = hashlib.shake_256(b"armiger-wots-msg-v2:" + pub_seed + pub_key + message).digest(32)
-        digits = cls._msg_to_base_w(digest)
-        ends: List[bytes] = []
-        for i, d in enumerate(digits):
-            sig_i = signature[32 * (i + 1) : 32 * (i + 2)]
-            ends.append(cls._chain(sig_i, d, 15 - d, pub_seed, i))
-        computed_pk = hashlib.shake_256(pub_seed + b"".join(ends)).digest(32)
-        return hmac.compare_digest(computed_pk, pub_key)
+        msg_digest = hashlib.sha256(message).digest()
+
+        if len(signature) == cls.SIG_BYTES:
+            kid = f"raw:{pub_key.hex().lower()}"
+            with cls._LOCK:
+                prev = cls._VERIFIED_ONE_TIME_KEYS.get(kid)
+                if prev is not None and prev != msg_digest:
+                    return False
+            if not cls._raw_verify(pub_key, message, signature):
+                return False
+            with cls._LOCK:
+                cls._VERIFIED_ONE_TIME_KEYS[kid] = msg_digest
+                cls._VERIFIED_ONE_TIME_KEYS[pub_key.hex().lower()] = msg_digest
+            return True
+
+        if not signature.startswith(cls.AWM2_MAGIC) or len(signature) < 73:
+            return False
+        num_hops = signature[4]
+        if num_hops < 1 or num_hops > 64:
+            return False
+        expected_len = 73 + num_hops * cls.HOP_BYTES + cls.SIG_BYTES
+        if len(signature) != expected_len:
+            return False
+
+        root_pq_pub = signature[5:37]
+        leaf_index = int.from_bytes(signature[37:41], "big")
+        leaf_pub = signature[41:73]
+
+        if not (hmac.compare_digest(pub_key, root_pq_pub) or hmac.compare_digest(pub_key, leaf_pub)):
+            return False
+        if (leaf_index // cls.USABLE_LEAVES_PER_SUBTREE) + 1 != num_hops:
+            return False
+
+        kid_leaf = f"awm2:{root_pq_pub.hex().lower()}:leaf:{leaf_index}"
+        kid_pub = leaf_pub.hex().lower()
+        with cls._LOCK:
+            for kid in (kid_leaf, kid_pub):
+                prev = cls._VERIFIED_ONE_TIME_KEYS.get(kid)
+                if prev is not None and prev != msg_digest:
+                    return False
+
+        cur_signer_pub = root_pq_pub
+        offset = 73
+        for s in range(num_hops):
+            hop = signature[offset : offset + cls.HOP_BYTES]
+            offset += cls.HOP_BYTES
+            sub_id = int.from_bytes(hop[:4], "big")
+            if sub_id != s:
+                return False
+            merkle_root = hop[4:36]
+            hop_leaf_pub = hop[36:68]
+            auth_path = hop[68:196]
+            cert_sig = hop[196 : 196 + cls.SIG_BYTES]
+
+            cert_msg = b"armiger-wots-tree-root-v1:" + sub_id.to_bytes(4, "big") + merkle_root
+            if not cls._raw_verify(cur_signer_pub, cert_msg, cert_sig):
+                return False
+
+            target_offset = cls.USABLE_LEAVES_PER_SUBTREE if s < num_hops - 1 else (leaf_index % cls.USABLE_LEAVES_PER_SUBTREE)
+            cur_hash = hashlib.sha256(
+                b"armiger-wots-leaf-node-v1:" + sub_id.to_bytes(4, "big") + target_offset.to_bytes(4, "big") + hop_leaf_pub
+            ).digest()
+            idx = target_offset
+            for lvl in range(cls.TREE_HEIGHT):
+                sib = auth_path[lvl * 32 : (lvl + 1) * 32]
+                if (idx & 1) == 0:
+                    cur_hash = hashlib.sha256(b"armiger-wots-int-node-v1:" + bytes([lvl]) + cur_hash + sib).digest()
+                else:
+                    cur_hash = hashlib.sha256(b"armiger-wots-int-node-v1:" + bytes([lvl]) + sib + cur_hash).digest()
+                idx >>= 1
+            if not hmac.compare_digest(cur_hash, merkle_root):
+                return False
+            cur_signer_pub = hop_leaf_pub
+
+        if not hmac.compare_digest(cur_signer_pub, leaf_pub):
+            return False
+
+        leaf_sig = signature[offset:]
+        if not cls._raw_verify(leaf_pub, message, leaf_sig):
+            return False
+
+        with cls._LOCK:
+            cls._VERIFIED_ONE_TIME_KEYS[kid_leaf] = msg_digest
+            cls._VERIFIED_ONE_TIME_KEYS[kid_pub] = msg_digest
+        return True
 
 
 # ---------------------------------------------------------------------------
@@ -1310,12 +2382,14 @@ class SignedTombstoneList:
         """Deterministic, sorted JSON bytes for Hybrid Ed25519 + WOTS+-SHAKE256 signature verification."""
         norm_reasons = {str(k).lower(): v for k, v in (self.reasons or {}).items()}
         norm_tombstones = sorted({str(t).lower() for t in self.tombstones})
-        body = {
+        body: dict[str, Any] = {
             "reasons": {k: norm_reasons.get(k, "CSAM_ABUSE") for k in norm_tombstones},
             "seq": int(self.seq),
             "timestamp": int(self.timestamp),
             "tombstones": norm_tombstones,
         }
+        if self.pq_pubkey_hex:
+            body["pq_pubkey_hex"] = self.pq_pubkey_hex.strip().lower()
         return json.dumps(body, sort_keys=True, separators=(",", ":")).encode("utf-8")
 
 
@@ -1331,31 +2405,95 @@ class TombstoneStore:
         trusted_root_pubkeys_hex: Sequence[str] | None = None,
         initial_seq: int = 0,
         trusted_root_pq_pubkeys_hex: Sequence[str] | None = None,
+        *,
+        require_pq: bool = True,
     ) -> None:
         if isinstance(initial_seq, bool) or not isinstance(initial_seq, int) or initial_seq < 0:
             raise TypeError("initial_seq must be a non-negative integer")
-        self.trusted_pubkeys = [
-            bytes.fromhex(k.strip().lower())
-            for k in (trusted_root_pubkeys_hex or [])
-            if len(k.strip()) == 64
-        ]
-        self.trusted_pq_pubkeys = [
+        self.trusted_pubkeys: list[bytes] = []
+        self.trusted_pq_pubkeys: list[bytes] = [
             bytes.fromhex(k.strip().lower())
             for k in (trusted_root_pq_pubkeys_hex or [])
             if len(k.strip()) == 64
         ]
+        self.ed_to_pq_pubkeys: dict[bytes, list[bytes]] = {}
+        raw_ed_entries = list(trusted_root_pubkeys_hex or [])
+        for idx, raw_entry in enumerate(raw_ed_entries):
+            cleaned = str(raw_entry).strip().lower()
+            if ":" in cleaned:
+                ed_part, pq_part = cleaned.split(":", 1)
+                ed_b: Optional[bytes] = None
+                if len(ed_part.strip()) == 64:
+                    ed_b = bytes.fromhex(ed_part.strip())
+                    if ed_b not in self.trusted_pubkeys:
+                        self.trusted_pubkeys.append(ed_b)
+                if len(pq_part.strip()) == 64:
+                    pq_b = bytes.fromhex(pq_part.strip())
+                    if pq_b not in self.trusted_pq_pubkeys:
+                        self.trusted_pq_pubkeys.append(pq_b)
+                    if ed_b is not None:
+                        bound_list = self.ed_to_pq_pubkeys.setdefault(ed_b, [])
+                        if pq_b not in bound_list:
+                            bound_list.append(pq_b)
+            elif len(cleaned) == 64:
+                ed_b = bytes.fromhex(cleaned)
+                if ed_b not in self.trusted_pubkeys:
+                    self.trusted_pubkeys.append(ed_b)
+                bound_list = self.ed_to_pq_pubkeys.setdefault(ed_b, [])
+                if self.trusted_pq_pubkeys:
+                    if len(self.trusted_pq_pubkeys) == len(raw_ed_entries) and idx < len(self.trusted_pq_pubkeys):
+                        pq_b = self.trusted_pq_pubkeys[idx]
+                        if pq_b not in bound_list:
+                            bound_list.append(pq_b)
+                    else:
+                        bound_root_pq = WOTSPlusSHAKE256.get_root_wots_pub(cleaned)
+                        if bound_root_pq and len(bound_root_pq) == 64:
+                            pq_b = bytes.fromhex(bound_root_pq)
+                            if pq_b in self.trusted_pq_pubkeys and pq_b not in bound_list:
+                                bound_list.append(pq_b)
+                        elif len(raw_ed_entries) == 1:
+                            for pq_b in self.trusted_pq_pubkeys:
+                                if pq_b not in bound_list:
+                                    bound_list.append(pq_b)
+                else:
+                    bound_root_pq = WOTSPlusSHAKE256.get_root_wots_pub(cleaned)
+                    if bound_root_pq and len(bound_root_pq) == 64:
+                        pq_b = bytes.fromhex(bound_root_pq)
+                        if pq_b not in self.trusted_pq_pubkeys:
+                            self.trusted_pq_pubkeys.append(pq_b)
+                        if pq_b not in bound_list:
+                            bound_list.append(pq_b)
+        self.require_pq = bool(require_pq)
         self.current_seq = int(initial_seq)
         self.blinded_hashes: set[str] = set()
         self.reasons: dict[str, str] = {}
+        self._used_pq_pubkeys: dict[str, bytes] = {}
 
     def add_trusted_pubkey(self, pubkey_hex: str, pq_pubkey_hex: str = "") -> None:
-        raw = bytes.fromhex(pubkey_hex.strip().lower())
+        cleaned = pubkey_hex.strip().lower()
+        if ":" in cleaned and not pq_pubkey_hex:
+            ed_part, pq_part = cleaned.split(":", 1)
+            cleaned = ed_part.strip()
+            pq_pubkey_hex = pq_part.strip()
+        raw = bytes.fromhex(cleaned)
         if len(raw) == 32 and raw not in self.trusted_pubkeys:
             self.trusted_pubkeys.append(raw)
+        bound_list = self.ed_to_pq_pubkeys.setdefault(raw, []) if len(raw) == 32 else []
         if pq_pubkey_hex:
             raw_pq = bytes.fromhex(pq_pubkey_hex.strip().lower())
-            if len(raw_pq) == 32 and raw_pq not in self.trusted_pq_pubkeys:
-                self.trusted_pq_pubkeys.append(raw_pq)
+            if len(raw_pq) == 32:
+                if raw_pq not in self.trusted_pq_pubkeys:
+                    self.trusted_pq_pubkeys.append(raw_pq)
+                if raw_pq not in bound_list:
+                    bound_list.append(raw_pq)
+        else:
+            bound_root_pq = WOTSPlusSHAKE256.get_root_wots_pub(cleaned)
+            if bound_root_pq and len(bound_root_pq) == 64:
+                raw_pq = bytes.fromhex(bound_root_pq)
+                if raw_pq not in self.trusted_pq_pubkeys:
+                    self.trusted_pq_pubkeys.append(raw_pq)
+                if raw_pq not in bound_list:
+                    bound_list.append(raw_pq)
 
     def is_tombstoned(self, infohash: str) -> bool:
         """Check whether an infohash matches any active blinded tombstone."""
@@ -1392,7 +2530,7 @@ class TombstoneStore:
 
         # 1. Classical Ed25519 signature verification against trusted roots
         verified = False
-        matched_ed_pub_hex = ""
+        matched_ed_pub: Optional[bytes] = None
         if not self.trusted_pubkeys:
             return False, "no_trusted_root_keys_configured", 0
 
@@ -1401,49 +2539,43 @@ class TombstoneStore:
                 vk = Ed25519PublicKey.from_public_bytes(pub_bytes)
                 vk.verify(sig_bytes, payload)
                 verified = True
-                matched_ed_pub_hex = pub_bytes.hex()
+                matched_ed_pub = pub_bytes
                 break
             except (InvalidSignature, ValueError):
                 continue
 
-        if not verified:
+        if not verified or matched_ed_pub is None:
             return False, "ed25519_signature_verification_failed", 0
 
-        # 2. Post-Quantum WOTS+-SHAKE256 signature verification
-        if manifest.pq_signature_hex or manifest.pq_pubkey_hex or self.trusted_pq_pubkeys:
+        # 2. Post-Quantum WOTS+-SHAKE256 signature verification (mandatory when require_pq=True)
+        has_pq_fields = bool(manifest.pq_signature_hex or manifest.pq_pubkey_hex)
+        if self.require_pq or has_pq_fields or self.trusted_pq_pubkeys:
+            if not manifest.pq_pubkey_hex.strip() or not manifest.pq_signature_hex.strip():
+                return False, "missing_pq_wots_signature", 0
             try:
                 pq_sig_bytes = bytes.fromhex(manifest.pq_signature_hex)
+                norm_pq_hex = manifest.pq_pubkey_hex.strip().lower()
+                man_pq_bytes = bytes.fromhex(norm_pq_hex)
             except ValueError:
                 return False, "pq_wots_signature_verification_failed", 0
 
-            candidate_pq_pubs: List[bytes] = list(self.trusted_pq_pubkeys)
-            for bound_hex in WOTSPlusSHAKE256.get_bound_wots_pubs(matched_ed_pub_hex):
-                b_pq = bytes.fromhex(bound_hex)
-                if b_pq not in candidate_pq_pubs:
-                    if not self.trusted_pq_pubkeys or any(
-                        WOTSPlusSHAKE256.is_bound_to_ed25519_pub(matched_ed_pub_hex, t_pq.hex())
-                        for t_pq in self.trusted_pq_pubkeys
-                    ):
-                        candidate_pq_pubs.append(b_pq)
+            bound_pq_roots = list(self.ed_to_pq_pubkeys.get(matched_ed_pub, []))
+            if not bound_pq_roots:
+                dyn_pq_hex = WOTSPlusSHAKE256.get_root_wots_pub(matched_ed_pub.hex())
+                if dyn_pq_hex and len(dyn_pq_hex) == 64:
+                    dyn_b = bytes.fromhex(dyn_pq_hex)
+                    if not self.trusted_pq_pubkeys or dyn_b in self.trusted_pq_pubkeys:
+                        bound_pq_roots.append(dyn_b)
 
-            if manifest.pq_pubkey_hex:
-                try:
-                    man_pq_bytes = bytes.fromhex(manifest.pq_pubkey_hex.strip().lower())
-                except ValueError:
-                    return False, "pq_wots_signature_verification_failed", 0
-                if man_pq_bytes not in candidate_pq_pubs:
-                    return False, "untrusted_pq_root_pubkey", 0
-                candidate_pq_pubs = [man_pq_bytes]
-
-            if not candidate_pq_pubs:
-                return False, "untrusted_pq_root_pubkey", 0
-
-            pq_verified = any(
-                WOTSPlusSHAKE256.verify(pq_pub, payload, pq_sig_bytes)
-                for pq_pub in candidate_pq_pubs
+            ok_pq, pq_reason = WOTSPlusSHAKE256.verify_against_trusted_roots(
+                bound_pq_roots,
+                man_pq_bytes,
+                payload,
+                pq_sig_bytes,
+                used_keys=self._used_pq_pubkeys,
             )
-            if not pq_verified:
-                return False, "pq_wots_signature_verification_failed", 0
+            if not ok_pq:
+                return False, pq_reason, 0
 
         # Monotonic update
         self.current_seq = int(manifest.seq)
@@ -1459,6 +2591,11 @@ class TombstoneStore:
         return True, "verified_and_applied", new_count
 
 
+def derive_pq_root_pubkey_hex(private_key_bytes: bytes) -> str:
+    """Return the distributable 64-char hex PQ root public key commitment for a 32-byte Ed25519 private key."""
+    return WOTSPlusSHAKE256.derive_pq_root_pubkey(private_key_bytes).hex()
+
+
 def generate_ed25519_keypair() -> tuple[bytes, bytes]:
     """Generate a fresh Ed25519 private key (32 bytes) and public key (32 bytes)."""
     priv = Ed25519PrivateKey.generate()
@@ -1466,6 +2603,7 @@ def generate_ed25519_keypair() -> tuple[bytes, bytes]:
     from cryptography.hazmat.primitives.serialization import Encoding, PublicFormat, PrivateFormat, NoEncryption
     priv_bytes = priv.private_bytes(Encoding.Raw, PrivateFormat.Raw, NoEncryption())
     pub_bytes = pub.public_bytes(Encoding.Raw, PublicFormat.Raw)
+    WOTSPlusSHAKE256.derive_keypair_from_ed25519_priv(priv_bytes, seq=0)
     return priv_bytes, pub_bytes
 
 
@@ -1477,7 +2615,7 @@ def sign_tombstone_list(
     are_blinded: bool = False,
     timestamp: int | None = None,
 ) -> SignedTombstoneList:
-    """Create and dual-sign a SignedTombstoneList manifest with Ed25519 + Post-Quantum WOTS+-SHAKE256."""
+    """Create and dual-sign a SignedTombstoneList manifest with Ed25519 + Merkle-Authenticated WOTS+-SHAKE256."""
     ts = timestamp if timestamp is not None else int(time.time())
     blinded_list = [
         h.lower() if are_blinded else blind_infohash(h)
@@ -1487,18 +2625,19 @@ def sign_tombstone_list(
     for h in blinded_list:
         reasons_map[h] = (reasons or {}).get(h, "CSAM_ABUSE")
 
+    leaf_idx, leaf_pub, _root_pq_pub = WOTSPlusSHAKE256.reserve_next_leaf(private_key_bytes)
     dummy = SignedTombstoneList(
         seq=seq,
         timestamp=ts,
         tombstones=blinded_list,
         reasons=reasons_map,
         signature_hex="",
+        pq_pubkey_hex=leaf_pub.hex(),
     )
     payload = dummy.canonical_payload()
     sk = Ed25519PrivateKey.from_private_bytes(private_key_bytes)
     sig = sk.sign(payload)
-    pq_priv, pq_pub = WOTSPlusSHAKE256.derive_keypair_from_ed25519_priv(private_key_bytes, seq=0)
-    pq_sig = WOTSPlusSHAKE256.sign(pq_priv, payload)
+    pq_sig = WOTSPlusSHAKE256.sign_reserved_leaf(private_key_bytes, leaf_idx, payload)
 
     return SignedTombstoneList(
         seq=seq,
@@ -1506,6 +2645,6 @@ def sign_tombstone_list(
         tombstones=blinded_list,
         reasons=reasons_map,
         signature_hex=sig.hex(),
-        pq_pubkey_hex=pq_pub.hex(),
+        pq_pubkey_hex=leaf_pub.hex(),
         pq_signature_hex=pq_sig.hex(),
     )

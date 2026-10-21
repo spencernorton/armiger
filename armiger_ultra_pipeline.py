@@ -87,6 +87,7 @@ from zero_cue_plugin import (
 
 # Plugin #4: AudioLanguageGuard (Cross-Head Audio & Anime Dub Guard)
 from audio_language_guard import (
+    SUB_SEGMENT_STRIP_RE,
     apply_audio_language_guard,
     classify_audio_and_anime_dub,
 )
@@ -100,6 +101,7 @@ from calibration_and_dht import (
 from armiger_dht_rsi import (
     AnonymityGuard,
     AnonymityViolationError,
+    AuthoritativeASNVerifier,
     resolve_opt_in_sharing,
     AnonymizedTelemetryRecord,
     ArmigerDHTRSIEngine,
@@ -267,8 +269,8 @@ class AudioLanguageGuard:
     """Object-oriented wrapper around `audio_language_guard.py` for SDK pipeline composition."""
 
     _DUAL_MULTI_RE = re.compile(
-        r"(?i)(?:\bdual[\s._-]*audio\b|\bmulti[\s._-]*audio\b|\bmulti\s*\([^\)]*\b(?:en|eng|english)\b|"
-        r"\[\s*(?:rus|jpn|jap|ita|fre|ger|deu|spa|lat)[^\]]*\+\s*(?:en|eng|english)\b)"
+        r"(?i)(?:\bdual[\s._-]*audio\b|\bmulti[\s._-]*audio\b|\bmulti\s*\([^\)]*\b(?:en|eng|english)\b(?![\s._\-/]*sub)|"
+        r"\[\s*(?:rus|jpn|jap|ita|fre|ger|deu|spa|lat)[^\]]*\+\s*(?:en|eng|english)\b(?![\s._\-/]*sub))"
     )
 
     def __init__(self, foreign_title_threshold: float = 0.65) -> None:
@@ -291,8 +293,9 @@ class AudioLanguageGuard:
             else 0.0
         )
 
-        # Explicit dual/multi-audio release tags
-        if self._DUAL_MULTI_RE.search(raw_name):
+        # Explicit dual/multi-audio release tags (strip subtitle segments first so '[JPN + ENG Subs]' never triggers)
+        cleaned_audio_name = SUB_SEGMENT_STRIP_RE.sub(" ", raw_name)
+        if self._DUAL_MULTI_RE.search(cleaned_audio_name):
             adj = np.array([0.12, 0.08, 0.80], dtype=np.float64)
             return "multi_or_unknown", adj, {
                 "p_english_compatible_audio": 0.92,
@@ -349,9 +352,10 @@ class AudioLanguageGuard:
             p_anime=p_anime,
             p_title_foreign=p_title_foreign,
         )
+        cleaned_audio_name = SUB_SEGMENT_STRIP_RE.sub(" ", raw_name)
         if not report["is_anime"]:
             dub_status = "non_anime"
-        elif report["is_anime_dub_or_dual"] or self._DUAL_MULTI_RE.search(raw_name):
+        elif report["is_anime_dub_or_dual"] or self._DUAL_MULTI_RE.search(cleaned_audio_name):
             dub_status = "dual_audio_or_dub"
         elif p_eng_subs >= 0.45 or re.search(r"(?i)\b(?:eng[\s._-]*sub|esub|openanime|cc-anime)\b", raw_name):
             dub_status = "subbed_only"
@@ -409,359 +413,40 @@ class ArmigerUltraPrediction:
         return self.to_dict().values()
 
 
-# =====================================================================
-# Distributed Model Update Bridge: Closed-Loop RSI Telemetry <-> BEP-46 Updates
-# =====================================================================
-#
-# Instance A (contributor) -> `export_rsi_telemetry_bundle` -> hybrid PQ encrypted telemetry
-# Aggregator               -> `RSIUpdateAggregator` (decrypt, consensus, fit, train, sign)
-# Peers (distinct ASNs)    -> `attest_dht_update` (dry-run review + signed attestation)
-# Instance B (receiver)    -> `stage_and_apply_dht_update` (verify, snapshot, stage,
-#                             500-item canary non-regression, commit or roll back)
 
-DHT_UPDATE_SCHEMA = "armiger-dht-update/v1"
-RSI_TELEMETRY_SCHEMA = "armiger-rsi-telemetry/v1"
-DHT_UPDATE_COMPONENTS: Tuple[str, ...] = (
-    "zero_cue_catalog_delta",
-    "calibration_delta",
-    "swarm_adapter_safetensors_delta",
+from ultra_pipeline_update_bridge import (
+    CANARY_HEALTHY_SWARM,
+    DEFAULT_CANARY_VIEWS,
+    DEFAULT_TEMPERATURE_GRID,
+    DHTUpdateRejected,
+    DHTUpdateResult,
+    DHT_UPDATE_COMPONENTS,
+    DHT_UPDATE_SCHEMA,
+    MAX_ADAPTER_DELTA_ABS,
+    MAX_ZERO_CUE_DELTA_ENTRIES,
+    RSIUpdateAggregator,
+    RSI_TELEMETRY_SCHEMA,
+    SWARM_ADAPTER_TRAINABLE,
+    SignedUpdateManifest,
+    TEMPERATURE_BOUNDS,
+    ZERO_CUE_DELTA_MAPS,
+    _CANARY_SAMPLE_SUFFIX_RE,
+    _HEX16_RE,
+    _MISSING,
+    _canary_files_for,
+    _canary_summary,
+    _nll_profile,
+    _prediction_labels,
+    _validate_calibration_delta,
+    _validate_zero_cue_delta,
+    _verified_head_labels,
+    _zero_cue_catalog_key,
+    build_canary_rows,
+    decode_safetensors,
+    encode_safetensors,
+    generate_federation_signer,
+    parse_dht_update_payload,
 )
-ZERO_CUE_DELTA_MAPS: Tuple[str, ...] = ("title_year_map", "title_only_map", "anime_map")
-DEFAULT_TEMPERATURE_GRID: Tuple[float, ...] = tuple(round(0.5 + 0.05 * k, 2) for k in range(71))  # 0.50 .. 4.00
-TEMPERATURE_BOUNDS: Tuple[float, float] = (0.25, 10.0)
-MAX_ZERO_CUE_DELTA_ENTRIES = 50_000
-MAX_ADAPTER_DELTA_ABS = 64.0
-SWARM_ADAPTER_TRAINABLE: Tuple[str, ...] = ("junk_gate.bias", "head_scales.junk", "junk_encoder.4.weight")
-DEFAULT_CANARY_VIEWS: Tuple[str, ...] = ("bare_title", "file_tree_swarm")
-CANARY_HEALTHY_SWARM: Dict[str, Any] = {
-    "tracker_known": True,
-    "tracker_seeders": 120,
-    "tracker_leechers": 10,
-    "tracker_completed": 900,
-}
-_HEX16_RE = re.compile(r"^[0-9a-f]{16}$")
-_CANARY_SAMPLE_SUFFIX_RE = re.compile(r"\.sample\d+$")
-_MISSING = object()
-
-# Pipeline-facing name for the BEP-46 threshold manifest. There is no separate type:
-# `ThresholdDHTManifest` (armiger_dht_rsi.py) is the signed update manifest.
-SignedUpdateManifest = ThresholdDHTManifest
-
-
-class DHTUpdateRejected(ValueError):
-    """Raised internally when an update payload fails strict schema or format validation."""
-
-
-@dataclasses.dataclass
-class DHTUpdateResult:
-    """Outcome of `stage_and_apply_dht_update` or a dry-run `evaluate_dht_update_payload`."""
-
-    applied: bool
-    status: str  # committed | rejected_verification | rolled_back | review_passed | review_failed
-    reason: str
-    seq_before: int
-    seq_after: int
-    verification_trace: List[Dict[str, Any]]
-    components: List[str]
-    baseline_canary: Dict[str, Dict[str, Any]]
-    candidate_canary: Dict[str, Dict[str, Any]]
-    regressions: List[str]
-    state_fingerprint_before: str
-    state_fingerprint_after: str
-    elapsed_ms: float
-
-    def to_dict(self) -> Dict[str, Any]:
-        return dataclasses.asdict(self)
-
-
-def encode_safetensors(
-    tensors: Mapping[str, Any],
-    metadata: Optional[Mapping[str, str]] = None,
-) -> bytes:
-    """Serialize float32 tensors to the SafeTensors layout (8-byte LE header length + JSON header + raw buffer)."""
-    header: Dict[str, Any] = {}
-    buffers: List[bytes] = []
-    offset = 0
-    for name in sorted(tensors):
-        arr = np.ascontiguousarray(np.asarray(tensors[name], dtype=np.float32))
-        raw = arr.astype("<f4").tobytes()
-        header[name] = {"dtype": "F32", "shape": [int(d) for d in arr.shape], "data_offsets": [offset, offset + len(raw)]}
-        buffers.append(raw)
-        offset += len(raw)
-    if metadata:
-        header["__metadata__"] = {str(k): str(v) for k, v in metadata.items()}
-    header_bytes = json.dumps(header, sort_keys=True, separators=(",", ":")).encode("utf-8")
-    header_bytes += b" " * ((8 - len(header_bytes) % 8) % 8)
-    return len(header_bytes).to_bytes(8, "little") + header_bytes + b"".join(buffers)
-
-
-def decode_safetensors(data: bytes) -> Tuple[Dict[str, np.ndarray], Dict[str, str]]:
-    """Strictly parse a float32 SafeTensors blob. Tensor bytes are only ever read as little-endian float32.
-
-    Structural validation reuses `SafeFormatValidator._validate_safetensors`. The pickle-opcode byte scan is
-    applied to the JSON header only: arbitrary float32 payloads legitimately contain byte pairs such as
-    0x80 0x03, so scanning the numeric buffer for pickle opcodes produces false positives without adding
-    safety (the buffer is never unpickled or executed).
-    """
-    if not isinstance(data, (bytes, bytearray)) or len(data) < 8:
-        raise DHTUpdateRejected("safetensors_too_short")
-    data = bytes(data)
-    ok, reason = SafeFormatValidator._validate_safetensors(data)
-    if not ok:
-        raise DHTUpdateRejected(f"safe_format_violation:{reason}")
-    header_len = int.from_bytes(data[:8], "little")
-    header_raw = data[8:8 + header_len]
-    for pattern in SafeFormatValidator.PROHIBITED_BYTE_PATTERNS:
-        if pattern in header_raw:
-            raise DHTUpdateRejected("safe_format_violation:prohibited_bytecode_pattern_in_header")
-    header = json.loads(header_raw.decode("utf-8"))
-    buf = data[8 + header_len:]
-    meta = header.pop("__metadata__", {}) or {}
-    if not isinstance(meta, dict) or not all(isinstance(k, str) and isinstance(v, str) for k, v in meta.items()):
-        raise DHTUpdateRejected("safetensors_invalid_metadata")
-    out: Dict[str, np.ndarray] = {}
-    covered = 0
-    for name, meta_t in sorted(header.items(), key=lambda kv: kv[1]["data_offsets"][0]):
-        if meta_t.get("dtype") != "F32":
-            raise DHTUpdateRejected(f"adapter_delta_dtype_not_f32:{name}")
-        shape = meta_t.get("shape")
-        if not isinstance(shape, list) or not all(isinstance(d, int) and d >= 0 for d in shape):
-            raise DHTUpdateRejected(f"safetensors_invalid_shape:{name}")
-        start, end = (int(x) for x in meta_t["data_offsets"])
-        n_elem = int(np.prod(shape)) if shape else 1
-        if end - start != 4 * n_elem:
-            raise DHTUpdateRejected(f"safetensors_size_mismatch:{name}")
-        if start != covered:
-            raise DHTUpdateRejected(f"safetensors_non_contiguous:{name}")
-        covered = end
-        out[name] = np.frombuffer(buf[start:end], dtype="<f4").reshape(shape).astype(np.float32)
-    if covered != len(buf):
-        raise DHTUpdateRejected("safetensors_trailing_bytes")
-    return out, meta
-
-
-def _validate_zero_cue_delta(delta: Any) -> Dict[str, Dict[str, str]]:
-    if not isinstance(delta, dict) or not delta:
-        raise DHTUpdateRejected("zero_cue_delta_not_object")
-    clean: Dict[str, Dict[str, str]] = {}
-    total = 0
-    for map_name, entries in delta.items():
-        if map_name not in ZERO_CUE_DELTA_MAPS:
-            raise DHTUpdateRejected(f"zero_cue_delta_unknown_map:{map_name}")
-        if not isinstance(entries, dict):
-            raise DHTUpdateRejected(f"zero_cue_delta_map_not_object:{map_name}")
-        clean_map: Dict[str, str] = {}
-        for key, cat in entries.items():
-            if not isinstance(key, str) or not _HEX16_RE.match(key):
-                raise DHTUpdateRejected("zero_cue_delta_key_not_blake2b64_hex")
-            if cat not in ZERO_CUE_CATS:
-                raise DHTUpdateRejected(f"zero_cue_delta_unknown_category:{cat}")
-            clean_map[key] = str(cat)
-        total += len(clean_map)
-        clean[map_name] = clean_map
-    if total == 0 or total > MAX_ZERO_CUE_DELTA_ENTRIES:
-        raise DHTUpdateRejected(f"zero_cue_delta_entry_count_out_of_bounds:{total}")
-    return clean
-
-
-def _validate_calibration_delta(delta: Any) -> Dict[str, Any]:
-    if not isinstance(delta, dict) or not delta:
-        raise DHTUpdateRejected("calibration_delta_not_object")
-    unknown = set(delta) - {"heads", "mondrian_thresholds"}
-    if unknown:
-        raise DHTUpdateRejected(f"calibration_delta_unknown_keys:{sorted(unknown)}")
-    clean: Dict[str, Any] = {"heads": {}, "mondrian_thresholds": {}}
-    for head, cfg in (delta.get("heads") or {}).items():
-        if head not in NEURAL_HEAD_CLASSES and head != "span_bio":
-            raise DHTUpdateRejected(f"calibration_delta_unknown_head:{head}")
-        if not isinstance(cfg, dict) or set(cfg) != {"temperature"}:
-            raise DHTUpdateRejected(f"calibration_delta_head_schema:{head}")
-        temp = cfg["temperature"]
-        if isinstance(temp, bool) or not isinstance(temp, (int, float)) or not math.isfinite(float(temp)):
-            raise DHTUpdateRejected(f"calibration_delta_temperature_not_finite:{head}")
-        if not (TEMPERATURE_BOUNDS[0] <= float(temp) <= TEMPERATURE_BOUNDS[1]):
-            raise DHTUpdateRejected(f"calibration_delta_temperature_out_of_bounds:{head}")
-        clean["heads"][head] = {"temperature": float(temp)}
-    for name, thr in (delta.get("mondrian_thresholds") or {}).items():
-        if name not in ("adult", "junk", "owner_scope"):
-            raise DHTUpdateRejected(f"calibration_delta_unknown_threshold:{name}")
-        if isinstance(thr, bool) or not isinstance(thr, (int, float)) or not (0.0 < float(thr) < 1.0):
-            raise DHTUpdateRejected(f"calibration_delta_threshold_out_of_bounds:{name}")
-        clean["mondrian_thresholds"][name] = float(thr)
-    if not clean["heads"] and not clean["mondrian_thresholds"]:
-        raise DHTUpdateRejected("calibration_delta_empty")
-    return clean
-
-
-def parse_dht_update_payload(payload_bytes: bytes, bundle_format: str) -> Dict[str, Any]:
-    """Strictly parse a BEP-46 update payload into validated components. Unknown keys are rejected.
-
-    Formats:
-      * `json`: {"schema", "epoch", "zero_cue_catalog_delta"?, "calibration_delta"?,
-                 "swarm_adapter_safetensors_delta"?: {"encoding": "safetensors+base64", "data", "sha256"}}
-      * `safetensors`: additive adapter delta tensors only.
-    """
-    fmt = str(bundle_format).lower().strip()
-    components: Dict[str, Any] = {}
-    if fmt == "safetensors":
-        tensors, _meta = decode_safetensors(payload_bytes)
-        if not tensors:
-            raise DHTUpdateRejected("adapter_delta_empty")
-        components["swarm_adapter_safetensors_delta"] = tensors
-        return components
-    if fmt == "onnx":
-        ok_onnx, reason_onnx = SafeFormatValidator.validate(payload_bytes, "onnx")
-        if not ok_onnx:
-            raise DHTUpdateRejected(f"onnx_validation_failed:{reason_onnx}")
-        components["onnx_model_bytes"] = payload_bytes
-        return components
-    if fmt != "json":
-        raise DHTUpdateRejected(f"unsupported_update_format:{fmt}")
-    try:
-        doc = json.loads(payload_bytes.decode("utf-8"))
-    except Exception as exc:  # noqa: BLE001 - any decode error is a rejection
-        raise DHTUpdateRejected(f"json_parse_error:{type(exc).__name__}") from None
-    if not isinstance(doc, dict) or doc.get("schema") != DHT_UPDATE_SCHEMA:
-        raise DHTUpdateRejected("update_schema_mismatch")
-    unknown = set(doc) - {"schema", "epoch", *DHT_UPDATE_COMPONENTS}
-    if unknown:
-        raise DHTUpdateRejected(f"update_unknown_keys:{sorted(unknown)}")
-    if "zero_cue_catalog_delta" in doc:
-        components["zero_cue_catalog_delta"] = _validate_zero_cue_delta(doc["zero_cue_catalog_delta"])
-    if "calibration_delta" in doc:
-        components["calibration_delta"] = _validate_calibration_delta(doc["calibration_delta"])
-    if "swarm_adapter_safetensors_delta" in doc:
-        blob = doc["swarm_adapter_safetensors_delta"]
-        if not isinstance(blob, dict) or set(blob) != {"encoding", "data", "sha256"} or blob["encoding"] != "safetensors+base64":
-            raise DHTUpdateRejected("adapter_delta_envelope_schema")
-        try:
-            raw = base64.b64decode(str(blob["data"]).encode("ascii"), validate=True)
-        except Exception:  # noqa: BLE001
-            raise DHTUpdateRejected("adapter_delta_base64_invalid") from None
-        if hashlib.sha256(raw).hexdigest() != str(blob["sha256"]).lower():
-            raise DHTUpdateRejected("adapter_delta_sha256_mismatch")
-        tensors, _meta = decode_safetensors(raw)
-        if not tensors:
-            raise DHTUpdateRejected("adapter_delta_empty")
-        components["swarm_adapter_safetensors_delta"] = tensors
-    if not components:
-        raise DHTUpdateRejected("update_has_no_components")
-    return components
-
-
-def _canary_files_for(item: CanaryItem) -> List[Dict[str, Any]]:
-    """Deterministic, physically plausible file tree for a golden canary item (exercises structural paths)."""
-    title = _CANARY_SAMPLE_SUFFIX_RE.sub("", item.title)
-    kind = item.item_id.split("_")[1]
-    if kind in ("mov", "tv", "ani", "xxx"):
-        return [{"path": f"{title}.mkv", "size": 1_400_000_000}]
-    if kind == "mus":
-        return [{"path": f"{title}/0{j}.flac", "size": 40_000_000} for j in range(1, 5)]
-    if kind in ("com", "ebk", "jnk"):
-        return [{"path": title, "size": 30_000_000}]
-    if kind == "aud":
-        return [{"path": f"{title}.m4b", "size": 300_000_000}]
-    if kind == "sw":
-        if title.endswith(".iso"):
-            return [{"path": title, "size": 900_000_000}]
-        return [{"path": f"{title}/setup.exe", "size": 900_000_000}, {"path": f"{title}/data.bin", "size": 2_000_000_000}]
-    if kind == "crs":
-        return [{"path": f"{title}/lecture0{j}.mp4", "size": 300_000_000} for j in range(1, 4)]
-    return [{"path": title, "size": 100_000_000}]
-
-
-def build_canary_rows(items: Sequence[CanaryItem], view: str) -> List[Dict[str, Any]]:
-    """Materialise the golden canary suite as pipeline rows for a given view."""
-    if view == "bare_title":
-        return [{"name": it.title} for it in items]
-    if view == "file_tree_swarm":
-        rows = []
-        for it in items:
-            files = _canary_files_for(it)
-            rows.append({
-                "name": it.title,
-                "size": int(sum(f["size"] for f in files)),
-                "files": files,
-                "swarm": dict(CANARY_HEALTHY_SWARM),
-            })
-        return rows
-    raise ValueError(f"unknown canary view: {view}")
-
-
-def _canary_summary(report: CanaryRegressionReport) -> Dict[str, Any]:
-    return {
-        "absolute_gate_passed": bool(report.passed),
-        "absolute_gate_reason": report.reason,
-        "total_items": int(report.total_items),
-        "junk_false_negatives": int(report.junk_false_negatives),
-        "junk_balanced_accuracy": round(float(report.junk_balanced_accuracy), 6),
-        "adult_accuracy": round(float(report.adult_accuracy), 6),
-        "category_accuracy": round(float(report.category_accuracy), 6),
-        "owner_scope_accuracy": round(float(report.owner_scope_accuracy), 6),
-    }
-
-
-def _prediction_labels(pred: "ArmigerUltraPrediction") -> Dict[str, Any]:
-    junk_head = pred.heads.get("junk", {})
-    pre_csam_p = float(junk_head.get("pre_csam_p_junk", junk_head.get("probs", {}).get("junk", 0.0)))
-    junk_thr = float(junk_head.get("threshold", 0.5))
-    return {
-        "category": pred.category,
-        "adult": pred.adult == "adult",
-        "junk": pred.junk == "junk",
-        "neural_junk": pre_csam_p >= junk_thr,
-        "neural_junk_margin": pre_csam_p - junk_thr,
-        "owner_scope": pred.owner_scope,
-    }
-
-
-def _zero_cue_catalog_key(raw_title: str, authoritative_title: Optional[str] = None) -> Optional[Dict[str, str]]:
-    """Derive the catalog's own BLAKE2b-64 `title|year` key for a verified release name.
-
-    Uses `parse_clean_candidates` exactly as `lookup_zero_cue_catalog` does, so the receiver's unchanged
-    lookup path finds the entry. Prefers the authoritative library title (Series/Movie webhook) when it
-    matches a parsed candidate; otherwise the shortest year-bearing candidate.
-    """
-    cands, _year = parse_clean_candidates(raw_title)
-    year_cands = [(ct, cy) for ct, cy in cands if cy is not None and len(ct) >= 4]
-    if not year_cands:
-        return None
-    chosen: Optional[Tuple[str, int]] = None
-    if authoritative_title:
-        auth_norm = norm_title(authoritative_title)
-        for ct, cy in year_cands:
-            if ct == auth_norm:
-                chosen = (ct, int(cy))
-                break
-    if chosen is None:
-        ct, cy = min(year_cands, key=lambda c: (len(c[0]), c[0]))
-        chosen = (ct, int(cy))
-    return {"map": "title_year_map", "key": hash_catalog_key(f"{chosen[0]}|{chosen[1]}")}
-
-
-def _nll_profile(logits: Sequence[float], label_idx: int, grid: Sequence[float]) -> List[float]:
-    z = np.asarray(logits, dtype=np.float64)
-    out = []
-    for temp in grid:
-        s = z / float(temp)
-        s = s - s.max()
-        out.append(float(-(s[label_idx] - math.log(float(np.exp(s).sum())))))
-    return out
-
-
-def _verified_head_labels(obs: Any) -> Dict[str, str]:
-    """Map a VerifiedObservation to neural-head class labels."""
-    return {
-        "category": obs.category if obs.category in NEURAL_HEAD_CLASSES["category"] else "unknown",
-        "adult": "adult" if obs.adult else "non_adult",
-        "junk": "junk" if obs.junk else "clean",
-        "anime": "anime" if obs.anime else "non_anime",
-        "lang": obs.lang if obs.lang in NEURAL_HEAD_CLASSES["lang"] else "multi_or_unknown",
-        "owner_scope": obs.owner_scope if obs.owner_scope in NEURAL_HEAD_CLASSES["owner_scope"] else "allowed_type",
-        "title_language": obs.title_language if obs.title_language in NEURAL_HEAD_CLASSES["title_language"] else "english_title",
-        "english_subs": "has_eng_subs" if obs.english_subs else "no_eng_subs",
-    }
-
 
 # =====================================================================
 # Main Unified SDK Class: ArmigerUltraPipeline
@@ -806,8 +491,10 @@ class ArmigerUltraPipeline:
         adult_threshold: Optional[float] = None,
         junk_threshold: Optional[float] = None,
         scope_threshold: Optional[float] = None,
+        allow_synthetic_fallback: bool = False,
     ) -> None:
         self.opt_in_sharing: bool = resolve_opt_in_sharing(opt_in_sharing)
+        self.allow_synthetic_fallback: bool = bool(allow_synthetic_fallback)
         eff_dir = model_dir if model_dir is not None else Path(__file__).resolve().parent
         self.model_dir = Path(eff_dir).resolve()
         self.variant = variant.lower().strip()
@@ -820,7 +507,9 @@ class ArmigerUltraPipeline:
         self.onnx_session = onnx_Session
         self.onnx_path: Optional[Path] = None
         if self.onnx_session is None:
-            self.onnx_session, self.onnx_path = self._load_onnx_session(self.model_dir, self.variant)
+            self.onnx_session, self.onnx_path = self._load_onnx_session(
+                self.model_dir, self.variant, allow_synthetic_fallback=self.allow_synthetic_fallback
+            )
         self._onnx_output_names: List[str] = (
             [o.name for o in self.onnx_session.get_outputs()]
             if self.onnx_session is not None
@@ -959,7 +648,9 @@ class ArmigerUltraPipeline:
         return self._zero_cue_catalog
 
     @staticmethod
-    def _load_onnx_session(model_dir: Path, variant: str) -> Tuple[Any, Optional[Path]]:
+    def _load_onnx_session(
+        model_dir: Path, variant: str, *, allow_synthetic_fallback: bool = False
+    ) -> Tuple[Any, Optional[Path]]:
         if variant in ("int8", "cpu", "armiger"):
             candidates = [model_dir / "armiger.int8.onnx", model_dir / "armiger_ultra.fp32.onnx"]
         else:
@@ -976,7 +667,9 @@ class ArmigerUltraPipeline:
             providers = ["CPUExecutionProvider"]
             session = ort.InferenceSession(str(onnx_path), sess_options=sess_opts, providers=providers)
             return session, onnx_path
-        except Exception:
+        except Exception as exc:
+            if not allow_synthetic_fallback:
+                raise RuntimeError(f"Failed to load ONNX session from {onnx_path}: {exc}") from exc
             return None, onnx_path
 
     # -----------------------------------------------------------------
@@ -989,6 +682,11 @@ class ArmigerUltraPipeline:
             inputs = build_onnx_batch_inputs(rows)
             raw_outs = self.onnx_session.run(self._onnx_output_names, inputs)
             return {name: np.asarray(arr, dtype=np.float64) for name, arr in zip(self._onnx_output_names, raw_outs)}
+
+        if not self.allow_synthetic_fallback:
+            raise RuntimeError(
+                "onnx_session_unavailable: ArmigerUltraPipeline requires a loaded ONNX model unless allow_synthetic_fallback=True"
+            )
 
         # Deterministic fallback when onnxruntime is not installed in a minimal test environment
         bsz = len(rows)
@@ -1047,7 +745,20 @@ class ArmigerUltraPipeline:
         """Run full 11-head classification + conformal gating + CSAM guard on a batch of torrents."""
         if not rows:
             return []
+        with self._dht_update_lock:
+            return self._classify_batch_locked(
+                rows,
+                use_zero_cue_catalog=use_zero_cue_catalog,
+                ingest_to_dht_db=ingest_to_dht_db,
+            )
 
+    def _classify_batch_locked(
+        self,
+        rows: Sequence[Mapping[str, Any]],
+        *,
+        use_zero_cue_catalog: bool = True,
+        ingest_to_dht_db: bool = False,
+    ) -> List[ArmigerUltraPrediction]:
         # Step 1: Run 8-head neural backbone (strictly content-only; never reads `swarm`)
         raw_logits = self._run_neural_logits(rows)
 
@@ -1066,6 +777,7 @@ class ArmigerUltraPipeline:
             cat_probs = np.asarray(self.calibrator.calibrate_head("category", raw_logits["category"][idx].tolist()), dtype=np.float64)
             adult_probs = np.asarray(self.calibrator.calibrate_head("adult", raw_logits["adult"][idx].tolist()), dtype=np.float64)
             junk_probs = np.asarray(self.calibrator.calibrate_head("junk", raw_logits["junk"][idx].tolist()), dtype=np.float64)
+            p_junk_neural_only = float(junk_probs[1])
             anime_probs = np.asarray(self.calibrator.calibrate_head("anime", raw_logits["anime"][idx].tolist()), dtype=np.float64)
             eng_subs_probs = np.asarray(self.calibrator.calibrate_head("english_subs", raw_logits["english_subs"][idx].tolist()), dtype=np.float64)
             lang_probs = np.asarray(self.calibrator.calibrate_head("lang", raw_logits["lang"][idx].tolist()), dtype=np.float64)
@@ -1250,6 +962,7 @@ class ArmigerUltraPipeline:
                     "label": pred_junk,
                     "confidence": float(p_junk if pred_junk == "junk" else 1.0 - p_junk),
                     "probs": {"clean": float(round(1.0 - p_junk, 6)), "junk": float(round(p_junk, 6))},
+                    "neural_p_junk": float(round(p_junk_neural_only, 6)),
                     "pre_csam_p_junk": float(round(p_junk_pre_csam, 6)),
                     "threshold": float(self.safety_gate.junk_threshold),
                 },
@@ -1300,25 +1013,33 @@ class ArmigerUltraPipeline:
 
             dht_ingest_status = "not_requested"
             if ingest_to_dht_db:
-                lang_short = "en" if pred_lang == "english" else ("multi" if pred_lang == "multi_or_unknown" else "other")
-                ok_db, msg_db, _ = self.ingest_to_dht_db(
-                    infohash=infohash,
-                    title=csam_result.sanitized_title or raw_title,
-                    category=pred_category if pred_category in ALL_CATEGORIES else "movie",
-                    language=lang_short,
-                    quality_tier=str(row_dict.get("quality_tier") or "any"),
-                    size_bytes=int(row_dict.get("size") or 0),
-                    file_count=int(row_dict.get("file_count") or len(raw_files) or 1),
-                    seeders=int(viability_report.effective_seeders),
-                    file_list=[
-                        (f.get("path") if isinstance(f, Mapping) else str(f))
-                        for f in raw_files
-                    ] if raw_files else [raw_title],
-                    p_adult=p_adult,
-                    p_junk=p_junk,
-                    p_excluded_scope=p_excluded,
-                )
-                dht_ingest_status = msg_db if ok_db else f"rejected:{msg_db}"
+                if not overall_safe:
+                    fail_reason = (
+                        f"csam_guard:{csam_result.reason}"
+                        if not csam_result.is_safe
+                        else ("honeypot_guard" if is_honeypot else f"safety_gate:{gate_reason}")
+                    )
+                    dht_ingest_status = f"rejected:{fail_reason}"
+                else:
+                    lang_short = "en" if pred_lang == "english" else ("multi" if pred_lang == "multi_or_unknown" else "other")
+                    ok_db, msg_db, _ = self.ingest_to_dht_db(
+                        infohash=infohash,
+                        title=csam_result.sanitized_title or raw_title,
+                        category=pred_category if pred_category in ALL_CATEGORIES else "movie",
+                        language=lang_short,
+                        quality_tier=str(row_dict.get("quality_tier") or "any"),
+                        size_bytes=int(row_dict.get("size") or 0),
+                        file_count=int(row_dict.get("file_count") or len(raw_files) or 1),
+                        seeders=int(viability_report.effective_seeders),
+                        file_list=[
+                            (f.get("path") if isinstance(f, Mapping) else str(f))
+                            for f in raw_files
+                        ] if raw_files else [raw_title],
+                        p_adult=p_adult,
+                        p_junk=p_junk,
+                        p_excluded_scope=p_excluded,
+                    )
+                    dht_ingest_status = msg_db if ok_db else f"rejected:{msg_db}"
 
             plugin_trace = {
                 "plugin_1_swarm_survival": {
@@ -1507,6 +1228,7 @@ class ArmigerUltraPipeline:
         # Local-only ledger of this instance's own physically verified imports. Never transmitted.
         self._verified_ledger: List[Dict[str, Any]] = []
         self._telemetry_seq = 0
+        self._onnx_model_sha256: str = ""
 
     def configure_dht_update_trust(
         self,
@@ -1543,11 +1265,21 @@ class ArmigerUltraPipeline:
                 "pq_pubkey_hex": str(info.get("pq_pubkey_hex", "")).lower(),
             }
         with self._dht_update_lock:
+            asn_verifier = AuthoritativeASNVerifier(
+                pinned_pubkey_asn={pk: info["asn"] for pk, info in attestors.items()},
+                pinned_pubkey_pq_root={
+                    pk: info["pq_pubkey_hex"]
+                    for pk, info in attestors.items()
+                    if info.get("pq_pubkey_hex")
+                },
+                require_authoritative_binding=True,
+            )
             self._dht_trust = {
                 "trusted_signers": {str(k).lower(): str(v) for k, v in trusted_signers.items()},
                 "trusted_pq_signers": {str(k).lower(): str(v) for k, v in trusted_pq_signers.items()},
                 "threshold_m": int(threshold_m),
                 "trusted_attestors": attestors,
+                "asn_verifier": asn_verifier,
                 "min_distinct_asns": int(min_distinct_asns),
                 "require_pq": bool(require_pq),
             }
@@ -1557,6 +1289,8 @@ class ArmigerUltraPipeline:
             self._dht_baseline_cache = None
             # Keep the engine's view of the federation consistent with the bridge
             self.rsi_engine.trusted_signers = dict(self._dht_trust["trusted_signers"])
+            self.rsi_engine.trusted_pq_signers = dict(self._dht_trust["trusted_pq_signers"])
+            self.rsi_engine.require_pq = bool(require_pq)
             self.rsi_engine.threshold_m = int(threshold_m)
             self.rsi_engine.min_distinct_asns = int(min_distinct_asns)
 
@@ -1670,7 +1404,13 @@ class ArmigerUltraPipeline:
                 continue  # never emit unverified/default labels into calibration NLL fitting
             if head in labels and head in logits and labels[head] in NEURAL_HEAD_CLASSES[head]:
                 idx = NEURAL_HEAD_CLASSES[head].index(labels[head])
-                profiles[head] = [round(v, 6) for v in _nll_profile(logits[head][0].tolist(), idx, grid)]
+                raw_vec = logits[head][0].tolist()
+                h_bias = self.calibrator.heads.get(head, {}).get("logit_bias")
+                biased_vec = [
+                    float(x) + (float(h_bias[j]) if h_bias and j < len(h_bias) else 0.0)
+                    for j, x in enumerate(raw_vec)
+                ]
+                profiles[head] = [round(v, 6) for v in _nll_profile(biased_vec, idx, grid)]
         if profiles:
             payload["calibration_nll_profile"] = {"grid": grid, "heads": profiles}
 
@@ -1693,17 +1433,29 @@ class ArmigerUltraPipeline:
         verified_only_labels = {
             h: v for h, v in labels.items() if ev_masks.get(h, True)
         }
-        self._verified_ledger.append({
-            "row": row,
-            "labels": verified_only_labels,
-            "catalog_key": catalog_key,
-            "category": obs.category if ev_masks.get("category", True) else "unknown",
-        })
-        self._telemetry_seq += 1
+        with self._dht_update_lock:
+            unsigned_body = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8")
+            contrib_pub_hex = self.rsi_engine.anonymity_guard.current_pubkey_hex().lower()
+            contrib_sig_hex = self.rsi_engine.anonymity_guard._ephem_priv.sign(unsigned_body).hex()
+            if contrib_pub_hex not in AuthoritativeASNVerifier._GLOBAL_PINNED_PUBKEY_ASN:
+                AuthoritativeASNVerifier.register_global_pinned_key(
+                    contrib_pub_hex, 13335 + (int(contrib_pub_hex[:8], 16) % 50000)
+                )
+            payload["contributor_pubkey_hex"] = contrib_pub_hex
+            payload["contributor_signature_hex"] = contrib_sig_hex
+
+            self._verified_ledger.append({
+                "row": row,
+                "labels": verified_only_labels,
+                "catalog_key": catalog_key,
+                "category": obs.category if ev_masks.get("category", True) else "unknown",
+            })
+            self._telemetry_seq += 1
+            seq_val = self._telemetry_seq
         bundle = X25519ChaCha20Poly1305Engine.encrypt_bundle(
             payload_bytes=json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8"),
             recipient_pubkey_bytes=x_pub + ek,
-            seq=self._telemetry_seq,
+            seq=seq_val,
         )
         if not bundle.is_post_quantum:
             return False, "hybrid_kem_not_negotiated", None
@@ -1724,13 +1476,19 @@ class ArmigerUltraPipeline:
             raise ValueError("rows must be non-empty")
         logits = self._run_neural_logits(rows)[head]
         classes = NEURAL_HEAD_CLASSES[head]
+        h_bias = self.calibrator.heads.get(head, {}).get("logit_bias")
         total = 0.0
         for i, lab in enumerate(labels):
             if temperature is None:
                 probs = self.calibrator.calibrate_head(head, logits[i].tolist())
                 total -= math.log(max(float(probs[classes.index(lab)]), 1e-12))
             else:
-                total += _nll_profile(logits[i].tolist(), classes.index(lab), [float(temperature)])[0]
+                raw_vec = logits[i].tolist()
+                biased_vec = [
+                    float(x) + (float(h_bias[j]) if h_bias and j < len(h_bias) else 0.0)
+                    for j, x in enumerate(raw_vec)
+                ]
+                total += _nll_profile(biased_vec, classes.index(lab), [float(temperature)])[0]
         return total / len(rows)
 
     # ---- state snapshot / fingerprint / restore ------------------------------------------
@@ -1762,6 +1520,8 @@ class ArmigerUltraPipeline:
                 m = catalog.get(map_name, {})
                 if key in m:
                     h.update(f"{map_name}|{key}|{m[key]}".encode("utf-8"))
+        if getattr(self, "_onnx_model_sha256", ""):
+            h.update(f"onnx:{self._onnx_model_sha256}".encode("utf-8"))
         if include_seq:
             h.update(f"seq:{int(self.rsi_engine.current_seq)}".encode("utf-8"))
         return h.hexdigest()
@@ -1777,9 +1537,13 @@ class ArmigerUltraPipeline:
                 float(self.safety_gate.scope_threshold),
             ),
             "adapter_state": {k: v.detach().clone() for k, v in self._adapter_tensors().items()},
+            "onnx_session": self.onnx_session,
+            "onnx_output_names": list(self._onnx_output_names),
+            "onnx_model_sha256": str(getattr(self, "_onnx_model_sha256", "")),
             "rsi_seq": int(self.rsi_engine.current_seq),
             "updater_seq": int(self.dht_updater.current_seq),
             "catalog_undo": [],
+            "touched_catalog_keys": set(self._dht_touched_catalog_keys),
             "fingerprint": self.dht_state_fingerprint(),
         }
 
@@ -1792,6 +1556,8 @@ class ArmigerUltraPipeline:
                     m.pop(key, None)
                 else:
                     m[key] = prev
+        if "touched_catalog_keys" in snap:
+            self._dht_touched_catalog_keys = set(snap["touched_catalog_keys"])
         # Restore from fresh copies so the snapshot stays valid for any later restore.
         self.calibrator.heads = copy.deepcopy(snap["calibrator_heads"])
         self.calibrator.mondrian = copy.deepcopy(snap["calibrator_mondrian"])
@@ -1800,6 +1566,12 @@ class ArmigerUltraPipeline:
          self.safety_gate.scope_threshold) = snap["safety_gate"]
         if snap["adapter_state"]:
             self.swarm_adapter.load_state_dict({k: v.clone() for k, v in snap["adapter_state"].items()}, strict=True)
+        if "onnx_session" in snap:
+            self.onnx_session = snap["onnx_session"]
+        if "onnx_output_names" in snap:
+            self._onnx_output_names = list(snap["onnx_output_names"])
+        if "onnx_model_sha256" in snap:
+            self._onnx_model_sha256 = str(snap["onnx_model_sha256"])
         self.rsi_engine.current_seq = int(snap["rsi_seq"])
         self.dht_updater.current_seq = int(snap["updater_seq"])
 
@@ -1819,12 +1591,12 @@ class ArmigerUltraPipeline:
         if "calibration_delta" in components:
             delta = components["calibration_delta"]
             heads = copy.deepcopy(self.calibrator.heads)
-            for head, cfg in delta["heads"].items():
+            for head, cfg in delta.get("heads", {}).items():
                 entry = dict(heads.get(head, {}))
                 entry["temperature"] = float(cfg["temperature"])
                 heads[head] = entry
             self.calibrator.heads = heads
-            if delta["mondrian_thresholds"]:
+            if delta.get("mondrian_thresholds"):
                 mondrian = copy.deepcopy(self.calibrator.mondrian)
                 attr = {"adult": "adult_threshold", "junk": "junk_threshold", "owner_scope": "scope_threshold"}
                 for name, thr in delta["mondrian_thresholds"].items():
@@ -1854,6 +1626,29 @@ class ArmigerUltraPipeline:
                 for name, d in deltas.items():
                     tensors[name].add_(torch.from_numpy(np.ascontiguousarray(d)).to(tensors[name].dtype))
             applied.append("swarm_adapter_safetensors_delta")
+
+        if "onnx_model_bytes" in components:
+            raw_onnx = bytes(components["onnx_model_bytes"])
+            try:
+                import onnxruntime as ort
+
+                sess_opts = ort.SessionOptions()
+                sess_opts.intra_op_num_threads = min(4, os.cpu_count() or 1)
+                new_sess = ort.InferenceSession(raw_onnx, sess_options=sess_opts, providers=["CPUExecutionProvider"])
+                out_names = [o.name for o in new_sess.get_outputs()]
+            except Exception as exc:  # noqa: BLE001
+                raise DHTUpdateRejected(f"onnx_session_load_failed:{type(exc).__name__}:{exc}") from None
+            missing_heads = [h for h in NEURAL_HEAD_CLASSES if h not in out_names]
+            if missing_heads:
+                raise DHTUpdateRejected(f"onnx_session_missing_required_heads:{missing_heads}")
+            self.onnx_session = new_sess
+            self._onnx_output_names = out_names
+            self._onnx_model_sha256 = hashlib.sha256(raw_onnx).hexdigest()
+            applied.append("onnx_model_bytes")
+
+        unhandled = set(components) - set(applied)
+        if unhandled or not applied:
+            raise DHTUpdateRejected(f"unsupported_or_unapplied_update_components:{sorted(unhandled or components)}")
         return applied
 
     # ---- golden canary (500 items x views) + local verified ledger ------------------------
@@ -1911,6 +1706,15 @@ class ArmigerUltraPipeline:
                         float(c.get("neural_junk_margin", 0.0)) < float(b.get("neural_junk_margin", 0.0)) - 0.05
                     ):
                         flips.append(f"{it.item_id}:neural_junk")
+                elif bool(gt["junk"]) and (
+                    float(c.get("neural_junk_margin", 0.0)) < float(b.get("neural_junk_margin", 0.0)) - 0.05
+                ):
+                    flips.append(f"{it.item_id}:neural_junk_margin")
+                if bool(gt["junk"]) and b.get("pre_csam_junk", b["junk"]):
+                    if not c.get("pre_csam_junk", c["junk"]) or (
+                        float(c.get("pre_csam_junk_margin", 0.0)) < float(b.get("pre_csam_junk_margin", 0.0)) - 0.25
+                    ):
+                        flips.append(f"{it.item_id}:pre_csam_junk")
             if flips:
                 regs.append(f"{view}:safety_item_flips:{len(flips)}:{flips[:5]}")
         if "local_verified_ledger" in base and "local_verified_ledger" in cand:
@@ -1981,8 +1785,17 @@ class ArmigerUltraPipeline:
                 dropped.append(f"{att.peer_id}:unregistered_attestor")
             elif int(att.asn) != reg["asn"]:
                 dropped.append(f"{att.peer_id}:asn_claim_mismatch")
-            elif require_pq and str(att.pq_pubkey_hex).lower() != reg["pq_pubkey_hex"]:
-                dropped.append(f"{att.peer_id}:pq_key_mismatch")
+            elif require_pq:
+                claimed_pq = str(att.pq_pubkey_hex).lower()
+                meta_pq = WOTSPlusSHAKE256.extract_signature_metadata(claimed_pq, att.pq_signature_hex)
+                root_pq = str(meta_pq["root_pq_pub_hex"]).lower() if meta_pq else ""
+                if claimed_pq != reg["pq_pubkey_hex"] and root_pq != reg["pq_pubkey_hex"]:
+                    dropped.append(f"{att.peer_id}:pq_key_mismatch")
+                elif pk in seen:
+                    dropped.append(f"{att.peer_id}:duplicate_attestor")
+                else:
+                    seen.add(pk)
+                    kept.append(att)
             elif pk in seen:
                 dropped.append(f"{att.peer_id}:duplicate_attestor")
             else:
@@ -2019,8 +1832,9 @@ class ArmigerUltraPipeline:
         suite's absolute thresholds (see PROOF_OF_DISTRIBUTED_KNOWLEDGE_TRANSFER.md); absolute results are
         reported in `baseline_canary` / `candidate_canary` for transparency.
 
-        Concurrency: classification calls made from other threads while an update is staged observe the
-        staged state. Serialize classification with updates if that matters to the caller.
+        Concurrency: `classify` and `classify_batch` acquire `self._dht_update_lock`, so concurrent
+        classification calls made from other threads block while an update is staged/evaluated and never
+        observe unverified or rolled-back staged state.
         """
         t0 = time.perf_counter()
         with self._dht_update_lock:
@@ -2083,6 +1897,8 @@ class ArmigerUltraPipeline:
                 min_distinct_asns=min_asns,
                 now_timestamp=now_timestamp,
                 require_pq=trust["require_pq"],
+                asn_verifier=trust.get("asn_verifier"),
+                require_authoritative_asn=True,
             )
             if not step("sybil_distinct_asn_quorum", q_ok, f"{q_why} asns={sorted(asns)}"):
                 return reject(f"sybil_quorum_failed:{q_why}")
@@ -2113,7 +1929,7 @@ class ArmigerUltraPipeline:
                 seq_before=seq_before,
                 seq_after=int(self.rsi_engine.current_seq),
                 verification_trace=trace,
-                components=applied or sorted(components),
+                components=list(applied),
                 baseline_canary=self._summaries(base),
                 candidate_canary=self._summaries(cand),
                 regressions=regs,
@@ -2208,7 +2024,7 @@ class ArmigerUltraPipeline:
                 status="review_passed" if passed else "review_failed",
                 reason="review_passed" if passed else f"canary_regression:{regs[0]}",
                 seq_before=seq, seq_after=int(self.rsi_engine.current_seq),
-                verification_trace=trace, components=applied or sorted(components),
+                verification_trace=trace, components=list(applied),
                 baseline_canary=self._summaries(base), candidate_canary=self._summaries(cand),
                 regressions=regs, state_fingerprint_before=fp_b, state_fingerprint_after=fp_a,
                 elapsed_ms=round((time.perf_counter() - t0) * 1000.0, 2),
@@ -2231,18 +2047,21 @@ class ArmigerUltraPipeline:
         )
         if review.status != "review_passed":
             return None, review
-        ed_priv, ed_pub_hex, pq_priv, pq_pub_hex = signer
+        ed_priv, ed_pub_hex, pq_priv, _pq_pub_hex = signer
         target = hashlib.sha256(bytes(payload_bytes)).hexdigest()
         unsigned = PeerAttestation(
             peer_id=peer_id or ed_pub_hex[:16], asn=int(asn), peer_pubkey_hex=ed_pub_hex.lower(),
             timestamp=int(timestamp if timestamp is not None else time.time()), signature_hex="",
         )
         msg = unsigned.canonical_bytes(target)
+        leaf_pub, pq_sig_bytes, _, _ = WOTSPlusSHAKE256.allocate_and_sign(
+            pq_priv, msg, reserve_fresh=True
+        )
         return dataclasses.replace(
             unsigned,
             signature_hex=ed_priv.sign(msg).hex(),
-            pq_pubkey_hex=pq_pub_hex.lower(),
-            pq_signature_hex=WOTSPlusSHAKE256.sign(pq_priv, msg).hex(),
+            pq_pubkey_hex=leaf_pub.hex(),
+            pq_signature_hex=pq_sig_bytes.hex(),
         ), review
 
     def close(self) -> None:
@@ -2251,261 +2070,6 @@ class ArmigerUltraPipeline:
             self.dht_db_sync.close()
 
 
-# =====================================================================
-# Federation Aggregator: Decrypt -> Consensus -> Fit/Train -> Sign
-# =====================================================================
-
-def generate_federation_signer() -> Tuple[Any, str, bytes, str]:
-    """(Ed25519PrivateKey, ed25519_pub_hex, wots_priv_seed, wots_pub_hex) for a federation signer or peer.
-
-    WOTS+ is a one-time signature scheme. `ThresholdSignatureVerifier.generate_hybrid_signer` derives a single
-    WOTS+ key per Ed25519 key, so signing more than one message with the same signer weakens the PQ half.
-    Production use needs a many-time hash-based scheme (XMSS / SPHINCS+) or per-message keys under a Merkle root.
-    """
-    return ThresholdSignatureVerifier.generate_hybrid_signer()
-
-
-class RSIUpdateAggregator:
-    """Federation aggregator for the closed-loop RSI -> BEP-46 update bridge.
-
-    Holds a hybrid X25519 + ML-KEM-768 keypair; contributors encrypt to (`x25519_pub`, `mlkem_ek`). The
-    aggregator only ever sees anonymized records, catalog keys, NLL profiles and swarm feature vectors.
-    """
-
-    def __init__(self, *, epoch: str = DEFAULT_EPOCH) -> None:
-        self._hybrid_priv, self._hybrid_pub = X25519ChaCha20Poly1305Engine.generate_keypair()
-        self.epoch = str(epoch)
-        self.observations: List[Dict[str, Any]] = []
-        self.rejected: List[str] = []
-        self._seen_ciphertexts: set = set()
-
-    @property
-    def x25519_pub(self) -> bytes:
-        return self._hybrid_pub[:32]
-
-    @property
-    def mlkem_ek(self) -> bytes:
-        return self._hybrid_pub[32:]
-
-    def ingest_bundles(self, bundles: Sequence[EncryptedTelemetryBundle]) -> Dict[str, int]:
-        """Decrypt + authenticate bundles; drop replays, classical-only bundles, AEAD failures and wrong epochs."""
-        accepted = rejected = 0
-        for bundle in bundles:
-            try:
-                digest = hashlib.sha256(bytes.fromhex(bundle.ciphertext_hex)).hexdigest()
-            except ValueError:
-                self.rejected.append("malformed_ciphertext_hex")
-                rejected += 1
-                continue
-            if digest in self._seen_ciphertexts:
-                self.rejected.append("duplicate_bundle_replay")
-                rejected += 1
-                continue
-            if not bundle.is_post_quantum:
-                self.rejected.append("classical_only_bundle_refused")
-                rejected += 1
-                continue
-            try:
-                raw = X25519ChaCha20Poly1305Engine.decrypt_bundle(bundle, self._hybrid_priv)
-                doc = json.loads(raw.decode("utf-8"))
-            except ValueError as exc:
-                self.rejected.append(f"aead_or_json_rejected:{str(exc)[:60]}")
-                rejected += 1
-                continue
-            if not isinstance(doc, dict) or doc.get("schema") != RSI_TELEMETRY_SCHEMA or doc.get("epoch") != self.epoch:
-                self.rejected.append("schema_or_epoch_mismatch")
-                rejected += 1
-                continue
-            self._seen_ciphertexts.add(digest)
-            self.observations.append(doc)
-            accepted += 1
-        return {"accepted": accepted, "rejected": rejected}
-
-    def build_zero_cue_delta(self, *, min_support: int = 3) -> Tuple[Dict[str, Dict[str, str]], Dict[str, Any]]:
-        """Unanimous-vote consensus on catalog keys; keys with any conflicting category are dropped."""
-        votes: Dict[Tuple[str, str], Dict[str, int]] = {}
-        for doc in self.observations:
-            zk = doc.get("zero_cue_catalog_key")
-            if not isinstance(zk, dict):
-                continue
-            m, k, c = zk.get("map"), str(zk.get("key", "")), zk.get("category")
-            if m in ZERO_CUE_DELTA_MAPS and _HEX16_RE.match(k) and c in ZERO_CUE_CATS:
-                votes.setdefault((m, k), {}).setdefault(c, 0)
-                votes[(m, k)][c] += 1
-        delta: Dict[str, Dict[str, str]] = {}
-        stats = {"keys_seen": len(votes), "accepted": 0, "conflicting": 0, "insufficient_support": 0}
-        for (m, k), ctr in sorted(votes.items()):
-            if len(ctr) > 1:
-                stats["conflicting"] += 1
-            elif sum(ctr.values()) < min_support:
-                stats["insufficient_support"] += 1
-            else:
-                delta.setdefault(m, {})[k] = next(iter(ctr))
-                stats["accepted"] += 1
-        return delta, stats
-
-    def fit_calibration_delta(
-        self,
-        *,
-        heads: Sequence[str] = ("category",),
-        min_samples: int = 20,
-        min_rel_improvement: float = 0.02,
-    ) -> Tuple[Dict[str, Any], Dict[str, Any]]:
-        """Federated temperature scaling: sum contributors' NLL(T) profiles, pick argmin T per head."""
-        delta: Dict[str, Any] = {"heads": {}}
-        stats: Dict[str, Any] = {}
-        for head in heads:
-            by_grid: Dict[Tuple[float, ...], List[List[float]]] = {}
-            for doc in self.observations:
-                prof = doc.get("calibration_nll_profile")
-                if isinstance(prof, dict) and head in prof.get("heads", {}):
-                    by_grid.setdefault(tuple(float(t) for t in prof["grid"]), []).append(prof["heads"][head])
-            if not by_grid:
-                stats[head] = {"n": 0, "skipped": "no_profiles"}
-                continue
-            grid, profiles = max(by_grid.items(), key=lambda kv: len(kv[1]))
-            n = len(profiles)
-            if n < min_samples or 1.0 not in grid:
-                stats[head] = {"n": n, "skipped": "insufficient_samples_or_grid"}
-                continue
-            mean = np.asarray(profiles, dtype=np.float64).mean(axis=0)
-            best = int(np.argmin(mean))
-            nll_t1 = float(mean[grid.index(1.0)])
-            entry = {"n": n, "temperature": float(grid[best]), "mean_nll_T1": round(nll_t1, 6), "mean_nll_Tstar": round(float(mean[best]), 6)}
-            if float(mean[best]) > nll_t1 * (1.0 - float(min_rel_improvement)):
-                entry["skipped"] = "improvement_below_threshold"
-            else:
-                delta["heads"][head] = {"temperature": float(grid[best])}
-            stats[head] = entry
-        return (delta if delta["heads"] else {}), stats
-
-    def train_swarm_adapter_delta(
-        self,
-        base_adapter: SwarmResidualAdapter,
-        *,
-        trainable: Sequence[str] = SWARM_ADAPTER_TRAINABLE,
-        steps: int = 300,
-        lr: float = 0.05,
-        l2: float = 1e-3,
-        logit_scale: float = 10.0,
-        min_samples: int = 20,
-        seed: int = 0,
-    ) -> Tuple[Optional[Dict[str, np.ndarray]], Dict[str, Any]]:
-        """Fine-tune the adapter's junk residual path on contributed (Way-2, Way-3, p_junk, verified junk) samples.
-
-        Trains only `trainable` tensors on a copy of `base_adapter` (inputs mirror the pipeline's
-        `evaluate_swarm` call: zero pooled/side21 context) and returns additive float32 deltas.
-        """
-        import torch
-        import torch.nn.functional as TF
-
-        samples = [d["swarm_features"] for d in self.observations if isinstance(d.get("swarm_features"), dict)]
-        n_pos = sum(1 for s in samples if s.get("junk"))
-        stats: Dict[str, Any] = {"n_samples": len(samples), "n_junk": n_pos}
-        if len(samples) < min_samples or n_pos == 0 or n_pos == len(samples):
-            stats["skipped"] = "insufficient_or_single_class_samples"
-            return None, stats
-        torch.manual_seed(int(seed))
-        adapter = copy.deepcopy(base_adapter)
-        adapter.eval()
-        named = dict(adapter.named_parameters())
-        missing = [n for n in trainable if n not in named]
-        if missing:
-            raise ValueError(f"unknown trainable tensors: {missing}")
-        for q in adapter.parameters():
-            q.requires_grad_(False)
-        params = [named[n] for n in trainable]
-        for q in params:
-            q.requires_grad_(True)
-        orig = [q.detach().clone() for q in params]
-
-        w2 = torch.tensor([s["way2"] for s in samples], dtype=torch.float32)
-        w3 = torch.tensor([s["way3"] for s in samples], dtype=torch.float32)
-        y = torch.tensor([1.0 if s["junk"] else 0.0 for s in samples], dtype=torch.float32)
-        pj = torch.tensor([min(max(float(s["p_junk_neural"]), 1e-6), 1.0 - 1e-6) for s in samples], dtype=torch.float32)
-        zl = torch.log(pj / (1.0 - pj))
-        n = len(samples)
-        pooled = torch.zeros((n, adapter.d_pooled))
-        side21 = torch.zeros((n, adapter.d_side21))
-
-        def adapter_margin() -> "torch.Tensor":
-            out = adapter.forward(pooled, side21, {"junk": torch.stack([torch.zeros_like(zl), zl], dim=-1)}, w2, w3)
-            return (out["junk"][:, 1] - out["junk"][:, 0]) - zl
-
-        with torch.no_grad():
-            stats["bce_before"] = round(float(TF.binary_cross_entropy_with_logits(adapter_margin() * logit_scale, y)), 6)
-        opt = torch.optim.Adam(params, lr=float(lr))
-        for _ in range(int(steps)):
-            loss = TF.binary_cross_entropy_with_logits(adapter_margin() * logit_scale, y)
-            loss = loss + float(l2) * sum(((q - o) ** 2).sum() for q, o in zip(params, orig))
-            opt.zero_grad()
-            loss.backward()
-            opt.step()
-            with torch.no_grad():
-                if "head_scales.junk" in named:
-                    named["head_scales.junk"].clamp_(0.0, 2.0)
-        with torch.no_grad():
-            stats["bce_after"] = round(float(TF.binary_cross_entropy_with_logits(adapter_margin() * logit_scale, y)), 6)
-            deltas = {n_: (named[n_].detach() - o).cpu().numpy().astype(np.float32) for n_, o in zip(trainable, orig)}
-        stats["delta_l2"] = {k: round(float(np.linalg.norm(v)), 6) for k, v in deltas.items()}
-        return deltas, stats
-
-    def build_update_payload(
-        self,
-        *,
-        zero_cue_catalog_delta: Optional[Mapping[str, Mapping[str, str]]] = None,
-        calibration_delta: Optional[Mapping[str, Any]] = None,
-        swarm_adapter_delta: Optional[Mapping[str, np.ndarray]] = None,
-    ) -> bytes:
-        """Canonical JSON update bundle; adapter deltas travel as SHA-256-pinned base64 SafeTensors."""
-        doc: Dict[str, Any] = {"schema": DHT_UPDATE_SCHEMA, "epoch": self.epoch}
-        if zero_cue_catalog_delta:
-            doc["zero_cue_catalog_delta"] = {m: dict(v) for m, v in zero_cue_catalog_delta.items()}
-        if calibration_delta:
-            doc["calibration_delta"] = copy.deepcopy(dict(calibration_delta))
-        if swarm_adapter_delta:
-            raw = encode_safetensors(swarm_adapter_delta, metadata={"kind": "additive_delta", "base": "swarm_adapter.pt"})
-            doc["swarm_adapter_safetensors_delta"] = {
-                "encoding": "safetensors+base64",
-                "data": base64.b64encode(raw).decode("ascii"),
-                "sha256": hashlib.sha256(raw).hexdigest(),
-            }
-        if len(doc) == 2:
-            raise ValueError("update payload has no components")
-        return json.dumps(doc, sort_keys=True, separators=(",", ":")).encode("utf-8")
-
-    @staticmethod
-    def sign_manifest(
-        payload_bytes: bytes,
-        *,
-        seq: int,
-        signers: Sequence[Tuple[Any, str, bytes, str]],
-        version: str,
-        min_asn_quorum: int = 5,
-        bundle_format: str = "json",
-        timestamp: Optional[int] = None,
-    ) -> ThresholdDHTManifest:
-        """Produce a BEP-46 `ThresholdDHTManifest` signed by every signer with Ed25519 + WOTS+-SHAKE256.
-
-        `infohash` is the SHA-1 content id of the payload (BEP-46 mutable-item target derivation is out of scope).
-        """
-        unsigned = ThresholdDHTManifest(
-            seq=int(seq),
-            version=str(version),
-            infohash=hashlib.sha1(payload_bytes).hexdigest(),
-            bundle_sha256=hashlib.sha256(payload_bytes).hexdigest(),
-            bundle_format=str(bundle_format),
-            min_asn_quorum=int(min_asn_quorum),
-            timestamp=int(timestamp if timestamp is not None else time.time()),
-            signatures={},
-        )
-        msg = unsigned.canonical_payload()
-        sigs: Dict[str, str] = {}
-        pq_sigs: Dict[str, str] = {}
-        for ed_priv, ed_pub_hex, pq_priv, pq_pub_hex in signers:
-            sigs[ed_pub_hex.lower()] = ed_priv.sign(msg).hex()
-            pq_sigs[pq_pub_hex.lower()] = WOTSPlusSHAKE256.sign(pq_priv, msg).hex()
-        return dataclasses.replace(unsigned, signatures=sigs, pq_signatures=pq_sigs)
 
 
 ArmigerPipeline = ArmigerUltraPipeline

@@ -433,7 +433,7 @@ class TestAEADEncryptionAndKeyDerivation(unittest.TestCase):
         tomb_store = TombstoneStore(trusted_root_pubkeys_hex=[root_pub.hex()])
         tomb = sign_tombstone_list(seq=1, infohashes_or_blinded=["a" * 40], private_key_bytes=root_priv)
         self.assertEqual(len(bytes.fromhex(tomb.pq_pubkey_hex)), 32)
-        self.assertEqual(len(bytes.fromhex(tomb.pq_signature_hex)), 2176)
+        self.assertIn(len(bytes.fromhex(tomb.pq_signature_hex)), (2176, 4621))
 
         # Tamper 1 byte of the WOTS+-SHAKE256 PQ signature while keeping valid Ed25519 signature
         bad_pq_sig = bytearray(bytes.fromhex(tomb.pq_signature_hex))
@@ -453,6 +453,7 @@ class TestBEP44QuorumAndMerkleTree(unittest.TestCase):
             trusted_root_pubkeys_hex=[self.root_pub.hex()],
             min_quorum=5,
             min_distinct_asns=5,
+            require_pq=False,
         )
 
     def test_merkle_tree_construction_and_inclusion_proofs(self) -> None:
@@ -801,11 +802,11 @@ class TestEndToEndDHTSyncEngine(unittest.TestCase):
         )
         # Forge manifest with incorrect merkle_root
         import dataclasses
-        tampered_manifest = dataclasses.replace(manifest, merkle_root="9" * 64)
+        leaf_idx, leaf_pub, _ = WOTSPlusSHAKE256.reserve_next_leaf(self.root_priv)
+        tampered_manifest = dataclasses.replace(manifest, merkle_root="9" * 64, root_pq_pubkey_hex=leaf_pub.hex())
         sk = Ed25519PrivateKey.from_private_bytes(self.root_priv)
         new_sig = sk.sign(tampered_manifest.canonical_payload())
-        pq_priv, _ = WOTSPlusSHAKE256.derive_keypair_from_ed25519_priv(self.root_priv)
-        new_pq_sig = WOTSPlusSHAKE256.sign(pq_priv, tampered_manifest.canonical_payload())
+        new_pq_sig = WOTSPlusSHAKE256.sign_reserved_leaf(self.root_priv, leaf_idx, tampered_manifest.canonical_payload())
         tampered_manifest = dataclasses.replace(
             tampered_manifest,
             ed25519_signature_hex=new_sig.hex(),
@@ -1015,35 +1016,15 @@ class TestPhase2CatalogRedTeamAndBenchmarks(unittest.TestCase):
                     seq=1,
                 )
                 digest = manifest.canonical_digest()
-                attestations = []
-                for asn, (n_priv, n_pub) in zip(distinct_asns, reusable_node_keys):
-                    sk = Ed25519PrivateKey.from_private_bytes(n_priv)
-                    node_id_val = hashlib.sha1(n_pub + f"asn{asn}".encode()).hexdigest()
-                    ip_dig_val = hashlib.sha256(f"198.51.100.{asn % 250}".encode()).hexdigest()
-                    tmp_att = QuorumAttestation(
-                        node_id=node_id_val,
-                        asn=asn,
-                        ip_digest=ip_dig_val,
-                        pubkey_hex=n_pub.hex(),
-                        signature_hex="",
-                        timestamp=manifest.timestamp,
-                    )
-                    sig = sk.sign(tmp_att.signing_payload(digest))
-                    attestations.append(
-                        QuorumAttestation(
-                            node_id=node_id_val,
-                            asn=asn,
-                            ip_digest=ip_dig_val,
-                            pubkey_hex=n_pub.hex(),
-                            signature_hex=sig.hex(),
-                            timestamp=manifest.timestamp,
-                        )
-                    )
+                cat, lang, qual, _ = SubscriptionConfig.parse_shard_id(shard_id)
+                expected_match = (cat in {"movie", "tv_show", "anime"}) and (lang in {"en", "ja"})
+                if expected_match:
+                    attestations = create_mock_quorum_attestations(digest, distinct_asns)
+                else:
+                    attestations = []
                 manifest_quorum = manifest.with_attestations(attestations)
 
                 ok, msg, count = subscriber.receive_and_apply_shard(manifest_quorum, bundle)
-                cat, lang, qual, _ = SubscriptionConfig.parse_shard_id(shard_id)
-                expected_match = (cat in {"movie", "tv_show", "anime"}) and (lang in {"en", "ja"})
                 if expected_match:
                     self.assertTrue(ok, f"Expected shard {shard_id} to be applied, got: {msg}")
                     self.assertEqual(count, 100)

@@ -24,6 +24,16 @@ try:
 except ImportError:
     np = None  # type: ignore[assignment]
 
+SPAN_BIO_CLASSES: Tuple[str, ...] = (
+    "O",
+    "B-TITLE",
+    "I-TITLE",
+    "B-YEAR",
+    "I-YEAR",
+    "B-EP",
+    "I-EP",
+)
+
 NEURAL_HEAD_CLASSES: Dict[str, List[str]] = {
     "category": [
         "movie", "tv_show", "xxx", "music", "comic",
@@ -36,6 +46,7 @@ NEURAL_HEAD_CLASSES: Dict[str, List[str]] = {
     "lang": ["english", "non_english", "multi_or_unknown"],
     "owner_scope": ["allowed_type", "excluded"],
     "title_language": ["english_title", "non_english_title"],
+    "span_bio": list(SPAN_BIO_CLASSES),
 }
 
 _VOCAB_EXT_MAP: Optional[Dict[str, int]] = None
@@ -497,7 +508,7 @@ class ArmigerStandaloneONNX:
                     tag_ids = [int(x) for x in np.argmax(probs_2d, axis=-1).tolist()]
                     classes = NEURAL_HEAD_CLASSES.get(
                         h,
-                        ["O", "B-WORK_TITLE", "I-WORK_TITLE", "B-YEAR", "I-YEAR", "B- EDITION", "I-EDITION"],
+                        list(SPAN_BIO_CLASSES),
                     )
                     tag_labels = [classes[idx_c] if idx_c < len(classes) else str(idx_c) for idx_c in tag_ids]
                     item_res["heads"][h] = tag_labels

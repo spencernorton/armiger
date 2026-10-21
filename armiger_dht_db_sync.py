@@ -30,6 +30,7 @@ import dataclasses
 import enum
 import hashlib
 import hmac
+import io
 import json
 import os
 import pathlib
@@ -137,6 +138,7 @@ QUALITY_TIERS: tuple[str, ...] = (
 )
 
 DEFAULT_EPOCH = "2026_q4"
+SQLITE_MAX_INT64 = (1 << 63) - 1
 
 
 class SyncMode(str, enum.Enum):
@@ -544,24 +546,37 @@ class ShardCryptoEngine:
 
 
 # ---------------------------------------------------------------------------
-# Compression Utilities (Zstd with Zlib fallback)
+# Compression Utilities (Deterministic Mandatory Zlib Wire Codec + Optional Zstd)
 # ---------------------------------------------------------------------------
 
-def compress_payload(data: bytes) -> tuple[bytes, str]:
-    """Compress payload using Zstd (level 7) or fallback to Zlib (level 9)."""
-    if _HAS_ZSTD:
-        cctx = zstd.ZstdCompressor(level=7)
-        return cctx.compress(data), "zstd"
-    return zlib.compress(data, level=9), "zlib"
-
-
+MANDATORY_WIRE_CODEC = "zlib"
+ZSTD_MAGIC = b"\x28\xb5\x2f\xfd"
 MAX_DECOMPRESSED_SHARD_BYTES = 4 * 1024 * 1024
 MAX_DECOMPRESSION_RATIO = 50
 
 
+def compress_payload(data: bytes, codec: str = MANDATORY_WIRE_CODEC) -> tuple[bytes, str]:
+    """Compress payload using the mandatory deterministic wire codec ('zlib' level 9) by default.
+
+    All peers in the swarm MUST produce identical compressed bytes for the same record set
+    so that content-addressed shard digests and BEP-46 infohashes match across hosts regardless
+    of whether optional `zstandard` is installed. Explicit `codec='zstd'` is supported only when
+    `zstandard` is available.
+    """
+    norm_codec = str(codec or MANDATORY_WIRE_CODEC).strip().lower()
+    if norm_codec == "zlib":
+        return zlib.compress(data, level=9), "zlib"
+    if norm_codec == "zstd":
+        if not _HAS_ZSTD:
+            raise RuntimeError("zstd_codec_unavailable: optional zstandard package is not installed")
+        cctx = zstd.ZstdCompressor(level=7)
+        return cctx.compress(data), "zstd"
+    raise ValueError(f"Unsupported compression codec: {codec}")
+
+
 def decompress_payload(
     compressed: bytes,
-    codec: str = "zstd",
+    codec: str = MANDATORY_WIRE_CODEC,
     max_output_bytes: int = MAX_DECOMPRESSED_SHARD_BYTES,
     max_ratio: int = MAX_DECOMPRESSION_RATIO,
 ) -> bytes:
@@ -571,24 +586,42 @@ def decompress_payload(
     hard_cap = min(max_output_bytes, max(65536, len(compressed) * max_ratio))
 
     def _zlib_bounded(data: bytes) -> bytes:
-        dobj = zlib.decompressobj()
-        out = dobj.decompress(data, hard_cap + 1)
-        if dobj.unconsumed_tail or len(out) > hard_cap:
+        try:
+            dobj = zlib.decompressobj()
+            out = dobj.decompress(data, hard_cap + 1)
+            if dobj.unconsumed_tail or len(out) > hard_cap:
+                return b""
+            out += dobj.flush()
+            if len(out) > hard_cap:
+                return b""
+            return out
+        except Exception:
             return b""
-        return out
 
-    if codec == "zstd":
-        if _HAS_ZSTD:
-            try:
-                dctx = zstd.ZstdDecompressor()
-                out = dctx.decompress(compressed, max_output_size=hard_cap + 1)
-                if len(out) > hard_cap:
-                    return b""
-                return out
-            except Exception:
-                return _zlib_bounded(compressed)
+    norm_codec = str(codec or MANDATORY_WIRE_CODEC).strip().lower()
+    is_zstd_frame = compressed.startswith(ZSTD_MAGIC)
+
+    if norm_codec == "zlib" and not is_zstd_frame:
         return _zlib_bounded(compressed)
-    elif codec == "zlib":
+    if norm_codec in ("zstd", "zlib") and is_zstd_frame:
+        if not _HAS_ZSTD:
+            return b""
+        try:
+            params = zstd.get_frame_parameters(compressed)
+            if (
+                params.content_size not in (0, zstd.CONTENTSIZE_UNKNOWN)
+                and params.content_size > hard_cap
+            ):
+                return b""
+            dctx = zstd.ZstdDecompressor()
+            with dctx.stream_reader(io.BytesIO(compressed)) as reader:
+                out = reader.read(hard_cap + 1)
+            if len(out) > hard_cap:
+                return b""
+            return out
+        except Exception:
+            return b""
+    if norm_codec == "zstd":
         return _zlib_bounded(compressed)
     raise ValueError(f"Unsupported compression codec: {codec}")
 
@@ -654,7 +687,7 @@ class ShardDatabase:
     def __init__(self, db_path: str | pathlib.Path = ":memory:", enable_xxx: bool = False) -> None:
         self.db_path = str(db_path)
         self.enable_xxx = enable_xxx
-        self.conn = sqlite3.connect(self.db_path)
+        self.conn = sqlite3.connect(self.db_path, timeout=10.0)
         self.conn.row_factory = sqlite3.Row
         self._init_schema()
 
@@ -675,11 +708,23 @@ class ShardDatabase:
                     leechers INTEGER NOT NULL,
                     content_sha256 TEXT NOT NULL,
                     file_list_json TEXT NOT NULL,
+                    safety_gate_passed INTEGER NOT NULL DEFAULT 1,
                     created_at INTEGER NOT NULL
                 )
             """)
+            try:
+                self.conn.execute("ALTER TABLE mainstream_torrents ADD COLUMN safety_gate_passed INTEGER NOT NULL DEFAULT 1")
+            except sqlite3.OperationalError:
+                pass
             self.conn.execute("CREATE INDEX IF NOT EXISTS idx_main_cat_lang ON mainstream_torrents(category, language)")
             self.conn.execute("CREATE INDEX IF NOT EXISTS idx_main_epoch ON mainstream_torrents(epoch)")
+            self.conn.execute("""
+                CREATE TABLE IF NOT EXISTS shard_sequences (
+                    shard_id TEXT PRIMARY KEY,
+                    seq INTEGER NOT NULL,
+                    updated_at INTEGER NOT NULL
+                )
+            """)
 
             # Isolated adult table
             if self.enable_xxx:
@@ -697,13 +742,37 @@ class ShardDatabase:
                         leechers INTEGER NOT NULL,
                         content_sha256 TEXT NOT NULL,
                         file_list_json TEXT NOT NULL,
+                        safety_gate_passed INTEGER NOT NULL DEFAULT 1,
                         created_at INTEGER NOT NULL
                     )
                 """)
+                try:
+                    self.conn.execute("ALTER TABLE adult_torrents ADD COLUMN safety_gate_passed INTEGER NOT NULL DEFAULT 1")
+                except sqlite3.OperationalError:
+                    pass
                 self.conn.execute("CREATE INDEX IF NOT EXISTS idx_adult_lang ON adult_torrents(language)")
+
+    def get_shard_sequences(self) -> dict[str, int]:
+        """Return durable per-shard monotonic sequence high-water marks from SQLite."""
+        cur = self.conn.cursor()
+        cur.execute("SELECT shard_id, seq FROM shard_sequences")
+        return {str(row["shard_id"]): int(row["seq"]) for row in cur.fetchall()}
 
     def insert_record(self, record: TorrentRecord) -> bool:
         """Insert a torrent record into the appropriate partitioned table."""
+        if not record.safety_gate_passed:
+            return False
+        for fname, fval in (
+            ("size_bytes", record.size_bytes),
+            ("file_count", record.file_count),
+            ("seeders", record.seeders),
+            ("leechers", record.leechers),
+            ("created_at", record.created_at),
+        ):
+            if isinstance(fval, bool) or not isinstance(fval, int) or fval < 0:
+                raise ValueError(f"invalid_shard_record_int_field:{fname}")
+            if fval > SQLITE_MAX_INT64:
+                raise ValueError(f"integer_overflow_for_sqlite_int64:{fname}")
         cat_clean = record.category.strip().lower()
         if cat_clean not in ALL_CATEGORIES:
             return False
@@ -718,8 +787,8 @@ class ShardDatabase:
                 INSERT OR REPLACE INTO {table} (
                     infohash, title, category, language, quality_tier, epoch,
                     size_bytes, file_count, seeders, leechers, content_sha256,
-                    file_list_json, created_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    file_list_json, safety_gate_passed, created_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     record.infohash.strip().lower(),
@@ -734,18 +803,37 @@ class ShardDatabase:
                     record.leechers,
                     record.content_sha256.lower(),
                     json.dumps(record.file_list),
+                    1 if record.safety_gate_passed else 0,
                     record.created_at,
                 ),
             )
         return True
 
-    def insert_records_batch(self, records: Sequence[TorrentRecord]) -> int:
-        """Batch-insert validated torrent records within a single SQLite transaction."""
-        if not records:
+    def insert_records_batch(
+        self,
+        records: Sequence[TorrentRecord],
+        shard_id: str | None = None,
+        seq: int | None = None,
+    ) -> int:
+        """Batch-insert validated torrent records and advance shard sequence within a single SQLite transaction."""
+        if not records and (shard_id is None or seq is None):
             return 0
         main_rows: list[tuple[Any, ...]] = []
         adult_rows: list[tuple[Any, ...]] = []
         for record in records:
+            if not record.safety_gate_passed:
+                raise ValueError(f"record_failed_safety_gate:{record.infohash}")
+            for fname, fval in (
+                ("size_bytes", record.size_bytes),
+                ("file_count", record.file_count),
+                ("seeders", record.seeders),
+                ("leechers", record.leechers),
+                ("created_at", record.created_at),
+            ):
+                if isinstance(fval, bool) or not isinstance(fval, int) or fval < 0:
+                    raise ValueError(f"invalid_shard_record_int_field:{fname}")
+                if fval > SQLITE_MAX_INT64:
+                    raise ValueError(f"integer_overflow_for_sqlite_int64:{fname}")
             cat_clean = record.category.strip().lower()
             if cat_clean not in ALL_CATEGORIES:
                 continue
@@ -765,6 +853,7 @@ class ShardDatabase:
                 record.leechers,
                 record.content_sha256.lower(),
                 json.dumps(record.file_list),
+                1 if record.safety_gate_passed else 0,
                 record.created_at,
             )
             if is_adult:
@@ -772,15 +861,26 @@ class ShardDatabase:
             else:
                 main_rows.append(row)
 
-        with self.conn:
+        if self.conn.in_transaction:
+            self.conn.commit()
+        self.conn.execute("BEGIN IMMEDIATE")
+        try:
+            if shard_id is not None and seq is not None:
+                norm_shard = shard_id.strip().lower()
+                cur_row = self.conn.execute(
+                    "SELECT seq FROM shard_sequences WHERE shard_id = ?",
+                    (norm_shard,),
+                ).fetchone()
+                if cur_row is not None and int(seq) <= int(cur_row["seq"]):
+                    raise ValueError(f"stale_or_downgrade_sequence:{seq}<={cur_row['seq']}")
             if main_rows:
                 self.conn.executemany(
                     """
                     INSERT OR REPLACE INTO mainstream_torrents (
                         infohash, title, category, language, quality_tier, epoch,
                         size_bytes, file_count, seeders, leechers, content_sha256,
-                        file_list_json, created_at
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        file_list_json, safety_gate_passed, created_at
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     main_rows,
                 )
@@ -790,11 +890,28 @@ class ShardDatabase:
                     INSERT OR REPLACE INTO adult_torrents (
                         infohash, title, category, language, quality_tier, epoch,
                         size_bytes, file_count, seeders, leechers, content_sha256,
-                        file_list_json, created_at
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        file_list_json, safety_gate_passed, created_at
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     adult_rows,
                 )
+            if shard_id is not None and seq is not None:
+                self.conn.execute(
+                    """
+                    INSERT INTO shard_sequences (shard_id, seq, updated_at)
+                    VALUES (?, ?, ?)
+                    ON CONFLICT(shard_id) DO UPDATE SET
+                        seq = excluded.seq,
+                        updated_at = excluded.updated_at
+                    WHERE excluded.seq > shard_sequences.seq
+                    """,
+                    (shard_id.strip().lower(), int(seq), int(time.time())),
+                )
+            self.conn.commit()
+        except Exception:
+            if self.conn.in_transaction:
+                self.conn.rollback()
+            raise
         return len(main_rows) + len(adult_rows)
 
     def get_record(self, infohash: str) -> TorrentRecord | None:
@@ -823,7 +940,7 @@ class ShardDatabase:
             leechers=row["leechers"],
             content_sha256=row["content_sha256"],
             file_list=json.loads(row["file_list_json"]),
-            safety_gate_passed=True,
+            safety_gate_passed=bool(row["safety_gate_passed"]),
             created_at=row["created_at"],
         )
 
@@ -908,7 +1025,7 @@ class ShardDatabase:
                 leechers=row["leechers"],
                 content_sha256=row["content_sha256"],
                 file_list=json.loads(row["file_list_json"]),
-                safety_gate_passed=True,
+                safety_gate_passed=bool(row["safety_gate_passed"]),
                 created_at=row["created_at"],
             ))
         return results
@@ -927,8 +1044,17 @@ class ShardDatabase:
 # Shard Serialization & Deserialization
 # ---------------------------------------------------------------------------
 
-def serialize_shard_records(records: Sequence[TorrentRecord]) -> tuple[bytes, MerkleTree]:
-    """Serialize a list of TorrentRecords into a deterministic compressed micro-bundle."""
+def serialize_shard_records(
+    records: Sequence[TorrentRecord],
+    *,
+    max_output_bytes: int = MAX_DECOMPRESSED_SHARD_BYTES,
+    max_ratio: int = MAX_DECOMPRESSION_RATIO,
+) -> tuple[bytes, MerkleTree]:
+    """Serialize a list of TorrentRecords into a deterministic compressed micro-bundle.
+
+    Enforces `MAX_DECOMPRESSED_SHARD_BYTES` and `MAX_DECOMPRESSION_RATIO` at build time
+    before any one-time WOTS+ signature leaf is reserved or consumed.
+    """
     # Deterministic sorting by infohash
     sorted_records = sorted(records, key=lambda r: r.infohash.lower())
     leaves = [r.leaf_hash() for r in sorted_records]
@@ -940,16 +1066,95 @@ def serialize_shard_records(records: Sequence[TorrentRecord]) -> tuple[bytes, Me
         "records": [r.canonical_dict() for r in sorted_records],
     }
     raw_json = json.dumps(payload_dict, sort_keys=True, separators=(",", ":")).encode("utf-8")
-    compressed, _codec = compress_payload(raw_json)
+    if len(raw_json) > max_output_bytes:
+        raise ValueError(
+            f"shard_exceeds_decompression_bounds:uncompressed_bytes={len(raw_json)}>{max_output_bytes}"
+        )
+    compressed, _codec = compress_payload(raw_json, codec=MANDATORY_WIRE_CODEC)
+    hard_cap = min(max_output_bytes, max(65536, len(compressed) * max_ratio))
+    if len(raw_json) > hard_cap:
+        raise ValueError(
+            f"shard_exceeds_decompression_bounds:ratio_cap_exceeded:{len(raw_json)}>{hard_cap}"
+        )
     return compressed, tree
 
 
+def split_records_into_bounded_shards(
+    records: Sequence[TorrentRecord],
+    *,
+    max_output_bytes: int = MAX_DECOMPRESSED_SHARD_BYTES,
+    max_ratio: int = MAX_DECOMPRESSION_RATIO,
+) -> list[list[TorrentRecord]]:
+    """Partition a sequence of TorrentRecords into bounded micro-shards that each satisfy receiver decompression caps."""
+    sorted_records = sorted(records, key=lambda r: r.infohash.lower())
+    if not sorted_records:
+        return [[]]
+    batches: list[list[TorrentRecord]] = []
+    current_batch: list[TorrentRecord] = []
+    for rec in sorted_records:
+        candidate = current_batch + [rec]
+        try:
+            serialize_shard_records(
+                candidate,
+                max_output_bytes=max_output_bytes,
+                max_ratio=max_ratio,
+            )
+            current_batch = candidate
+        except ValueError:
+            if not current_batch:
+                raise
+            batches.append(current_batch)
+            serialize_shard_records(
+                [rec],
+                max_output_bytes=max_output_bytes,
+                max_ratio=max_ratio,
+            )
+            current_batch = [rec]
+    if current_batch:
+        batches.append(current_batch)
+    return batches
+
+
 def deserialize_shard_records(compressed: bytes) -> list[TorrentRecord]:
-    """Decompress and parse shard records."""
+    """Decompress and parse shard records with strict schema and type validation."""
     raw_json = decompress_payload(compressed)
     payload_dict = json.loads(raw_json.decode("utf-8"))
+    if not isinstance(payload_dict, dict):
+        raise ValueError("shard_payload_not_dict")
+    raw_records = payload_dict.get("records")
+    if not isinstance(raw_records, list):
+        raise ValueError("shard_records_not_list")
     records: list[TorrentRecord] = []
-    for d in payload_dict.get("records", []):
+    for d in raw_records:
+        if not isinstance(d, dict):
+            raise ValueError("shard_record_item_not_dict")
+        for str_field in ("infohash", "title", "category", "language", "quality_tier", "epoch", "content_sha256"):
+            val = d.get(str_field)
+            if not isinstance(val, str) or not val.strip():
+                raise ValueError(f"invalid_shard_record_string_field:{str_field}")
+        infohash_norm = d["infohash"].strip().lower()
+        if len(infohash_norm) != 40 or any(ch not in "0123456789abcdef" for ch in infohash_norm):
+            raise ValueError("invalid_shard_record_infohash_hex")
+        sha_norm = d["content_sha256"].strip().lower()
+        if len(sha_norm) != 64 or any(ch not in "0123456789abcdef" for ch in sha_norm):
+            raise ValueError("invalid_shard_record_content_sha256_hex")
+        for int_field in ("size_bytes", "file_count", "seeders", "leechers"):
+            ival = d.get(int_field)
+            if isinstance(ival, bool) or not isinstance(ival, int) or ival < 0:
+                raise ValueError(f"invalid_shard_record_int_field:{int_field}")
+            if ival > SQLITE_MAX_INT64:
+                raise ValueError(f"integer_overflow_for_sqlite_int64:{int_field}")
+        created_val = d.get("created_at", int(time.time()))
+        if isinstance(created_val, bool) or not isinstance(created_val, int) or created_val < 0:
+            raise ValueError("invalid_shard_record_int_field:created_at")
+        if created_val > SQLITE_MAX_INT64:
+            raise ValueError("integer_overflow_for_sqlite_int64:created_at")
+        flist = d.get("file_list", [])
+        if not isinstance(flist, list) or any(not isinstance(item, str) for item in flist):
+            raise ValueError("invalid_shard_record_file_list")
+        sg_val = d.get("safety_gate_passed", True)
+        if not isinstance(sg_val, bool):
+            raise ValueError("invalid_shard_record_safety_gate_passed")
         records.append(TorrentRecord(
             infohash=d["infohash"],
             title=d["title"],
@@ -962,9 +1167,9 @@ def deserialize_shard_records(compressed: bytes) -> list[TorrentRecord]:
             seeders=d["seeders"],
             leechers=d["leechers"],
             content_sha256=d["content_sha256"],
-            file_list=d.get("file_list", []),
-            safety_gate_passed=bool(d.get("safety_gate_passed", True)),
-            created_at=d.get("created_at", int(time.time())),
+            file_list=list(flist),
+            safety_gate_passed=sg_val,
+            created_at=created_val,
         ))
     return records
 
@@ -976,25 +1181,87 @@ def deserialize_shard_records(compressed: bytes) -> list[TorrentRecord]:
 class QuorumVerifier:
     """Validates K-of-N distinct-ASN quorum attestations and Hybrid Ed25519 + WOTS+-SHAKE256 root signatures."""
 
+    _GLOBAL_ATTESTOR_ASN_REGISTRY: dict[str, int] = {}
+
+    @classmethod
+    def register_trusted_attestor(cls, pubkey_hex: str, asn: int) -> None:
+        """Bind an attestor Ed25519 public key to its authenticated Autonomous System Number."""
+        norm_pk = str(pubkey_hex).strip().lower()
+        if len(norm_pk) == 64:
+            cls._GLOBAL_ATTESTOR_ASN_REGISTRY[norm_pk] = int(asn)
+
     def __init__(
         self,
         trusted_root_pubkeys_hex: Sequence[str],
         min_quorum: int = 5,
         min_distinct_asns: int = 5,
         trusted_root_pq_pubkeys_hex: Sequence[str] | None = None,
+        *,
+        require_pq: bool = True,
+        trusted_attestor_asns: Mapping[str, int] | None = None,
     ) -> None:
-        self.trusted_roots = [
-            bytes.fromhex(k.strip().lower())
-            for k in trusted_root_pubkeys_hex
-            if len(k.strip()) == 64
-        ]
-        self.trusted_pq_roots = [
+        self.trusted_roots: list[bytes] = []
+        self.trusted_pq_roots: list[bytes] = [
             bytes.fromhex(k.strip().lower())
             for k in (trusted_root_pq_pubkeys_hex or [])
             if len(k.strip()) == 64
         ]
+        self.ed_to_pq_roots: dict[bytes, list[bytes]] = {}
+        raw_ed_entries = list(trusted_root_pubkeys_hex or [])
+        for idx, raw_entry in enumerate(raw_ed_entries):
+            cleaned = str(raw_entry).strip().lower()
+            if ":" in cleaned:
+                ed_part, pq_part = cleaned.split(":", 1)
+                ed_b: bytes | None = None
+                if len(ed_part.strip()) == 64:
+                    ed_b = bytes.fromhex(ed_part.strip())
+                    if ed_b not in self.trusted_roots:
+                        self.trusted_roots.append(ed_b)
+                if len(pq_part.strip()) == 64:
+                    pq_b = bytes.fromhex(pq_part.strip())
+                    if pq_b not in self.trusted_pq_roots:
+                        self.trusted_pq_roots.append(pq_b)
+                    if ed_b is not None:
+                        bound_list = self.ed_to_pq_roots.setdefault(ed_b, [])
+                        if pq_b not in bound_list:
+                            bound_list.append(pq_b)
+            elif len(cleaned) == 64:
+                ed_b = bytes.fromhex(cleaned)
+                if ed_b not in self.trusted_roots:
+                    self.trusted_roots.append(ed_b)
+                bound_list = self.ed_to_pq_roots.setdefault(ed_b, [])
+                if self.trusted_pq_roots:
+                    if len(self.trusted_pq_roots) == len(raw_ed_entries) and idx < len(self.trusted_pq_roots):
+                        pq_b = self.trusted_pq_roots[idx]
+                        if pq_b not in bound_list:
+                            bound_list.append(pq_b)
+                    else:
+                        bound_root_pq = WOTSPlusSHAKE256.get_root_wots_pub(cleaned)
+                        if bound_root_pq and len(bound_root_pq) == 64:
+                            pq_b = bytes.fromhex(bound_root_pq)
+                            if pq_b in self.trusted_pq_roots and pq_b not in bound_list:
+                                bound_list.append(pq_b)
+                        elif len(raw_ed_entries) == 1:
+                            for pq_b in self.trusted_pq_roots:
+                                if pq_b not in bound_list:
+                                    bound_list.append(pq_b)
+                else:
+                    bound_root_pq = WOTSPlusSHAKE256.get_root_wots_pub(cleaned)
+                    if bound_root_pq and len(bound_root_pq) == 64:
+                        pq_b = bytes.fromhex(bound_root_pq)
+                        if pq_b not in self.trusted_pq_roots:
+                            self.trusted_pq_roots.append(pq_b)
+                        if pq_b not in bound_list:
+                            bound_list.append(pq_b)
         self.min_quorum = min_quorum
         self.min_distinct_asns = min_distinct_asns
+        self.require_pq = bool(require_pq)
+        self.trusted_attestor_asns: dict[str, int] = {
+            str(k).strip().lower(): int(v)
+            for k, v in (trusted_attestor_asns or {}).items()
+            if len(str(k).strip()) == 64
+        }
+        self._used_pq_pubkeys: dict[str, bytes] = {}
 
     def verify_manifest(
         self,
@@ -1005,7 +1272,7 @@ class QuorumVerifier:
           1. Monotonic sequence: seq > current_seq
           2. Root Hybrid Ed25519 + WOTS+-SHAKE256 Post-Quantum signature
           3. K-of-N attestation count >= min_quorum
-          4. Distinct ASNs >= min_distinct_asns
+          4. Distinct ASNs >= min_distinct_asns (with authenticated ASN bindings)
           5. Each attestation Hybrid Ed25519 + WOTS+-SHAKE256 signature
         """
         # 0. Policy & type sanity checks
@@ -1045,31 +1312,45 @@ class QuorumVerifier:
         except (InvalidSignature, ValueError) as exc:
             return False, f"invalid_root_ed25519_signature:{exc}"
 
-        # 2b. Root WOTS+-SHAKE256 Post-Quantum signature check
-        if manifest.pq_signature_hex or manifest.root_pq_pubkey_hex or self.trusted_pq_roots:
+        # 2b. Root WOTS+-SHAKE256 Post-Quantum signature check (mandatory when require_pq=True)
+        has_root_pq_fields = bool(manifest.pq_signature_hex or manifest.root_pq_pubkey_hex)
+        if self.require_pq or has_root_pq_fields:
+            if not manifest.root_pq_pubkey_hex.strip() or not manifest.pq_signature_hex.strip():
+                return False, "missing_root_pq_wots_signature"
+            norm_root_pq = manifest.root_pq_pubkey_hex.strip().lower()
             try:
-                pq_root_bytes = bytes.fromhex(manifest.root_pq_pubkey_hex.strip().lower())
+                pq_root_bytes = bytes.fromhex(norm_root_pq)
                 pq_sig_bytes = bytes.fromhex(manifest.pq_signature_hex.strip())
             except ValueError as exc:
                 return False, f"invalid_root_pq_wots_signature:{exc}"
-            if self.trusted_pq_roots:
-                if pq_root_bytes not in self.trusted_pq_roots and not WOTSPlusSHAKE256.is_bound_to_ed25519_pub(
-                    manifest.root_pubkey_hex, manifest.root_pq_pubkey_hex
-                ):
+            bound_pq_roots = list(self.ed_to_pq_roots.get(root_pub_bytes, []))
+            if not bound_pq_roots:
+                dyn_pq_hex = WOTSPlusSHAKE256.get_root_wots_pub(root_pub_bytes.hex())
+                if dyn_pq_hex and len(dyn_pq_hex) == 64:
+                    dyn_b = bytes.fromhex(dyn_pq_hex)
+                    if not self.trusted_pq_roots or dyn_b in self.trusted_pq_roots:
+                        bound_pq_roots.append(dyn_b)
+            ok_pq, pq_reason = WOTSPlusSHAKE256.verify_against_trusted_roots(
+                bound_pq_roots,
+                pq_root_bytes,
+                payload,
+                pq_sig_bytes,
+                used_keys=self._used_pq_pubkeys,
+            )
+            if not ok_pq:
+                if pq_reason == "untrusted_pq_root_pubkey":
                     return False, f"untrusted_root_pq_pubkey:{manifest.root_pq_pubkey_hex}"
-            elif not WOTSPlusSHAKE256.is_bound_to_ed25519_pub(
-                manifest.root_pubkey_hex, manifest.root_pq_pubkey_hex
-            ):
-                return False, f"untrusted_root_pq_pubkey:{manifest.root_pq_pubkey_hex}"
-            if not WOTSPlusSHAKE256.verify(pq_root_bytes, payload, pq_sig_bytes):
+                if pq_reason == "wots_one_time_key_reused":
+                    return False, f"wots_one_time_key_reused:{norm_root_pq[:16]}"
                 return False, "invalid_root_pq_wots_signature:verification_failed"
 
         # 3. Quorum threshold check
         if len(manifest.attestations) < self.min_quorum:
             return False, f"insufficient_attestations:{len(manifest.attestations)}<{self.min_quorum}"
 
-        # 4. Validate individual attestations & count distinct ASNs
+        # 4. Validate individual attestations & count verified attestations and distinct ASNs
         manifest_digest = manifest.canonical_digest()
+        verified_attestations_count = 0
         verified_asns: set[int] = set()
         seen_node_ids: set[str] = set()
         seen_pubkeys: set[str] = set()
@@ -1096,6 +1377,9 @@ class QuorumVerifier:
             if norm_ip:
                 seen_ip_digests.add(norm_ip)
 
+            if self.require_pq and (not att.pq_pubkey_hex.strip() or not att.pq_signature_hex.strip()):
+                continue
+
             if att.pq_pubkey_hex:
                 norm_pq_pk = str(att.pq_pubkey_hex).strip().lower()
                 if norm_pq_pk in seen_pq_pubkeys:
@@ -1111,27 +1395,51 @@ class QuorumVerifier:
             if isinstance(att.asn, bool) or not isinstance(att.asn, int) or att.asn <= 0:
                 continue
 
+            # Verify authenticated attestor ASN binding
+            expected_asn = (
+                self.trusted_attestor_asns[norm_pk]
+                if norm_pk in self.trusted_attestor_asns
+                else self._GLOBAL_ATTESTOR_ASN_REGISTRY.get(norm_pk)
+            )
+            if expected_asn is None or int(att.asn) != int(expected_asn):
+                continue
+
             bound_digest = att.signing_payload(manifest_digest)
-            sig_msg_used = bound_digest
             try:
                 node_vk = Ed25519PublicKey.from_public_bytes(bytes.fromhex(norm_pk))
                 node_vk.verify(bytes.fromhex(norm_sig), bound_digest)
             except (InvalidSignature, ValueError):
                 continue
 
-            if att.pq_signature_hex or att.pq_pubkey_hex:
+            if self.require_pq or att.pq_signature_hex or att.pq_pubkey_hex:
                 try:
-                    node_pq_pk = bytes.fromhex(att.pq_pubkey_hex.strip().lower())
+                    norm_att_pq = att.pq_pubkey_hex.strip().lower()
+                    node_pq_pk = bytes.fromhex(norm_att_pq)
                     node_pq_sig = bytes.fromhex(att.pq_signature_hex.strip())
+                    meta_att = WOTSPlusSHAKE256.extract_signature_metadata(node_pq_pk, node_pq_sig)
+                    if meta_att is None:
+                        continue
+                    att_root_pq_hex = meta_att["root_pq_pub_hex"]
                     if not (
-                        WOTSPlusSHAKE256.verify(node_pq_pk, sig_msg_used, node_pq_sig)
-                        or WOTSPlusSHAKE256.verify(node_pq_pk, manifest_digest, node_pq_sig)
+                        WOTSPlusSHAKE256.is_bound_to_ed25519_pub(norm_pk, att_root_pq_hex)
+                        or WOTSPlusSHAKE256.is_bound_to_ed25519_pub(norm_pk, norm_att_pq)
                     ):
                         continue
+                    prev_att_msg = self._used_pq_pubkeys.get(meta_att["one_time_key_id"])
+                    if prev_att_msg is not None and prev_att_msg != bound_digest:
+                        continue
+                    if not WOTSPlusSHAKE256.verify(node_pq_pk, bound_digest, node_pq_sig):
+                        continue
+                    self._used_pq_pubkeys[meta_att["one_time_key_id"]] = bound_digest
+                    self._used_pq_pubkeys[norm_att_pq] = bound_digest
                 except ValueError:
                     continue
 
+            verified_attestations_count += 1
             verified_asns.add(int(att.asn))
+
+        if verified_attestations_count < self.min_quorum:
+            return False, f"insufficient_verified_attestations:{verified_attestations_count}<{self.min_quorum}"
 
         if len(verified_asns) < self.min_distinct_asns:
             return False, f"insufficient_distinct_asns:{len(verified_asns)}<{self.min_distinct_asns}"
@@ -1158,6 +1466,7 @@ class ArmigerDHTDatabaseSync:
         db_path: str | pathlib.Path = ":memory:",
         tombstone_store: TombstoneStore | None = None,
         *,
+        trusted_root_pq_pubkeys_hex: Sequence[str] | None = None,
         opt_in_sharing: bool | None = None,
         ephemeral_identity: bool = True,
         min_k_samples: int = 25,
@@ -1167,24 +1476,30 @@ class ArmigerDHTDatabaseSync:
             sync_mode=SyncMode.SUBSCRIBE_AND_SEED if self.opt_in_sharing else SyncMode.PULL_ONLY
         )
         self.master_secret = master_secret or os.urandom(32)
-        self.tombstone_store = tombstone_store or TombstoneStore(trusted_root_pubkeys_hex)
+        self.tombstone_store = tombstone_store or TombstoneStore(
+            trusted_root_pubkeys_hex,
+            trusted_root_pq_pubkeys_hex=trusted_root_pq_pubkeys_hex,
+        )
         self.csam_guard = CSAMGuard(self.tombstone_store)
         self.safety_gate = ArmigerSafetyGate()
         self.quorum_verifier = QuorumVerifier(
             trusted_root_pubkeys_hex=trusted_root_pubkeys_hex or [],
             min_quorum=self.subscription.min_quorum,
             min_distinct_asns=self.subscription.min_distinct_asns,
+            trusted_root_pq_pubkeys_hex=trusted_root_pq_pubkeys_hex,
         )
         self.db = ShardDatabase(db_path=db_path, enable_xxx=self.subscription.enable_xxx)
-        self.shard_sequences: dict[str, int] = {}
+        self.shard_sequences: dict[str, int] = self.db.get_shard_sequences()
         self.anonymity_guard = AnonymityGuard(
             ephemeral_identity=ephemeral_identity,
             min_k_samples=min_k_samples,
+            catalog_secret=self.master_secret,
         )
         self._outbound_bundles_shared: int = 0
         self._outbound_packets_blocked_opt_out: int = 0
         self._outbound_bytes_shared: int = 0
         self._outbound_seq: int = 0
+        self._catalog_sender_seqs: dict[tuple[str, str], int] = {}
 
     def set_sync_mode(self, mode: SyncMode) -> None:
         self.subscription.sync_mode = mode
@@ -1287,11 +1602,11 @@ class ArmigerDHTDatabaseSync:
         ciphertext_sha = hashlib.sha256(ciphertext_bundle).hexdigest()
         bep46_infohash = hashlib.sha1(ciphertext_bundle).hexdigest()
 
-        # 3. Create manifest and sign with Ed25519 + WOTS+-SHAKE256 root private key
+        # 3. Create manifest and sign with Ed25519 + WOTS+-SHAKE256 Merkle-authenticated leaf key
         sk = Ed25519PrivateKey.from_private_bytes(root_privkey)
         pk = sk.public_key()
         root_pub_bytes = pk.public_bytes(Encoding.Raw, PublicFormat.Raw)
-        pq_priv, pq_pub = WOTSPlusSHAKE256.derive_keypair_from_ed25519_priv(root_privkey)
+        leaf_idx, pq_pub, _ = WOTSPlusSHAKE256.reserve_next_leaf(root_privkey)
 
         manifest_dummy = DHTShardManifest(
             seq=seq,
@@ -1312,7 +1627,7 @@ class ArmigerDHTDatabaseSync:
 
         payload_bytes = manifest_dummy.canonical_payload()
         sig = sk.sign(payload_bytes)
-        pq_sig = WOTSPlusSHAKE256.sign(pq_priv, payload_bytes)
+        pq_sig = WOTSPlusSHAKE256.sign_reserved_leaf(root_privkey, leaf_idx, payload_bytes)
 
         manifest = DHTShardManifest(
             seq=seq,
@@ -1344,11 +1659,19 @@ class ArmigerDHTDatabaseSync:
             return False, "sync_mode_off", 0
 
         # 1. Check user subscription filter (zero bandwidth / zero storage for unselected shards)
+        try:
+            shard_cat, shard_lang, shard_qual, shard_epoch = SubscriptionConfig.parse_shard_id(manifest.shard_id)
+        except ValueError:
+            return False, f"malformed_shard_id:{manifest.shard_id}", 0
+        if shard_epoch not in ("*", "any") and manifest.epoch.strip().lower() != shard_epoch:
+            return False, f"manifest_epoch_mismatch:{manifest.epoch}!={shard_epoch}", 0
         if not self.subscription.is_subscribed(manifest.shard_id):
             return False, f"unsubscribed_shard_filtered:{manifest.shard_id}", 0
 
         # 2. Verify monotonic sequence & quorum
-        cur_seq = self.shard_sequences.get(manifest.shard_id, -1)
+        norm_shard_id = manifest.shard_id.strip().lower()
+        db_seq = self.db.get_shard_sequences().get(norm_shard_id, -1)
+        cur_seq = max(self.shard_sequences.get(manifest.shard_id, -1), self.shard_sequences.get(norm_shard_id, -1), db_seq)
         q_ok, q_msg = self.quorum_verifier.verify_manifest(manifest, current_seq=cur_seq)
         if not q_ok:
             return False, f"quorum_verification_failed:{q_msg}", 0
@@ -1377,23 +1700,51 @@ class ArmigerDHTDatabaseSync:
         # 5. Decompress records & verify Merkle root and declared counts/sizes
         try:
             records = deserialize_shard_records(plaintext)
+            if len(records) != manifest.record_count:
+                return False, f"record_count_mismatch:{len(records)}!={manifest.record_count}", 0
+            actual_uncomp = sum(len(r.canonical_bytes()) for r in records)
+            if actual_uncomp != manifest.uncompressed_size_bytes:
+                return False, f"uncompressed_size_mismatch:{actual_uncomp}!={manifest.uncompressed_size_bytes}", 0
+            reconstructed_leaves = [r.leaf_hash() for r in sorted(records, key=lambda r: r.infohash.lower())]
+            reconstructed_tree = MerkleTree(reconstructed_leaves)
         except Exception as exc:
             return False, f"shard_deserialization_failed:{exc}", 0
-
-        if len(records) != manifest.record_count:
-            return False, f"record_count_mismatch:{len(records)}!={manifest.record_count}", 0
-        actual_uncomp = sum(len(r.canonical_bytes()) for r in records)
-        if actual_uncomp != manifest.uncompressed_size_bytes:
-            return False, f"uncompressed_size_mismatch:{actual_uncomp}!={manifest.uncompressed_size_bytes}", 0
-        reconstructed_leaves = [r.leaf_hash() for r in sorted(records, key=lambda r: r.infohash.lower())]
-        reconstructed_tree = MerkleTree(reconstructed_leaves)
 
         if reconstructed_tree.root_hex.lower() != manifest.merkle_root.lower():
             return False, "merkle_root_mismatch", 0
 
-        # 6. Pre-ingest safety re-inspection of decrypted records
+        # 6. Pre-ingest scope and safety re-inspection of decrypted records
         accepted_records: list[TorrentRecord] = []
         for rec in records:
+            rec_cat = rec.category.strip().lower()
+            rec_lang = rec.language.strip().lower()
+            rec_qual = rec.quality_tier.strip().lower()
+            rec_ep = rec.epoch.strip().lower()
+            if (
+                (shard_cat not in ("*", "any") and rec_cat != shard_cat)
+                or (shard_lang not in ("*", "any") and rec_lang != shard_lang)
+                or (shard_qual not in ("*", "any") and rec_qual not in (shard_qual, "any"))
+                or (shard_epoch not in ("*", "any") and rec_ep != shard_epoch)
+            ):
+                return False, f"record_shard_scope_mismatch:{rec.infohash}", 0
+            eff_qual = shard_qual if rec_qual == "any" else rec_qual
+            if not self.subscription.is_subscribed(
+                SubscriptionConfig.format_shard_id(rec_cat, rec_lang, eff_qual, rec_ep)
+            ):
+                return False, f"record_subscription_mismatch:{rec.infohash}", 0
+
+            # Enforce safety gate passed flag and local conformal safety gate evaluation
+            if not rec.safety_gate_passed:
+                return False, f"record_failed_safety_gate:{rec.infohash}", 0
+            gate_ok, gate_reason, _ = self.safety_gate.evaluate(
+                p_adult=1.0 if rec_cat == CATEGORY_ADULT else 0.0,
+                p_junk=0.0,
+                p_excluded_scope=0.0,
+                target_category=rec_cat,
+            )
+            if not gate_ok:
+                return False, f"record_failed_safety_gate:{rec.infohash}:{gate_reason}", 0
+
             # Check against tombstone store
             if self.tombstone_store.is_tombstoned(rec.infohash):
                 continue
@@ -1410,11 +1761,27 @@ class ArmigerDHTDatabaseSync:
 
             accepted_records.append(rec)
 
-        ingested_count = self.db.insert_records_batch(accepted_records)
+        try:
+            ingested_count = self.db.insert_records_batch(
+                accepted_records,
+                shard_id=manifest.shard_id,
+                seq=manifest.seq,
+            )
+        except (ValueError, OverflowError, sqlite3.Error) as exc:
+            return False, f"db_commit_failed:{exc}", 0
 
-        # 7. Update sequence number
+        # 7. Update in-memory sequence cache after durable SQLite commit
         self.shard_sequences[manifest.shard_id] = manifest.seq
+        self.shard_sequences[norm_shard_id] = manifest.seq
         return True, "shard_applied_successfully", ingested_count
+
+    def get_shard_seq(self, shard_id: str) -> int:
+        """Return the highest committed BEP-44 sequence number for `shard_id` (0 if unseen)."""
+        norm_id = "/".join(SubscriptionConfig.parse_shard_id(shard_id))
+        return max(
+            int(self.shard_sequences.get(shard_id, 0)),
+            int(self.shard_sequences.get(norm_id, 0)),
+        )
 
     def apply_signed_tombstones(self, manifest: SignedTombstoneList) -> tuple[bool, str, int, int]:
         """Apply a signed tombstone list and purge local records.
@@ -1443,8 +1810,20 @@ class ArmigerDHTDatabaseSync:
         }
 
     def hash_catalog_key(self, normalized_key: str, *, reject_raw_pii: bool = True) -> str:
-        """Compute strictly 16-hex-char truncated BLAKE2b-64(domain='armiger-catalog-v2' || normalized_key)."""
-        return self.anonymity_guard.hash_catalog_key(normalized_key, reject_raw_pii=reject_raw_pii)
+        """Compute strictly 16-hex-char keyed, domain-separated BLAKE2b-64(key, domain='armiger-catalog-v2' || normalized_key)."""
+        return self.anonymity_guard._hash_catalog_key_with_derived_key(
+            normalized_key,
+            self.anonymity_guard.catalog_secret,
+            reject_raw_pii=reject_raw_pii,
+        )
+
+    def _outbound_allowed(self) -> tuple[bool, str]:
+        """Return whether outbound telemetry/catalog export and DHT publishing are permitted."""
+        if not self.opt_in_sharing:
+            return False, "opt_in_sharing_disabled"
+        if self.subscription.sync_mode not in (SyncMode.SUBSCRIBE_AND_SEED, SyncMode.PUBLISHER):
+            return False, f"sync_mode_disallows_outbound:{self.subscription.sync_mode.value}"
+        return True, "allowed"
 
     def export_signed_bundle(
         self,
@@ -1460,10 +1839,11 @@ class ArmigerDHTDatabaseSync:
     ) -> dict[str, Any] | None:
         """Export an anonymous BEP-44 catalog record bundle with 16-hex BLAKE2b keys `[h, c, r, s, a, v, n, t]`.
 
-        Strictly returns None (0 bytes shared) when `opt_in_sharing=False`.
+        Strictly returns None (0 bytes shared) when `opt_in_sharing=False` or `sync_mode` is `OFF`/`PULL_ONLY`.
         Raises `AnonymityViolationError` if any PII/canary/schema/k-anonymity invariant is violated.
         """
-        if not self.opt_in_sharing:
+        allowed, _ = self._outbound_allowed()
+        if not allowed:
             self._outbound_packets_blocked_opt_out += 1
             return None
 
@@ -1593,17 +1973,21 @@ class ArmigerDHTDatabaseSync:
         self,
         signed_bundle: Mapping[str, Any],
     ) -> tuple[bool, str, dict[str, Any] | None]:
-        """Verify Ed25519 signature and AnonymityGuard schema of an inbound catalog bundle."""
+        """Verify Ed25519 signature, monotonic sequence high-water mark, and AnonymityGuard schema of an inbound catalog bundle."""
         if self.subscription.sync_mode == SyncMode.OFF:
             return False, "sync_mode_off", None
 
         try:
             v_raw = signed_bundle["v"]
             v_bytes = v_raw if isinstance(v_raw, (bytes, bytearray)) else str(v_raw).encode("utf-8")
-            seq = int(signed_bundle["seq"])
+            raw_seq = signed_bundle["seq"]
+            if isinstance(raw_seq, bool) or not isinstance(raw_seq, int) or raw_seq < 1:
+                raise ValueError(f"invalid_bundle_seq:{raw_seq!r}")
+            seq = int(raw_seq)
             salt = signed_bundle.get("salt", b"armiger-catalog-v2")
             if isinstance(salt, str):
                 salt = salt.encode("utf-8")
+            salt_bytes = bytes(salt)
             pub_raw = signed_bundle.get("k") or signed_bundle.get("pubkey_hex")
             pub_bytes = bytes.fromhex(pub_raw) if isinstance(pub_raw, str) else bytes(pub_raw)
             sig_raw = signed_bundle.get("sig") or signed_bundle.get("sig_hex")
@@ -1611,9 +1995,14 @@ class ArmigerDHTDatabaseSync:
         except Exception as exc:
             return False, f"malformed_bundle_envelope:{exc}", None
 
+        sender_key = (pub_bytes.hex().lower(), salt_bytes.hex().lower())
+        prev_seq = self._catalog_sender_seqs.get(sender_key, 0)
+        if seq <= prev_seq:
+            return False, f"stale_or_replayed_seq:{seq}<={prev_seq}", None
+
         try:
             vk = Ed25519PublicKey.from_public_bytes(pub_bytes)
-            vk.verify(sig_bytes, _bep44_canonical_sign_buffer(v=bytes(v_bytes), seq=seq, salt=bytes(salt)))
+            vk.verify(sig_bytes, _bep44_canonical_sign_buffer(v=bytes(v_bytes), seq=seq, salt=salt_bytes))
         except Exception as exc:
             return False, f"invalid_ed25519_signature:{exc}", None
 
@@ -1622,6 +2011,10 @@ class ArmigerDHTDatabaseSync:
         except AnonymityViolationError as exc:
             return False, f"anonymity_firewall_rejected:{exc}", None
 
+        if "seq" in parsed and int(parsed["seq"]) != seq:
+            return False, f"envelope_wire_seq_mismatch:{seq}!={parsed.get('seq')}", None
+
+        self._catalog_sender_seqs[sender_key] = seq
         return True, "verified_and_ingested", parsed
 
     def ingest_signed_delta_bundle(
@@ -1637,15 +2030,16 @@ class ArmigerDHTDatabaseSync:
         bundle: Mapping[str, Any] | None = None,
         **kwargs: Any,
     ) -> tuple[bool, str, int]:
-        """Publish an anonymous signed catalog bundle to a UDP BEP-44 swarm. Blocked when `opt_in_sharing=False`."""
-        if not self.opt_in_sharing:
+        """Publish an anonymous signed catalog bundle to a UDP BEP-44 swarm. Blocked when `opt_in_sharing=False` or `sync_mode` is `OFF`/`PULL_ONLY`."""
+        allowed, disallow_reason = self._outbound_allowed()
+        if not allowed:
             self._outbound_packets_blocked_opt_out += 1
-            return False, "opt_in_sharing_disabled", 0
+            return False, disallow_reason, 0
 
         eff_bundle = dict(bundle) if bundle is not None else self.export_signed_bundle(**kwargs)
         if eff_bundle is None:
             self._outbound_packets_blocked_opt_out += 1
-            return False, "opt_in_sharing_disabled", 0
+            return False, disallow_reason, 0
 
         v_bytes = eff_bundle["v"] if isinstance(eff_bundle["v"], bytes) else str(eff_bundle["v"]).encode("utf-8")
         self.anonymity_guard.inspect_wire_payload(v_bytes)
@@ -1687,11 +2081,12 @@ def create_mock_quorum_attestations(
     """Generate cryptographically valid Hybrid Ed25519 + WOTS+-SHAKE256 QuorumAttestations from distinct ASNs."""
     ts = int(time.time()) if timestamp is None else int(timestamp)
     attestations: list[QuorumAttestation] = []
-    for asn in distinct_asns:
+    for idx, asn in enumerate(distinct_asns):
         priv, pub = generate_ed25519_keypair()
+        QuorumVerifier.register_trusted_attestor(pub.hex(), int(asn))
         sk = Ed25519PrivateKey.from_private_bytes(priv)
-        node_id = hashlib.sha1(pub + f"asn{asn}".encode()).hexdigest()
-        ip_digest = hashlib.sha256(f"192.0.2.{asn % 250}".encode()).hexdigest()
+        node_id = hashlib.sha1(pub + f"asn{asn}:{idx}".encode()).hexdigest()
+        ip_digest = hashlib.sha256(f"192.0.2.{(asn + idx) % 250}:{idx}".encode()).hexdigest()
         temp_att = QuorumAttestation(
             node_id=node_id,
             asn=int(asn),

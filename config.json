@@ -119,7 +119,7 @@
       ],
       "sha256": {
         "zero_cue_plugin.py": "9e0fd58810f66bfffbef828dc1488f223833ec16111a49cb2633fbdfdf0db48c",
-        "validated_zero_cue_catalog.json": "3f42219f7e9ac1b38e7aa0f1301ae96298dd58e7d71960c371a4cdaf86c3d0b2"
+        "validated_zero_cue_catalog.json": "a43193a7d9982f1b83e9e6968c47dbbe8d058b113af5020d6d5ea45ed2af7fcd"
       }
     },
     "armiger-audio-guard": {

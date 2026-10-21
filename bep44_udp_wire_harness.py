@@ -18,6 +18,7 @@ import asyncio
 import hashlib
 import json
 import os
+import time
 import zlib
 import dataclasses
 from dataclasses import dataclass
@@ -378,7 +379,10 @@ async def udp_query(host: str, port: int, query: Dict[bytes, Any], timeout: floa
         def datagram_received(self, data: bytes, _: Tuple[str, int]) -> None:
             if not on_response.done():
                 try:
-                    on_response.set_result(bdecode(data))
+                    decoded = bdecode(data)
+                    if not isinstance(decoded, dict):
+                        raise ValueError("KRPC response must be a bencoded dict")
+                    on_response.set_result(decoded)
                 except Exception as exc:
                     on_response.set_exception(exc)
 
@@ -474,17 +478,34 @@ class LocalKademliaSwarm:
         pubkey_bytes: bytes,
         salt: bytes,
         fanout: int = 4,
+        *,
+        max_transfer_seconds: float = 30.0,
     ) -> Optional[StoredItem]:
         """Query the k closest UDP nodes for a BEP-44 mutable item, verifying Ed25519 signatures."""
+        if (
+            isinstance(max_transfer_seconds, bool)
+            or not isinstance(max_transfer_seconds, (int, float))
+            or float(max_transfer_seconds) <= 0.0
+        ):
+            return None
+        deadline = time.monotonic() + float(max_transfer_seconds)
         target = compute_bep44_target(pubkey_bytes, salt)
         peers = self.closest_nodes(target, k=fanout)
         best: Optional[StoredItem] = None
         for idx, (host, port, _) in enumerate(peers):
+            rem = deadline - time.monotonic()
+            if rem <= 0.0:
+                break
             q = {b"t": f"g{idx}".encode("ascii"), b"y": b"q", b"q": b"get", b"a": {b"target": target}}
-            resp = await udp_query(host, port, q)
-            if resp.get(b"y") != b"r":
+            try:
+                resp = await udp_query(host, port, q, timeout=min(2.0, rem))
+            except (asyncio.TimeoutError, OSError, ValueError):
+                continue
+            if not isinstance(resp, dict) or resp.get(b"y") != b"r":
                 continue
             r_body = resp.get(b"r", resp)
+            if not isinstance(r_body, dict):
+                continue
             v = r_body.get(b"v")
             seq = r_body.get(b"seq")
             sig = r_body.get(b"sig")
@@ -528,35 +549,91 @@ class LocalKademliaSwarm:
                     raise RuntimeError(f"put_bundle piece {p_idx}/{total} failed on {host}:{port}: {resp!r}")
         return ih.hex()
 
+    MAX_BUNDLE_PIECES: int = 4096
+    MAX_BUNDLE_BYTES: int = 16 * 1024 * 1024
+    MAX_TRANSFER_SECONDS: float = 30.0
+
     async def get_bep46_bundle(
         self,
         infohash_hex: str,
         expected_sha256_hex: Optional[str] = None,
         fanout: int = 4,
+        *,
+        max_pieces: int = MAX_BUNDLE_PIECES,
+        max_bundle_bytes: int = MAX_BUNDLE_BYTES,
+        max_transfer_seconds: float = MAX_TRANSFER_SECONDS,
     ) -> Optional[bytes]:
         """Fetch a content-addressed BEP-46 bundle in 4 KiB UDP pieces and verify SHA-1/SHA-256."""
+        if (
+            isinstance(max_pieces, bool)
+            or not isinstance(max_pieces, int)
+            or max_pieces < 1
+            or isinstance(max_bundle_bytes, bool)
+            or not isinstance(max_bundle_bytes, int)
+            or max_bundle_bytes < 1
+            or isinstance(max_transfer_seconds, bool)
+            or not isinstance(max_transfer_seconds, (int, float))
+            or float(max_transfer_seconds) <= 0.0
+        ):
+            raise ValueError("Invalid get_bep46_bundle size or timeout bounds")
         ih = bytes.fromhex(infohash_hex)
         peers = self.closest_nodes(ih, k=fanout)
         for idx, (host, port, _) in enumerate(peers):
+            peer_deadline = time.monotonic() + float(max_transfer_seconds)
+            rem0 = peer_deadline - time.monotonic()
+            if rem0 <= 0.0:
+                continue
             q0 = {b"t": f"f{idx}_0".encode("ascii"), b"y": b"q", b"q": b"get_bundle", b"a": {b"infohash": ih, b"piece": 0}}
-            resp0 = await udp_query(host, port, q0)
-            if resp0.get(b"y") != b"r":
+            try:
+                resp0 = await udp_query(host, port, q0, timeout=min(2.0, rem0))
+            except (asyncio.TimeoutError, OSError, ValueError):
+                continue
+            if not isinstance(resp0, dict) or resp0.get(b"y") != b"r":
                 continue
             r0 = resp0.get(b"r", {})
+            if not isinstance(r0, dict):
+                continue
             c0 = r0.get(b"blob")
-            total = int(r0.get(b"total", 1))
-            if not isinstance(c0, bytes):
+            raw_total = r0.get(b"total", 1)
+            if (
+                isinstance(raw_total, bool)
+                or not isinstance(raw_total, int)
+                or raw_total < 1
+                or raw_total > max_pieces
+            ):
+                continue
+            total = int(raw_total)
+            if not isinstance(c0, bytes) or len(c0) > self.CHUNK_SIZE or (total > 1 and len(c0) == 0):
+                continue
+            cum_bytes = len(c0)
+            if cum_bytes > max_bundle_bytes or (total - 1) * 1 + cum_bytes > max_bundle_bytes:
                 continue
             pieces = [c0]
             ok_all = True
             for p_idx in range(1, total):
-                qp = {b"t": f"f{idx}_{p_idx}".encode("ascii"), b"y": b"q", b"q": b"get_bundle", b"a": {b"infohash": ih, b"piece": p_idx}}
-                rp = await udp_query(host, port, qp)
-                if rp.get(b"y") != b"r":
+                rem_p = peer_deadline - time.monotonic()
+                if rem_p <= 0.0:
                     ok_all = False
                     break
-                cp = rp.get(b"r", {}).get(b"blob")
-                if not isinstance(cp, bytes):
+                qp = {b"t": f"f{idx}_{p_idx}".encode("ascii"), b"y": b"q", b"q": b"get_bundle", b"a": {b"infohash": ih, b"piece": p_idx}}
+                try:
+                    rp = await udp_query(host, port, qp, timeout=min(2.0, rem_p))
+                except (asyncio.TimeoutError, OSError, ValueError):
+                    ok_all = False
+                    break
+                if not isinstance(rp, dict) or rp.get(b"y") != b"r":
+                    ok_all = False
+                    break
+                r_body = rp.get(b"r", {})
+                if not isinstance(r_body, dict):
+                    ok_all = False
+                    break
+                cp = r_body.get(b"blob")
+                if not isinstance(cp, bytes) or len(cp) == 0 or len(cp) > self.CHUNK_SIZE:
+                    ok_all = False
+                    break
+                cum_bytes += len(cp)
+                if cum_bytes > max_bundle_bytes:
                     ok_all = False
                     break
                 pieces.append(cp)
@@ -621,12 +698,18 @@ class LocalKademliaSwarm:
         ).encode("utf-8")
         assert len(pointer_v) <= BEP44UDPNode.MAX_V_BYTES
         salt = manifest.shard_id.strip().lower().encode("utf-8")
-        await self.put_mutable(
+        responses = await self.put_mutable(
             privkey_bytes=root_privkey_bytes,
             salt=salt,
             v=pointer_v,
             seq=manifest.seq,
         )
+        ok_responses = [r for r in responses if isinstance(r, dict) and r.get(b"y") == b"r"]
+        if not ok_responses:
+            err_details = [r.get(b"e") for r in responses if isinstance(r, dict) and b"e" in r]
+            raise RuntimeError(
+                f"publish_shard_over_udp mutable pointer rejected by all peers (seq={manifest.seq}): {err_details or responses!r}"
+            )
         return ih_hex
 
     async def fetch_and_apply_shard_over_udp(
