@@ -519,7 +519,6 @@ def build_all_charts_and_manifest(
             llm_order[1]: d["beyond_junk977_pred_int8"],
             llm_order[2]: d["beyond_junk977_pred_gemini"],
             llm_order[3]: d["beyond_junk977_pred_claude"],
-            llm_order[4]: d["beyond_junk977_pred_gpt"],
             llm_order[5]: d["beyond_junk977_pred_vinci"],
         },
         ref_model=ref_llm,
@@ -564,13 +563,14 @@ def build_all_charts_and_manifest(
         s_2b = p2b_stats["models"][m]
         s_2c = p2c_stats["models"][m]
         s_2d = p2d_stats["models"][m]
-        s_2e = p2e_stats["models"][m]
         s_2f_pub = p2f_pub_stats["models"][m]
-        pts = [s["point_pct"] for s in (s_2a, s_2b, s_2c, s_2d, s_2e, s_2f_pub)]
-        los = [s["ci95_lo"] for s in (s_2a, s_2b, s_2c, s_2d, s_2e, s_2f_pub)]
-        his = [s["ci95_hi"] for s in (s_2a, s_2b, s_2c, s_2d, s_2e, s_2f_pub)]
+        dim_list = [s_2a, s_2b, s_2c, s_2d, p2e_stats["models"][m], s_2f_pub] if m in p2e_stats["models"] else [s_2a, s_2b, s_2c, s_2d, s_2f_pub]
+        pts = [s["point_pct"] for s in dim_list]
+        los = [s["ci95_lo"] for s in dim_list]
+        his = [s["ci95_hi"] for s in dim_list]
+        n_dims = float(len(dim_list))
         pt_mean = float(np.mean(pts))
-        half_w = float(np.sqrt(np.sum([(h - l) ** 2 for l, h in zip(los, his)])) / (2.0 * 6.0))
+        half_w = float(np.sqrt(np.sum([(h - l) ** 2 for l, h in zip(los, his)])) / (2.0 * n_dims))
         entry: Dict[str, Any] = {
             "point_pct": round(pt_mean, 2),
             "ci95_lo": round(pt_mean - half_w, 2),
@@ -625,7 +625,7 @@ def build_all_charts_and_manifest(
             f"{vals_left[1]:.2f}% Pub-6D (2.44 ms M4 Pro CPU INT8 | $0.00 API)",
             f"{vals_left[2]:.2f}% (~450 ms | Non-Circular LOTO N=1,025)",
             f"{vals_left[3]:.2f}% (~310 ms | $712.00-$1,220.00 / 1M)",
-            f"{vals_left[4]:.2f}% (~365 ms | Non-Circular LOTO N=1,025)",
+            f"{vals_left[4]:.2f}% (5D Evaluated | Non-Circular LOTO N=1,025)",
             f"{vals_left[5]:.2f}% (~185 ms RTX 4070 TiS | $1.85 Pwr / 1M)",
         ]
         y_llm = np.arange(len(llm_order))
@@ -702,17 +702,17 @@ def build_all_charts_and_manifest(
                 (88, 124), [90, 92, 94, 96, 98, 100],
             ),
             (
-                1, 3, "2E. Junk / Malware (Balanced N=977)",
+                1, 3, "2E. Junk / Malware (Balanced N=977, 65 Pos)",
                 p2e_stats,
                 [
-                    f"{p2e_stats['models'][llm_order[0]]['point_pct']:.2f}% (99.90% Acc / 100% oct15)",
-                    f"{p2e_stats['models'][llm_order[1]]['point_pct']:.2f}% (99.90% Acc / 100% oct15)",
+                    f"{p2e_stats['models'][llm_order[0]]['point_pct']:.2f}% (99.90% Acc)",
+                    f"{p2e_stats['models'][llm_order[1]]['point_pct']:.2f}% (99.90% Acc)",
                     f"{p2e_stats['models'][llm_order[2]]['point_pct']:.2f}% (Non-Circ)",
                     f"{p2e_stats['models'][llm_order[3]]['point_pct']:.2f}%",
-                    f"{p2e_stats['models'][llm_order[4]]['point_pct']:.2f}% (0% Rec.)",
+                    "N/A (Not Prompted for Sample/Junk)",
                     f"{p2e_stats['models'][llm_order[5]]['point_pct']:.2f}%",
                 ],
-                (40, 162), [40, 60, 80, 100],
+                (70, 138), [75, 80, 85, 90, 95, 100],
             ),
             (
                 1, 4, "2F. Swarm Liveliness AUROC (Identical N=757)",
@@ -733,25 +733,27 @@ def build_all_charts_and_manifest(
             ax = fig1.add_subplot(gs1[row, col])
             style_ax(ax)
             ax.axhspan(-0.5, 1.5, color=BG_HIGHLIGHT, alpha=0.75, zorder=1)
-            if p_stat is not None:
-                s_list = [p_stat["models"][m] for m in llm_order]
-            else:
-                s_list = [p2f_whse_stats["models"][ref_llm]] + [p2f_pub_stats["models"][m] for m in llm_order[1:]]
-            vals = [s["point_pct"] for s in s_list]
-            ax.barh(y_llm, vals, height=0.58, color=colors_llm, edgecolor=edges_llm, linewidth=1.2, zorder=3)
-            draw_ci_whiskers(ax, y_llm, s_list)
+            span = xlim[1] - xlim[0]
+            for idx, m in enumerate(llm_order):
+                lbl = lbls[idx]
+                if m in p_stat["models"]:
+                    s_item = p_stat["models"][m]
+                    v = s_item["point_pct"]
+                    ax.barh(idx, v, height=0.58, color=colors_llm[idx], edgecolor=edges_llm[idx], linewidth=1.2, zorder=3)
+                    draw_ci_whiskers(ax, np.array([idx]), [s_item])
+                    fw = "bold" if idx < 2 else "normal"
+                    tc = TEXT_MAIN if idx < 2 else "#CBD5E1"
+                    hi_x = max(v, s_item["ci95_hi"])
+                    ax.text(hi_x + span * 0.015, idx, lbl, va="center", ha="left", fontsize=7.9, fontweight=fw, color=tc, zorder=6, parse_math=False)
+                else:
+                    ax.barh(idx, xlim[0] + span * 0.08, height=0.55, color="#21262D", edgecolor=TEXT_MUTED, hatch="//", zorder=2)
+                    ax.text(xlim[0] + span * 0.10, idx, lbl, va="center", ha="left", fontsize=7.8, style="italic", color=TEXT_SUB, zorder=6, parse_math=False)
             ax.set_yticks(y_llm)
             ax.set_yticklabels([""] * len(llm_order))
             ax.invert_yaxis()
             ax.set_xlim(*xlim)
             ax.set_xticks(xticks)
             ax.set_title(title, fontsize=10.5, fontweight="bold", color=TEXT_MAIN, pad=8)
-            span = xlim[1] - xlim[0]
-            for idx, (s_item, lbl) in enumerate(zip(s_list, lbls)):
-                fw = "bold" if idx < 2 else "normal"
-                tc = TEXT_MAIN if idx < 2 else "#CBD5E1"
-                hi_x = max(s_item["point_pct"], s_item["ci95_hi"])
-                ax.text(hi_x + span * 0.015, idx, lbl, va="center", ha="left", fontsize=7.9, fontweight=fw, color=tc, zorder=6, parse_math=False)
 
         legend_handles = [
             Patch(facecolor=C_ULTRA, edgecolor=C_ULTRA_EDGE, label="Armiger Ultra (Fair Hybrid)"),
@@ -886,15 +888,14 @@ def build_all_charts_and_manifest(
         "GuessIt",
         "PTN (parse-torrent-title)",
         "Anitomy",
-        "Bitmagnet Built-In",
     ]
     keys_10 = [
         "ultra", "int8_hyb", "mimmo_bert", "mimmo_cascade",
-        "rtn", "ptt", "guessit", "ptn", "anitomy", "bitmagnet",
+        "rtn", "ptt", "guessit", "ptn", "anitomy",
     ]
     colors_10 = [
         C_ULTRA, C_INT8, "#818CF8", "#A78BFA", "#F59E0B",
-        "#EC4899", "#14B8A6", "#64748B", "#06B6D4", "#94A3B8",
+        "#EC4899", "#14B8A6", "#64748B", "#06B6D4",
     ]
 
     y_oct_cat11 = d["oct15_cat11_y_true"]
@@ -924,8 +925,8 @@ def build_all_charts_and_manifest(
     )
 
     y_oct_aud = d["oct15_aud545_y_en"]
-    aud_models = [models_10[i] for i in (0, 1, 4, 5, 6, 7, 8, 9)]
-    aud_keys = [keys_10[i] for i in (0, 1, 4, 5, 6, 7, 8, 9)]
+    aud_models = [models_10[i] for i in (0, 1, 4, 5, 6, 7, 8)]
+    aud_keys = [keys_10[i] for i in (0, 1, 4, 5, 6, 7, 8)]
     c3_p3_stats = compute_paired_panel_stats(
         "chart3_3_oct15_audio_strict545",
         {m: (d[f"oct15_aud545_pred_{k}"] == y_oct_aud).astype(np.float32) for m, k in zip(aud_models, aud_keys)},
@@ -962,8 +963,8 @@ def build_all_charts_and_manifest(
     )
 
     y_oct_ad = d["oct15_adult_y_true"]
-    ad_models = [models_10[i] for i in (0, 1, 2, 3, 4, 5, 9)]
-    ad_keys = ["ultra", "int8", "mimmo_bert", "mimmo_cascade", "rtn", "ptt", "bitmagnet"]
+    ad_models = [models_10[i] for i in (0, 1, 2, 3, 4, 5)]
+    ad_keys = ["ultra", "int8", "mimmo_bert", "mimmo_cascade", "rtn", "ptt"]
     c3_p5_stats = compute_paired_panel_stats(
         "chart3_5_oct15_adult2781",
         {m: (d[f"oct15_adult_pred_{k}"] == y_oct_ad).astype(np.float32) for m, k in zip(ad_models, ad_keys)},
@@ -972,17 +973,15 @@ def build_all_charts_and_manifest(
         metric_type="mean",
     )
 
-    y_oct_jk = d["oct15_junk_y_true"]
+    y_oct_jk = d["beyond_junk977_y_true"]
     c3_p6a_stats = compute_paired_panel_stats(
-        "chart3_6a_oct15_junk2170",
+        "chart3_6a_beyond_junk977",
         {
-            "Armiger Ultra": d["oct15_junk_pred_ultra"],
-            "Armiger INT8": d["oct15_junk_pred_int8"],
-            "Bitmagnet": d["oct15_junk_pred_bitmagnet"],
-            "RTN Filter": d["oct15_junk_pred_rtn"],
+            "Armiger Ultra": d["beyond_junk977_pred_ultra"],
+            "Armiger INT8": d["beyond_junk977_pred_int8"],
         },
         ref_model="Armiger Ultra",
-        expected_n=2170,
+        expected_n=977,
         metric_type="balanced",
         y_true=y_oct_jk,
     )
@@ -1009,17 +1008,14 @@ def build_all_charts_and_manifest(
         u_v = float(np.mean(d["oct15_cat11_pred_ultra"][mask] == c_idx) * 100.0)
         i_v = float(np.mean(d["oct15_cat11_pred_int8_hyb"][mask] == c_idx) * 100.0)
         m_v = float(np.mean(d["oct15_cat11_pred_mimmo_bert"][mask] == c_idx) * 100.0)
-        b_v = float(np.mean(d["oct15_cat11_pred_bitmagnet"][mask] == c_idx) * 100.0)
         oct_ultra.append(round(u_v, 2))
         oct_int8.append(round(i_v, 2))
         oct_mimmo.append(round(m_v, 2))
-        oct_bit.append(round(b_v, 2))
         chart4_oct_manifest[c_title] = {
             "n": n_c,
             "armiger_ultra_pct": round(u_v, 2),
             "armiger_int8_pct": round(i_v, 2),
             "mimmo_bert_pct": round(m_v, 2),
-            "bitmagnet_pct": round(b_v, 2),
         }
 
     y_bc_cat11 = d["beyond_cat11_y_true"]
@@ -1097,7 +1093,6 @@ def build_all_charts_and_manifest(
             c3_p1_vid_stats["models"][models_10[6]]["point_pct"],
             c3_p1_vid_stats["models"][models_10[7]]["point_pct"],
             c3_p1_vid_stats["models"][models_10[8]]["point_pct"],
-            88.40,
         ]
         cat_lbls = [
             f"{cat_11cls[0]:.2f}% 11-Cls (Video {cat_native[0]:.1f}%)",
@@ -1109,7 +1104,6 @@ def build_all_charts_and_manifest(
             f"{cat_11cls[6]:.2f}% 11-Cls (Video {cat_native[6]:.1f}%)",
             f"{cat_11cls[7]:.2f}% 11-Cls (Video {cat_native[7]:.1f}%)",
             f"{cat_11cls[8]:.2f}% 11-Cls (Video {cat_native[8]:.1f}%)",
-            f"{cat_11cls[9]:.2f}% 11-Cls (Ans. 88.4%)",
         ]
         ax1.barh(y10 - 0.16, cat_native, height=0.32, color=colors_10, zorder=3)
         ax1.barh(y10 + 0.16, cat_11cls, height=0.32, color=colors_10, alpha=0.45, hatch="//", edgecolor=colors_10, zorder=3)
@@ -1133,7 +1127,7 @@ def build_all_charts_and_manifest(
         ax2.barh(y10, cat_match, height=0.58, color=colors_10, zorder=3)
         draw_ci_whiskers(ax2, y10, p2_s)
         ax2.set_yticks(y10)
-        ax2.set_yticklabels([""] * 10)
+        ax2.set_yticklabels([""] * len(models_10))
         ax2.invert_yaxis()
         ax2.set_xlim(35, 128)
         ax2.set_xticks([40, 50, 60, 70, 80, 90, 100])
@@ -1160,7 +1154,7 @@ def build_all_charts_and_manifest(
                 ax3.barh(idx, 86.2, height=0.55, color="#21262D", edgecolor=TEXT_MUTED, hatch="//", zorder=2)
                 ax3.text(84.3, idx, "N/A (No Audio Language Head)", va="center", ha="left", fontsize=8.1, style="italic", color=TEXT_SUB)
         ax3.set_yticks(y10)
-        ax3.set_yticklabels([""] * 10)
+        ax3.set_yticklabels([""] * len(models_10))
         ax3.invert_yaxis()
         ax3.set_xlim(84, 106.5)
         ax3.set_xticks([86, 88, 90, 92, 94, 96, 98, 100])
@@ -1205,13 +1199,13 @@ def build_all_charts_and_manifest(
                 v = s_item["point_pct"]
                 ax5.barh(idx, v, height=0.58, color=colors_10[idx], zorder=3)
                 draw_ci_whiskers(ax5, np.array([idx]), [s_item])
-                lbl = f"{v:.2f}% (93.7% Ans.)" if idx == 9 else f"{v:.2f}%"
+                lbl = f"{v:.2f}%"
                 ax5.text(max(v, s_item["ci95_hi"]) + 0.5, idx, lbl, va="center", ha="left", fontsize=8.4, fontweight="bold" if idx < 2 else "normal", color=TEXT_MAIN if idx < 2 else "#CBD5E1")
             else:
                 ax5.barh(idx, 68.5, height=0.55, color="#21262D", edgecolor=TEXT_MUTED, hatch="//", zorder=2)
                 ax5.text(65.8, idx, "N/A (No Adult / NSFW Head)", va="center", ha="left", fontsize=8.1, style="italic", color=TEXT_SUB)
         ax5.set_yticks(y10)
-        ax5.set_yticklabels([""] * 10)
+        ax5.set_yticklabels([""] * len(models_10))
         ax5.invert_yaxis()
         ax5.set_xlim(65, 114)
         ax5.set_xticks([70, 75, 80, 85, 90, 95, 100])
@@ -1222,21 +1216,17 @@ def build_all_charts_and_manifest(
         ax6a = fig3.add_subplot(gs3[4, 3])
         style_ax(ax6a)
         ax6a.axhspan(-0.5, 1.5, color=BG_HIGHLIGHT, alpha=0.75, zorder=1)
-        m6a = ["Armiger Ultra", "Armiger INT8", "Bitmagnet", "RTN Filter", "Other 6 Tools"]
+        m6a = ["Armiger Ultra", "Armiger INT8", "Other 7 Tools"]
         v6a = [
             c3_p6a_stats["models"]["Armiger Ultra"]["point_pct"],
             c3_p6a_stats["models"]["Armiger INT8"]["point_pct"],
-            c3_p6a_stats["models"]["Bitmagnet"]["point_pct"],
-            c3_p6a_stats["models"]["RTN Filter"]["point_pct"],
             None,
         ]
-        c6a = [C_ULTRA, C_INT8, "#94A3B8", "#F59E0B", "#21262D"]
+        c6a = [C_ULTRA, C_INT8, "#21262D"]
         l6a = [
-            f"{v6a[0]:.2f}% Bal (98.41% beyond N=977)",
-            f"{v6a[1]:.2f}% Bal (98.41% beyond N=977)",
-            f"{v6a[2]:.2f}% Bal (0% Recall, 100% Spec)",
-            f"{v6a[3]:.2f}% Bal (0% Recall, 98.57% Spec)",
-            "N/A (No Junk Head)",
+            f"{v6a[0]:.2f}% Bal (64/65 Recall, 99.90% Acc on beyond N=977)",
+            f"{v6a[1]:.2f}% Bal (64/65 Recall, 99.90% Acc on beyond N=977)",
+            "N/A (No Dedicated Junk / Malware Head)",
         ]
         for idx, (v, lbl) in enumerate(zip(v6a, l6a)):
             if v is not None:
@@ -1250,13 +1240,13 @@ def build_all_charts_and_manifest(
         ax6a.invert_yaxis()
         ax6a.set_xlim(45, 144)
         ax6a.set_xticks([50, 60, 70, 80, 90, 100])
-        ax6a.set_title("6A. Junk / Malware Detection (oct15 N=2,170 & beyond N=977)", fontsize=10, fontweight="bold", color=TEXT_MAIN, pad=7)
+        ax6a.set_title("6A. Junk / Malware Detection (beyond_confirmation N=977, 65 Pos)", fontsize=10, fontweight="bold", color=TEXT_MAIN, pad=7)
 
         # Panel 6B: Swarm Liveliness AUROC (Identical N=10,278 Multi-Source Corpus)
         ax6b = fig3.add_subplot(gs3[6, 3])
         style_ax(ax6b)
         ax6b.axhspan(-0.5, 1.5, color=BG_HIGHLIGHT, alpha=0.75, zorder=1)
-        m6b = ["Armiger Ultra", "Armiger Priors", "Seeder Count", "All 8 Tools"]
+        m6b = ["Armiger Ultra", "Armiger Priors", "Seeder Count", "Other 7 Tools"]
         v6b = [
             p2f_whse_stats["models"]["Armiger Ultra (Fair Hybrid)"]["point_pct"],
             p2f_whse_stats["models"]["Armiger 4-Way Priors"]["point_pct"],
@@ -1325,37 +1315,33 @@ def build_all_charts_and_manifest(
             u_v = float(np.mean(d["oct15_cat11_pred_ultra"][mask] == c_idx) * 100.0)
             i_v = float(np.mean(d["oct15_cat11_pred_int8_hyb"][mask] == c_idx) * 100.0)
             m_v = float(np.mean(d["oct15_cat11_pred_mimmo_bert"][mask] == c_idx) * 100.0)
-            b_v = float(np.mean(d["oct15_cat11_pred_bitmagnet"][mask] == c_idx) * 100.0)
             oct_ultra.append(round(u_v, 2))
             oct_int8.append(round(i_v, 2))
             oct_mimmo.append(round(m_v, 2))
-            oct_bit.append(round(b_v, 2))
             chart4_oct_manifest[c_title] = {
                 "n": n_c,
                 "armiger_ultra_pct": round(u_v, 2),
                 "armiger_int8_pct": round(i_v, 2),
                 "mimmo_bert_pct": round(m_v, 2),
-                "bitmagnet_pct": round(b_v, 2),
             }
 
         style_ax(ax4_l)
         y_c = np.arange(len(cats_oct_labels))
-        h = 0.19
-        ax4_l.barh(y_c - 1.5 * h, oct_ultra, height=h, color=C_ULTRA, label="Armiger Ultra Fair Hybrid (95.49% Overall)", zorder=3)
-        ax4_l.barh(y_c - 0.5 * h, oct_int8, height=h, color=C_INT8, label="Armiger INT8 + ZeroCue (95.49% Overall, 95.06% Raw)", zorder=3)
-        ax4_l.barh(y_c + 0.5 * h, oct_mimmo, height=h, color="#818CF8", label="MIMMO BERT 360M (72.24% Overall on N=2,835)", zorder=3)
-        ax4_l.barh(y_c + 1.5 * h, oct_bit, height=h, color="#64748B", label="Bitmagnet Built-In (35.17% Overall on N=2,835)", zorder=3)
+        h = 0.24
+        ax4_l.barh(y_c - h, oct_ultra, height=h, color=C_ULTRA, label="Armiger Ultra Fair Hybrid (95.49% Overall)", zorder=3)
+        ax4_l.barh(y_c, oct_int8, height=h, color=C_INT8, label="Armiger INT8 + ZeroCue (95.49% Overall, 95.06% Raw)", zorder=3)
+        ax4_l.barh(y_c + h, oct_mimmo, height=h, color="#818CF8", label="MIMMO BERT 360M (72.24% Overall on N=2,835)", zorder=3)
         ax4_l.set_yticks(y_c)
         ax4_l.set_yticklabels(cats_oct_labels, fontsize=10, fontweight="bold", color=TEXT_MAIN)
         ax4_l.set_ylim(len(cats_oct_labels) - 0.35, -0.6)
         ax4_l.set_xlim(0, 128)
         ax4_l.set_xticks([0, 20, 40, 60, 80, 100])
         ax4_l.set_xlabel("Per-Class Recall (%) — Identical N = 2,835 Ground-Truth Mask", fontsize=9.8, color=TEXT_SUB, labelpad=8)
-        ax4_l.set_title("1. Per-Category Recall vs. Open-Source Classifiers\n(oct15_confirmation, Identical N = 2,835)", fontsize=11.5, fontweight="bold", color=TEXT_MAIN, pad=10)
+        ax4_l.set_title("1. Per-Category Recall vs. Open-Source Neural Baseline\n(oct15_confirmation, Identical N = 2,835)", fontsize=11.5, fontweight="bold", color=TEXT_MAIN, pad=10)
         for idx in range(len(cats_oct_labels)):
-            ax4_l.text(oct_ultra[idx] + 1.0, idx - 1.1 * h, f"{oct_ultra[idx]:.1f}%", va="center", ha="left", fontsize=8.0, fontweight="bold", color=C_ULTRA_EDGE)
-            ax4_l.text(oct_mimmo[idx] + 1.0, idx + 0.5 * h, f"{oct_mimmo[idx]:.1f}%", va="center", ha="left", fontsize=7.6, color="#CBD5E1")
-            ax4_l.text(oct_bit[idx] + 1.0, idx + 1.5 * h, f"{oct_bit[idx]:.1f}%", va="center", ha="left", fontsize=7.6, color=TEXT_SUB)
+            ax4_l.text(oct_ultra[idx] + 1.0, idx - h, f"{oct_ultra[idx]:.1f}%", va="center", ha="left", fontsize=8.0, fontweight="bold", color=C_ULTRA_EDGE)
+            ax4_l.text(oct_mimmo[idx] + 1.0, idx + h, f"{oct_mimmo[idx]:.1f}%", va="center", ha="left", fontsize=7.8, color="#CBD5E1")
+        h = 0.19
         ax4_l.legend(loc="upper center", bbox_to_anchor=(0.5, -0.09), ncol=2, facecolor=BG_PANEL, edgecolor=BORDER_COLOR, fontsize=8.6, labelcolor=TEXT_MAIN)
 
         # Order for Right Panel (beyond_confirmation N=1,025 Non-Circular LOTO)

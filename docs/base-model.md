@@ -57,7 +57,7 @@ All metrics below are reproducibly computed using `armiger_inference.py` against
 
 - **`category` (11 classes: `movie`, `tv_show`, `xxx`, `music`, `comic`, `game`, `audiobook`, `software`, `ebook`, `course`, `unknown`)** — **`95.06%`** Standalone Neural INT8 (**`95.49%`** Fair Hybrid) on `oct15_confirmation` (`N=2,835`); **`93.95%`** INT8 / **`95.39%`** Fair Hybrid weighted mean across all 5 evaluation splits (`N=10,262`).
 - **`adult` (Safety Gate: `non_adult` vs. `adult`)** — **`98.53%`** on `oct15_confirmation` (`2,740/2,781`), **`99.90%`** on `zero_cue_2000`, and **`100.00%`** on `multilang_3000`.
-- **`junk` (Malware & Fake-Codec Filter: `clean` vs. `junk`)** — **`100.00%`** on `oct15_confirmation` (`2,170/2,170`) and `fresh_confirmation` (`1,291/1,291`); **`99.90%`** on `beyond_confirmation` (`976/977`).
+- **`junk` (Sample/Extra & Disguised-Executable Filter: `clean` vs. `junk`)** — **`99.23%`** balanced accuracy (**`99.90%`** overall accuracy, `976/977`, `65` positive items) on `beyond_confirmation` (`100.00%` on `oct15_confirmation` `N=2,170` and `fresh_confirmation` `N=1,291`, where positive sample/junk items are sparse).
 - **`anime` (Anime & Dub Routing: `non_anime` vs. `anime`)** — **`99.61%`** on `oct15_confirmation` (`505/507`) and **`98.90%`** on `beyond_confirmation` (`629/636`).
 - **`lang` (Audio/Release Language: `english`, `non_english`, `multi_or_unknown`)** — **`96.88%`** Standalone Neural / **`97.80%`** with `AudioLanguageGuard` on `oct15_confirmation` binary English-vs-Foreign (`N=545`).
 - **`title_language` (Title Script/Language: `english_title` vs. `non_english_title`)** — **`93.70%`** on `oct15_confirmation` (`N=969`) and **`98.51%`** on `beyond_confirmation` (`N=604`).

@@ -33,8 +33,8 @@ services:
       - "8096:8096"
     environment:
       ARMIGER_MODEL_DIR: /app
-      ARMIGER_VARIANT: "${ARMIGER_VARIANT:-fp32}"
-      ARMIGER_BRIDGE_HOST: "localhost"
+      ARMIGER_VARIANT: "${ARMIGER_VARIANT:-int8}"
+      ARMIGER_BRIDGE_HOST: "0.0.0.0"
       ARMIGER_BRIDGE_PORT: "8096"
       BITMAGNET_GRAPHQL_URL: "http://bitmagnet:3333/graphql"
       ARMIGER_PRUNE_MALWARE: "true"

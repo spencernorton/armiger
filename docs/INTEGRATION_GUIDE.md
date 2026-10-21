@@ -116,7 +116,7 @@ If you configure `DH-Waypoint` via environment variables instead of `plugins.d`:
 
 ## Part B — Integrating Armiger with `Bitmagnet`
 
-Upstream `Bitmagnet` uses deterministic keyword/extension rules (`35.17%` 11-class accuracy on `N=10,262` audited torrents). Deploying [`examples/bitmagnet/bitmagnet_armiger_bridge.py`](../examples/bitmagnet/bitmagnet_armiger_bridge.py) upgrades a `Bitmagnet` deployment to **`95.49%` 11-class accuracy** (`97.60%` 6-dimension composite accuracy) and **`100%` fake-seeder malware trap recall**.
+`Bitmagnet` includes a built-in rule engine and TMDB workflow focused on video and common media types. Deploying [`examples/bitmagnet/bitmagnet_armiger_bridge.py`](../examples/bitmagnet/bitmagnet_armiger_bridge.py) complements a `Bitmagnet` instance with **11-class neural + structural classification (`95.49%` accuracy on `oct15_confirmation` `N=2,835`)**, `torrentContent.putTags` enrichment, and automatic pruning of disguised executable files (`.mkv.exe`, `.scr`, `.lnk`, `.vbs`) via Bitmagnet's GraphQL `torrent.delete` mutation.
 
 ### 1. Turnkey `Bitmagnet` + `Armiger` Docker Compose Stack
 
@@ -271,12 +271,12 @@ ok, reason, record = pipeline.ingest_rsi_feedback(
 assert ok and record.category == "movie"
 ```
 
-### 3. `BEP-44` / `BEP-46` Privacy & RSI Participation Modes
+### 3. Optional `BEP-44` / `BEP-46` Calibration & Telemetry Modes
 
-All adapters enforce `PhysicalGroundTruthVerifier` (never trusting unverified model predictions) and `TelemetryAnonymizer` (stripping tracker passkeys, local paths, and IP addresses; blinding title stems via post-quantum `HMAC-SHA256` + `SHAKE-256`; applying Laplace differential privacy $\epsilon = 1.0$; and scheduling outbound packets with Poisson timing jitter):
+All webhook adapters run `PhysicalGroundTruthVerifier` (requiring verified downloads/streams rather than raw model predictions) and `TelemetryAnonymizer` (stripping tracker passkeys, local paths, and IP addresses, and hashing title stems before any opt-in export):
 
 | `ARMIGER_DHT_RSI_MODE` | Behavior |
 | :--- | :--- |
 | `off` | Disables all `BEP-44`/`BEP-46` DHT traffic; calibration and ground-truth verification stay strictly local. |
-| `pull_only` *(Default)* | Verifies and applies `M`-of-`N` hybrid post-quantum (`Ed25519` + `WOTS+-SHAKE256`) signed calibration manifests from the DHT after passing the 500-item golden canary gate; never transmits telemetry. |
-| `anonymous_contribute` | Opts in to transmitting differential-privacy blinded, hybrid post-quantum (`X25519` + `ML-KEM-768` + `ChaCha20-Poly1305`) encrypted ground-truth observations. |
+| `pull_only` *(Default)* | Verifies signed calibration manifests after passing the local 500-item canary regression check; never transmits outbound telemetry (`opt_in_sharing=False`). |
+| `anonymous_contribute` | Explicitly opts in to exporting anonymized, `BLAKE2b-64` hashed ground-truth observations checked by `AnonymityGuard`. |
