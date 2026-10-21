@@ -505,7 +505,13 @@ class ArmigerStandaloneONNX:
                     shifted = vec - np.max(vec, axis=-1, keepdims=True)
                     exps = np.exp(shifted)
                     probs_2d = exps / np.maximum(1e-12, np.sum(exps, axis=-1, keepdims=True))
-                    tag_ids = [int(x) for x in np.argmax(probs_2d, axis=-1).tolist()]
+                    raw_nm = str(rows[i].get("name") or rows[i].get("title") or "")
+                    try:
+                        from armiger.byte_span_extractor import decode_bio_logits_viterbi, decode_bio_tags_to_spans
+                    except ImportError:
+                        from byte_span_extractor import decode_bio_logits_viterbi, decode_bio_tags_to_spans
+                    raw_b = raw_nm.encode("utf-8", errors="replace")[: vec.shape[0]]
+                    tag_ids = [int(x) for x in decode_bio_logits_viterbi(vec, raw_b).tolist()]
                     classes = NEURAL_HEAD_CLASSES.get(
                         h,
                         list(SPAN_BIO_CLASSES),
@@ -517,8 +523,6 @@ class ArmigerStandaloneONNX:
                         classes[k]: round(float(mean_probs[k]), 6) for k in range(min(len(classes), len(mean_probs)))
                     }
                     try:
-                        from byte_span_extractor import decode_bio_tags_to_spans
-                        raw_nm = str(rows[i].get("name") or rows[i].get("title") or "")
                         item_res["span_bio"] = decode_bio_tags_to_spans(raw_nm, tag_ids)
                     except Exception:
                         item_res["span_bio"] = {"tag_ids": tag_ids, "tags": tag_labels}
