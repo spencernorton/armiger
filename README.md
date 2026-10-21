@@ -74,25 +74,26 @@ pytest -q
 
 ---
 
-## Ecosystem Integrations (`Bitmagnet`, `DH-Waypoint` & Torznab / Webhook Clients)
-
-Reference HTTP bridges and Docker Compose stacks are included in [`examples/`](examples) and documented in [`docs/INTEGRATION_GUIDE.md`](docs/INTEGRATION_GUIDE.md):
-
-- **[`Bitmagnet` Companion Bridge (`examples/bitmagnet/`)](examples/bitmagnet)** — Pre-ingest or post-crawl batch classifier (`bitmagnet_armiger_bridge.py`) that complements Bitmagnet's built-in classifier and TMDB pipeline with 11-class neural categorization, `armiger:*` tag enrichment (`torrentContent.putTags`), and automatic pruning of disguised executable files (`.mkv.exe`, `.scr`, `.lnk`) via Bitmagnet's GraphQL `torrent.delete` mutation.
-- **[`DH-Waypoint` Processor (`examples/dh-waypoint/`)](examples/dh-waypoint)** — Drop-in `processorapi/v1` service (`armiger_waypoint_processor.py`) and plugin manifest (`07-armiger-ultra.plugin.yml`) implementing batch classification (`dh-waypoint.processor.v1`), pre-ingest admission (`dh-waypoint.processors.admission.v1`), and outcome feedback (`dh-waypoint.processors.feedback.v1`) for [`spencernorton/DH-Waypoint`](https://github.com/spencernorton/DH-Waypoint).
-- **[Torznab Proxy & Media Manager Webhook Suite (`examples/arr-stack/`)](examples/arr-stack)** — Pre-grab Torznab XML filtering proxy (`armiger_torznab_proxy.py`) for `Prowlarr`, `Bitmagnet`, `DH-Waypoint`, `Sonarr`, `Radarr`, `Lidarr`, and `Readarr`, paired with an optional post-import webhook receiver (`armiger_arr_webhook_receiver.py`).
-
----
-
-## What's Included & Modular Plugins
+## What's Included & The 6 Official Plugins
 
 - **`armiger_ultra.fp32.onnx` (`32.3 MB`) & `armiger_ultra.pt` (`32.2 MB`)** — Full-precision 8-head byte-level RoPE Transformer + File-Tree Encoder (`0.21 ms/item` batch-64 on NVIDIA RTX GPU, `0.29 ms/item` on Apple M4 Pro MPS GPU).
 - **`armiger.int8.onnx` (`8.3 MB`)** — Dynamically quantized CPU fast-path engine from the same checkpoint (`2.44 ms` single-item p50 on Apple M4 Pro CPU ONNX Runtime). See [`docs/base-model.md`](docs/base-model.md).
 - **[SwarmSurvivalNet v2 Adapter](https://huggingface.co/NorviTech/armiger-swarm-survival)** (`swarm_survival.py`, `swarm_adapter.pt` · `167 KB`) — 48-tensor residual neural pass combining tracker/DHT seeder-leecher telemetry with content embeddings to reach **`96.83%`** Multi-Source Corpus AUROC (`N=10,278`, vs. `53.02%` raw seeders) and **`92.42%`** Public-Tracker AUROC (`N=757`) while keeping `category` predictions independent of seeder counts. See [`docs/plugins/swarm-survival.md`](docs/plugins/swarm-survival.md).
 - **[Empirical Bayes Swarm Priors](https://huggingface.co/NorviTech/armiger-swarm-priors)** (`swarm_priors.py` · `29 KB`) — 4-pathway tracker scrape priors (`86.64%` formula AUROC), anomaly features, and passkey sanitization. See [`docs/plugins/swarm-priors.md`](docs/plugins/swarm-priors.md).
-- **[Zero-Cue Catalog & Structural Disambiguator](https://huggingface.co/NorviTech/armiger-zero-cue-catalog)** (`zero_cue_plugin.py`, `validated_zero_cue_catalog.json` · `26.0 MB`) — `929,400`-entry `BLAKE2b-64` hashed catalog + structural rules, lifting `zero_cue_2000` (`N=2,000`) accuracy by **`+4.10 pp`** (`87.40%` $ightarrow$ **`91.50%`**) and `beyond_confirmation` (`N=1,025`) by **`+2.24 pp`** (`92.88%` $ightarrow$ **`95.12%`**). See [`docs/plugins/zero-cue-catalog.md`](docs/plugins/zero-cue-catalog.md).
+- **[Zero-Cue Catalog & Structural Disambiguator](https://huggingface.co/NorviTech/armiger-zero-cue-catalog)** (`zero_cue_plugin.py`, `validated_zero_cue_catalog.json` · `26.0 MB`) — `929,400`-entry `BLAKE2b-64` hashed catalog + structural rules, lifting `zero_cue_2000` (`N=2,000`) accuracy by **`+4.10 pp`** (`87.40%` $
+ightarrow$ **`91.50%`**) and `beyond_confirmation` (`N=1,025`) by **`+2.24 pp`** (`92.88%` $
+ightarrow$ **`95.12%`**). See [`docs/plugins/zero-cue-catalog.md`](docs/plugins/zero-cue-catalog.md).
 - **[Cross-Head Audio Language & Anime Dub Guard](https://huggingface.co/NorviTech/armiger-audio-guard)** (`audio_language_guard.py` · `3.3 KB`) — Couples `title_language` with the `lang` head to disambiguate `.en.` prepositions, `<Foreign>.ENG.Sub` releases, regional dubs, and `MULTi` tags, lifting binary English-vs-Foreign audio accuracy on `oct15_confirmation` (`N=545`) from **`96.88%`** to **`97.80%`**. See [`docs/plugins/audio-guard.md`](docs/plugins/audio-guard.md).
 - **[Conformal Calibration & Optional DHT Sync Plugins](https://huggingface.co/NorviTech/armiger-calibration-dht)** (`calibration.json`, `calibration_and_dht.py`, `armiger_dht_rsi.py`, `armiger_dht_db_sync.py`, `csam_guard.py`) — Per-head temperature scaling, Mondrian conformal thresholds, multi-stage CSAM/abuse pre-ingest blocking, and strictly opt-in (`opt_in_sharing=False` by default) experimental `BEP-44` catalog/calibration sync behind `AnonymityGuard`. See [`docs/plugins/calibration-dht.md`](docs/plugins/calibration-dht.md), [`docs/plugins/dht-db-sync.md`](docs/plugins/dht-db-sync.md), and [`docs/ANONYMOUS_OPT_IN_DHT.md`](docs/ANONYMOUS_OPT_IN_DHT.md).
+
+---
+
+## Separate Optional Addition: Ecosystem Connectors (`spencernorton/Armiger-Connectors`)
+
+External HTTP, GraphQL, and Manticore connectors are maintained as a **separate repository** — **[`spencernorton/Armiger-Connectors`](https://github.com/spencernorton/Armiger-Connectors)** — distinct from the core classifier and the 6 official plugins above:
+
+- **[Stock `bitmagnet` Connector (`bitmagnet/`)](https://github.com/spencernorton/Armiger-Connectors/tree/main/bitmagnet)** — Connects to unmodified [`bitmagnet-io/bitmagnet`](https://github.com/bitmagnet-io/bitmagnet) via GraphQL (`torrentContent.search` + `torrent.files`), pruning disguised executables (`.mkv.exe`, `.scr`, `.lnk`) via `torrent.delete` and enriching surviving items with grouped `torrent.putTags` mutations.
+- **[Stock `rats-search` Connector (`rats-search/`)](https://github.com/spencernorton/Armiger-Connectors/tree/main/rats-search)** — Connects to unmodified [`librats/rats-search`](https://github.com/librats/rats-search) via REST (`:8095`), WebSocket (`:8096`), and local Manticore (`127.0.0.1:9306`), purging disguised executables via `/api/torrent.remove` and populating `contentType` and `contentCategory` (`Movie=1..Game=9`, `XXX=100`) using `rowIdFromHash` docid lookups.
 
 ---
 
