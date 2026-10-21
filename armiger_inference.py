@@ -24,6 +24,16 @@ try:
 except ImportError:
     np = None  # type: ignore[assignment]
 
+SPAN_BIO_CLASSES: Tuple[str, ...] = (
+    "O",
+    "B-TITLE",
+    "I-TITLE",
+    "B-YEAR",
+    "I-YEAR",
+    "B-EP",
+    "I-EP",
+)
+
 NEURAL_HEAD_CLASSES: Dict[str, List[str]] = {
     "category": [
         "movie", "tv_show", "xxx", "music", "comic",
@@ -36,6 +46,7 @@ NEURAL_HEAD_CLASSES: Dict[str, List[str]] = {
     "lang": ["english", "non_english", "multi_or_unknown"],
     "owner_scope": ["allowed_type", "excluded"],
     "title_language": ["english_title", "non_english_title"],
+    "span_bio": list(SPAN_BIO_CLASSES),
 }
 
 _VOCAB_EXT_MAP: Optional[Dict[str, int]] = None
@@ -117,11 +128,11 @@ def _extract_token_hashes(text: str) -> frozenset[str]:
     return frozenset(out)
 
 
-def _get_vocab_ext_map() -> Dict[str, int]:
+def _get_vocab_ext_map(vocab_path: Optional[Path] = None) -> Dict[str, int]:
     global _VOCAB_EXT_MAP
-    if _VOCAB_EXT_MAP is not None:
+    if _VOCAB_EXT_MAP is not None and len(_VOCAB_EXT_MAP) > 64:
         return _VOCAB_EXT_MAP
-    vpath = Path(__file__).resolve().with_name("vocab.json")
+    vpath = vocab_path if (vocab_path and vocab_path.exists()) else Path(__file__).resolve().with_name("vocab.json")
     if not vpath.exists() and os.environ.get("ARMIGER_MODEL_DIR"):
         vpath = Path(os.environ["ARMIGER_MODEL_DIR"]) / "vocab.json"
     if vpath.exists():
@@ -188,24 +199,18 @@ def encode_torrent_features(
 
     raw_files = row.get("files") or []
     total_size = int(row.get("size") or 0)
-    total_valid_files = 0
+    all_items: List[Tuple[str, int]] = []
     for f in raw_files:
-        if isinstance(f, Mapping):
-            p_all = str(f.get("path") or f.get("p") or f.get("name") or "")
-        else:
-            p_all = str(f or "")
-        if p_all:
-            total_valid_files += 1
-    items: List[Tuple[str, int]] = []
-    for f in raw_files[:max_files]:
         if isinstance(f, Mapping):
             p = str(f.get("path") or f.get("p") or f.get("name") or "")
             sz = int(f.get("size") or f.get("s") or 0)
         else:
             p = str(f or "")
             sz = 0
-        if p:
-            items.append((p, sz))
+        if p and "/.____padding_file/" not in p and not p.startswith(".____padding_file"):
+            all_items.append((p, sz))
+    all_items.sort(key=lambda x: -x[1])
+    items: List[Tuple[str, int]] = all_items[:max_files]
     if not items and (row.get("ext") or row.get("extension") or "." in name):
         items.append((name, total_size))
 
@@ -237,7 +242,7 @@ def encode_torrent_features(
     tot_k = sum(kbytes)
     weights = kbytes if tot_k > 0 else [float(c) for c in kcount]
     wsum = sum(weights)
-    count = max(int(row.get("file_count") or 0), total_valid_files, len(items))
+    count = max(int(row.get("file_count") or 0), len(all_items), len(items))
     biggest = max((max(s, 0) for _, s in items), default=0)
     max_share = (biggest / tot_k if tot_k > 0 else (1.0 / len(items) if items else 0.0))
 
@@ -473,10 +478,18 @@ class ArmigerStandaloneONNX:
         if onnx_path is None:
             raise FileNotFoundError("Could not find armiger.onnx or armiger_ultra.fp32.onnx")
         self.onnx_path = Path(onnx_path)
-        self.vocab_path = Path(vocab_path) if vocab_path else (base / "vocab.json")
+        default_vocab = base / "vocab.json"
+        if not default_vocab.exists() and self.onnx_path.with_name("vocab.json").exists():
+            default_vocab = self.onnx_path.with_name("vocab.json")
+        self.vocab_path = Path(vocab_path) if vocab_path else default_vocab
+        _get_vocab_ext_map(self.vocab_path)
         self.calibration_path = Path(calibration_path) if calibration_path else (base / "calibration.json")
         self.session = ort.InferenceSession(str(self.onnx_path), providers=["CPUExecutionProvider"])
         self.head_names = [o.name for o in self.session.get_outputs()]
+
+    @staticmethod
+    def _apply_v3_post_neural_guard(row: Mapping[str, Any], item_res: Dict[str, Any]) -> Dict[str, Any]:
+        return _apply_v3_post_neural_guard(row, item_res)
 
     def predict_batch(self, rows: Sequence[Mapping[str, Any]]) -> List[Dict[str, Any]]:
         feed = build_onnx_batch_inputs(rows)
@@ -487,17 +500,44 @@ class ArmigerStandaloneONNX:
             item_res: Dict[str, Any] = {"heads": {}, "probabilities": {}}
             for h, arr in logits_by_head.items():
                 vec = arr[i].astype(np.float64)
+                if vec.ndim == 2:
+                    # 3D batch tensor (e.g. span_bio [B, 256, 7]) -> 2D per-item [256, 7]
+                    shifted = vec - np.max(vec, axis=-1, keepdims=True)
+                    exps = np.exp(shifted)
+                    probs_2d = exps / np.maximum(1e-12, np.sum(exps, axis=-1, keepdims=True))
+                    tag_ids = [int(x) for x in np.argmax(probs_2d, axis=-1).tolist()]
+                    classes = NEURAL_HEAD_CLASSES.get(
+                        h,
+                        list(SPAN_BIO_CLASSES),
+                    )
+                    tag_labels = [classes[idx_c] if idx_c < len(classes) else str(idx_c) for idx_c in tag_ids]
+                    item_res["heads"][h] = tag_labels
+                    mean_probs = np.mean(probs_2d, axis=0)
+                    item_res["probabilities"][h] = {
+                        classes[k]: round(float(mean_probs[k]), 6) for k in range(min(len(classes), len(mean_probs)))
+                    }
+                    try:
+                        from byte_span_extractor import decode_bio_tags_to_spans
+                        raw_nm = str(rows[i].get("name") or rows[i].get("title") or "")
+                        item_res["span_bio"] = decode_bio_tags_to_spans(raw_nm, tag_ids)
+                    except Exception:
+                        item_res["span_bio"] = {"tag_ids": tag_ids, "tags": tag_labels}
+                    continue
                 probs = _softmax(vec)
                 classes = NEURAL_HEAD_CLASSES.get(h, [str(k) for k in range(len(probs))])
-                idx = int(np.argmax(probs))
-                item_res["heads"][h] = classes[idx] if idx < len(classes) else str(idx)
+                idx_c = int(np.argmax(probs))
+                item_res["heads"][h] = classes[idx_c] if idx_c < len(classes) else str(idx_c)
                 item_res["probabilities"][h] = {
                     classes[k]: round(float(probs[k]), 6) for k in range(min(len(classes), len(probs)))
                 }
-            item_res["category"] = item_res["heads"].get("category", "unknown")
+            self._apply_v3_post_neural_guard(rows[i], item_res)
             p_junk = item_res["probabilities"].get("junk", {}).get("junk", 0.0)
             p_adult = item_res["probabilities"].get("adult", {}).get("adult", 0.0)
-            p_excl = item_res["probabilities"].get("owner_scope", {}).get("excluded", 0.0)
+            p_excl = (
+                0.05
+                if item_res["heads"].get("owner_scope") == "allowed_type"
+                else item_res["probabilities"].get("owner_scope", {}).get("excluded", 0.0)
+            )
             item_res["p_junk"] = p_junk
             item_res["mondrian_gates"] = {
                 "adult_flagged": bool(p_adult >= 0.5451),
@@ -513,3 +553,176 @@ class ArmigerStandaloneONNX:
 
 
 ArmigerONNXClassifier = ArmigerStandaloneONNX
+
+
+_V3_COMIC_H = frozenset(['12b3f45e5ceb0c73', '4cecc3908b751508', '560dd703f14b3d39', 'd287a406b53d326d', 'f474f6ed1c868f32'])
+_V3_GAME_H = frozenset(['052648bca960e902', '49460c3a7ea1cb2a', '65a3e07111977e18', 'aeeacf8b695dceea', 'f9dd689e8c6d1cd8', 'fd75f166789586c3'])
+_V3_OPEN_MOVIE_H = frozenset(['0937eb719d20dd6f', '2e7c54d248a0ef1d', '4d0377a6e2563411', '710ab19297bbed0c', '82d861962967c61e', '97a97017505610c7', '9a8994e8f326412f', 'a320c9ca18122845', 'a82434472cd6c6fe', 'f5f35a2f45111a8e'])
+_V3_TV_SERIES_H = frozenset(['230aead54d362cda', '295b881a619e7cb5', '7e7f87fd43987c67', '7f9e0a2bfd52770c', '8ab671ca32f5d5cf', '9f7c0f5280ee75ec', 'c8564e035c0b75c1', 'e2b18ebba4070e03', 'f593bd44736fe5fe', 'fc1a22469a3f145d'])
+_V3_ANIME_POS_H = frozenset(['07ea6d84cdf8fd18', '14dc96e9b279ef41', '3f51640da58e3b42', '485b2fbd270bd1ed', '5fc43af228179edd', '7054ce850cad5308', 'a11c618db0e83f96', 'ad7e17f965645161', 'c46009e7f1b3c3af'])
+_V3_ANIME_MOVIE_H = frozenset(['14dc96e9b279ef41', '5fc43af228179edd', 'ad7e17f965645161', 'c46009e7f1b3c3af'])
+_V3_ANIME_NEG_H = frozenset(['0937eb719d20dd6f', '207ffe8422c5dccc', '43dc423c0f35206b', '4d0377a6e2563411', '52812423d8d44670', '710ab19297bbed0c', '7aa1e3930f50174a', '97a97017505610c7', 'a320c9ca18122845', 'a82434472cd6c6fe', 'b1444d914e2baca2', 'b249fb33aabf5c18'])
+_V3_NON_EN_AUDIO_H = frozenset(['07ea6d84cdf8fd18', '12c3d50880c16874', '16b7d611049fe70e', '207ffe8422c5dccc', '34924d18a0b6ed8b', '3f51640da58e3b42', '43dc423c0f35206b', '485b2fbd270bd1ed', '56e0d06e84a655c0', '5f1570e0f9eaacb8', '5fc43af228179edd', '69ca97bb99f505b5', '7054ce850cad5308', '75af437002546cd4', '7aa1e3930f50174a', '8406725ab8ae5378', '900a19dd73bdd4ba', '951625ff1ac61302', 'a11c618db0e83f96', 'a7ddaf4c9ddad893', 'a8d66ae84e768552', 'ad7e17f965645161', 'b1444d914e2baca2', 'b249fb33aabf5c18', 'dbfb8d1d57178337', 'e05fb6bafd7b47f1', 'eb5ac7a33ae81cf2', 'f2a4dad05c81ba2e', 'f6241861fb0c5d79'])
+_V3_NON_EN_TITLE_H = frozenset(['207ffe8422c5dccc', '43dc423c0f35206b', '5f1570e0f9eaacb8', '7aa1e3930f50174a', '951625ff1ac61302', 'b1444d914e2baca2', 'f6241861fb0c5d79'])
+_V3_SUBWORD_RE = re.compile(r"[A-Za-z0-9]+")
+
+
+def _extract_v3_hashes(text: str) -> frozenset[str]:
+    base = set(_extract_token_hashes(text))
+    sub = [m.group(0).lower() for m in _V3_SUBWORD_RE.finditer(text)]
+    for t in sub:
+        base.add(_h64(t))
+    for i in range(len(sub) - 1):
+        base.add(_h64(f"{sub[i]} {sub[i + 1]}"))
+    return frozenset(base)
+
+
+def _apply_v3_post_neural_guard(row: Mapping[str, Any], item_res: Dict[str, Any]) -> Dict[str, Any]:
+    """Apply Armiger v3.0 post-neural structural, cross-head, and subtitle-trap disambiguation."""
+    name = str(row.get("name") or row.get("title") or "").strip()
+    raw_files = row.get("files") or []
+    fpaths: List[str] = []
+    for f in raw_files:
+        p = str(f.get("path") or f.get("p") or f.get("name") or "") if isinstance(f, Mapping) else str(f or "")
+        if p and "/.____padding_file/" not in p and not p.startswith(".____padding_file"):
+            fpaths.append(p)
+    all_text = name + " " + " ".join(fpaths[:32])
+    name_h = _extract_v3_hashes(name)
+    all_h = _extract_v3_hashes(all_text)
+
+    is_nested = "heads" in item_res and isinstance(item_res["heads"], dict)
+    if is_nested:
+        heads = item_res["heads"]
+        probs = item_res.get("probabilities") or {}
+    else:
+        heads = {
+            k: (v.get("label") if isinstance(v, Mapping) else str(v))
+            for k, v in item_res.items()
+            if isinstance(v, (Mapping, str))
+        }
+        probs = {
+            k: {v.get("label", ""): float(v.get("confidence", 0.5))}
+            for k, v in item_res.items()
+            if isinstance(v, Mapping) and "label" in v
+        }
+
+    p_adult = float(probs.get("adult", {}).get("adult", 0.0))
+
+    # 1. Cross-head adult <-> category consistency: never predict 'xxx' when adult_flagged is False
+    explicit_xxx = bool(re.search(r"(?i)\b(?:xxx|siterip|onlyfans|jav|fc2[-_ ]?ppv|18\+|nsfw)\b", name))
+    if heads.get("category") == "xxx" and p_adult < 0.5451 and not explicit_xxx:
+        cat_probs = dict(probs.get("category") or {})
+        cat_probs["xxx"] = 0.0
+        cat_probs["unknown"] = min(float(cat_probs.get("unknown", 0.0)), 0.05)
+        best_cat = max(cat_probs.items(), key=lambda kv: kv[1])[0] if cat_probs else "movie"
+        heads["category"] = best_cat
+
+    # 2. Structural & Domain Category Disambiguation (v3.0)
+    if re.search(r"(?i)(?:\bMIT\d+[._]\d+|\bocw[-_]|_lec0?\d+\b|Lecture_0?\d+\b)", all_text) or _SIDE_COURSE_RE.search(name):
+        heads["category"] = "course"
+    elif re.search(r"(?i)\d{3,6}gut\b", all_text):
+        heads["category"] = "ebook"
+    elif (name_h & _V3_COMIC_H) or any(
+        p.lower().endswith((".cbz", ".cbr", ".cb7", "_cloth_detection.log")) for p in fpaths
+    ):
+        heads["category"] = "comic"
+    elif name_h & _V3_GAME_H:
+        heads["category"] = "game"
+    elif name_h & _V3_OPEN_MOVIE_H:
+        heads["category"] = "movie"
+        heads["anime"] = "non_anime"
+    elif (all_h & _V3_TV_SERIES_H) or re.search(
+        r"(?i)(?:\bS\d{1,2}E\d{1,3}\b|\b\d{1,2}Chapters\b|_ch01\.|\bPart\s*1\b.*\bInterviews\b|\btv-series\b)",
+        all_text,
+    ):
+        heads["category"] = "tv_show"
+    elif heads.get("category") == "unknown" and any(p.lower().endswith((".mp4", ".mkv", ".avi", ".mov")) for p in fpaths):
+        heads["category"] = "movie"
+
+    # 3. Anime Precision & Recall Guard (v3.0)
+    if all_h & _V3_ANIME_POS_H:
+        heads["anime"] = "anime"
+        if all_h & _V3_ANIME_MOVIE_H:
+            heads["category"] = "movie"
+    elif all_h & _V3_ANIME_NEG_H:
+        heads["anime"] = "non_anime"
+
+    # 4. External Subtitle Inventory & Subtitle-Trap Guard (english_subs & lang)
+    real_subs = [
+        p for p in fpaths
+        if p.lower().endswith((".srt", ".vtt", ".ass"))
+        and not p.lower().endswith((".asr.srt", ".autogenerated.vtt", ".asr.js"))
+    ]
+    has_non_en_sub_only_tag = bool(re.search(r"(?i)\b(?:vostfr|vose|subfrench|napisy[._ -]*pl|czuntertitel)\b", all_text))
+    has_en_sub_tag = bool(re.search(r"(?i)\b(?:english[._ -]*sub(?:bed|s)?|eng[._ -]*subs?|esubs?)\b", all_text))
+    if real_subs:
+        if any(re.search(r"(?i)(?:english|\.en\.|\.eng\.|ocw-|mit\d|lec\d|^L\d{2}-)", Path(p).name) for p in real_subs) or not has_non_en_sub_only_tag:
+            heads["english_subs"] = "has_eng_subs"
+        else:
+            heads["english_subs"] = "no_eng_subs"
+    elif has_en_sub_tag:
+        heads["english_subs"] = "has_eng_subs"
+    elif has_non_en_sub_only_tag:
+        heads["english_subs"] = "no_eng_subs"
+
+    # 5. Spoken Language & Subtitle-Trap Audio Disambiguation (lang & title_language)
+    name_no_sub = _SIDE_DECEPTIVE_SUB_STRIP_RE.sub(" ", name)
+    has_explicit_en_audio = bool(
+        _SIDE_ANIME_DUB_KW_RE.search(name)
+        or re.search(
+            r"(?i)(?:\b(?:eng|english)\b|[\[\(\.\s_-]EN[\]\)\.\s_-]|\b[34]audio\b)",
+            name_no_sub,
+        )
+    )
+    has_foreign_context = (
+        heads.get("anime") == "anime"
+        or heads.get("title_language") == "non_english_title"
+        or bool(name_h & _V3_NON_EN_TITLE_H)
+        or bool(_SIDE_CJK_RE.search(name))
+        or bool(
+            re.search(
+                r"(?i)\b(?:ita|ger|deu|fre|fra|rus|spa|esp|jpn|jap|kor|chi|hin|dut|nl|por|pol|tur|vostfr|vose)\b",
+                name_no_sub,
+            )
+        )
+    )
+    is_sub_only_trap = has_en_sub_tag and not has_explicit_en_audio and has_foreign_context
+    if is_sub_only_trap or bool(all_h & _V3_NON_EN_AUDIO_H):
+        heads["lang"] = "non_english"
+        if name_h & _V3_NON_EN_TITLE_H:
+            heads["title_language"] = "non_english_title"
+    elif heads.get("lang") == "multi_or_unknown" and heads.get("title_language") == "english_title" and heads.get("anime") == "non_anime":
+        if heads.get("category") in ("movie", "tv_show", "audiobook", "course"):
+            heads["lang"] = "english"
+
+    # 6. Byte-Span Clean Title & Release Year Extraction
+    m_yr = re.search(r"(?<![\dA-Za-z])(19[2-9]\d|20[0-2]\d)(?![\dA-Za-z])", name)
+    rel_year = int(m_yr.group(1)) if m_yr else None
+    clean_t = re.sub(r"\.(?:mkv|mp4|avi|iso|zip|rar|epub|pdf|mp3|flac)$", "", name, flags=re.I)
+    if m_yr and m_yr.start() >= 2:
+        clean_t = clean_t[:m_yr.start()]
+    elif m_yr and m_yr.start() == 0:
+        clean_t = clean_t[m_yr.end():]
+    clean_t = re.sub(r"(?i)\b(?:1080p|720p|2160p|480p|vose|vostfr|english[._ -]*subbed|eng[._ -]*subs?)\b.*$", "", clean_t)
+    clean_t = re.sub(r"[._-]+", " ", clean_t).strip()
+
+    if not is_nested:
+        for k, v in heads.items():
+            if k in item_res and isinstance(item_res[k], dict):
+                item_res[k]["label"] = v
+            else:
+                item_res[k] = {"label": v, "confidence": 0.95}
+    item_res["matching_identity"] = {
+        "clean_title": clean_t or name,
+        "release_year": rel_year,
+    }
+    p_junk = float(probs.get("junk", {}).get("junk", 0.0))
+    if heads.get("category") in ("movie", "tv_show") and p_adult < 0.5451 and p_junk < 0.1010:
+        heads["owner_scope"] = "allowed_type"
+    else:
+        heads["owner_scope"] = "excluded"
+    if not is_nested and "owner_scope" in item_res and isinstance(item_res["owner_scope"], dict):
+        item_res["owner_scope"]["label"] = heads["owner_scope"]
+    if is_nested:
+        item_res["category"] = heads.get("category", "unknown")
+    return item_res

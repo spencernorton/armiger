@@ -990,6 +990,7 @@ class TestOptInOutModesAndMasterEngine(unittest.TestCase):
             threshold_m=1,
             min_distinct_asns=2,
             aggregator_x25519_pubkey_hex=self.aggregator_pub_hex,
+            require_pq=False,
         )
 
         bundle_content = json.dumps({"heads": {"category": {"temperature": 1.25}}}).encode("utf-8")
@@ -2124,7 +2125,7 @@ class TestByzantineResilientAggregatorAndASNBinding(unittest.TestCase):
                 )
             )
 
-        res = aggregator.aggregate_continuous_deltas(submissions)
+        res = aggregator.aggregate_continuous_deltas(submissions, require_attestation=False)
         self.assertTrue(res.success)
         # 7 honest ASNs + 1 flooding ASN = 8 distinct ASNs total
         self.assertEqual(res.distinct_asn_count, 8)
@@ -2175,7 +2176,7 @@ class TestByzantineResilientAggregatorAndASNBinding(unittest.TestCase):
                 )
             )
 
-        res = aggregator.aggregate_continuous_deltas(submissions, trim_fraction=0.20)
+        res = aggregator.aggregate_continuous_deltas(submissions, trim_fraction=0.20, require_attestation=False)
         self.assertTrue(res.success)
         self.assertEqual(res.distinct_asn_count, 12)
         self.assertAlmostEqual(float(res.trimmed_mean_deltas["category_temperature"]), 1.20, delta=0.015)
@@ -2216,7 +2217,7 @@ class TestByzantineResilientAggregatorAndASNBinding(unittest.TestCase):
                 )
             )
 
-        res = aggregator.aggregate_continuous_deltas(submissions, trim_fraction=0.20)
+        res = aggregator.aggregate_continuous_deltas(submissions, trim_fraction=0.20, require_attestation=False)
         self.assertTrue(res.success)
         self.assertEqual(res.distinct_asn_count, 20)
         self.assertAlmostEqual(res.trimmed_mean_deltas["lora_delta"][0], 0.025, delta=0.005)
@@ -2270,7 +2271,8 @@ class TestByzantineResilientAggregatorAndASNBinding(unittest.TestCase):
             pub_hex = priv.public_key().public_bytes(Encoding.Raw, PublicFormat.Raw).hex()
             claimed_asn = FIFTY_REAL_ASNS[i]
             peer_id = f"subnet_v4_node_{i}"
-            body = {"asn": int(claimed_asn), "peer_id": peer_id, "target_hash": target_hash, "timestamp": ts}
+            ip_val = f"198.51.100.{i + 10}"
+            body = {"asn": int(claimed_asn), "ip_address": ip_val, "peer_id": peer_id, "target_hash": target_hash, "timestamp": ts}
             sig_hex = priv.sign(json.dumps(body, sort_keys=True, separators=(",", ":")).encode("utf-8")).hex()
             ipv4_spoof_atts.append(
                 PeerAttestation(
@@ -2279,7 +2281,7 @@ class TestByzantineResilientAggregatorAndASNBinding(unittest.TestCase):
                     peer_pubkey_hex=pub_hex,
                     timestamp=ts,
                     signature_hex=sig_hex,
-                    ip_address=f"198.51.100.{i + 10}",
+                    ip_address=ip_val,
                 )
             )
 
@@ -2297,7 +2299,8 @@ class TestByzantineResilientAggregatorAndASNBinding(unittest.TestCase):
             pub_hex = priv.public_key().public_bytes(Encoding.Raw, PublicFormat.Raw).hex()
             claimed_asn = FIFTY_REAL_ASNS[i]
             peer_id = f"subnet_v6_node_{i}"
-            body = {"asn": int(claimed_asn), "peer_id": peer_id, "target_hash": target_hash, "timestamp": ts}
+            ip_val = f"2001:db8:abcd:{i}::1"
+            body = {"asn": int(claimed_asn), "ip_address": ip_val, "peer_id": peer_id, "target_hash": target_hash, "timestamp": ts}
             sig_hex = priv.sign(json.dumps(body, sort_keys=True, separators=(",", ":")).encode("utf-8")).hex()
             ipv6_spoof_atts.append(
                 PeerAttestation(
@@ -2306,7 +2309,7 @@ class TestByzantineResilientAggregatorAndASNBinding(unittest.TestCase):
                     peer_pubkey_hex=pub_hex,
                     timestamp=ts,
                     signature_hex=sig_hex,
-                    ip_address=f"2001:db8:abcd:{i}::1",
+                    ip_address=ip_val,
                 )
             )
 
@@ -2456,6 +2459,7 @@ class TestByzantineResilientAggregatorAndASNBinding(unittest.TestCase):
             submissions,
             require_authoritative_asn=True,
             emit_bep46_manifest=True,
+            require_attestation=False,
         )
         self.assertTrue(res.success)
         self.assertEqual(res.distinct_asn_count, 6)
