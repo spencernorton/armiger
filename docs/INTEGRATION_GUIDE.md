@@ -1,6 +1,6 @@
 # Armiger & Armiger Ultra Ecosystem Integration Guide
 
-This guide provides step-by-step instructions, turnkey Docker Compose stacks, and reference HTTP adapters for integrating **Armiger** (`8.3 MB INT8 CPU`) and **Armiger Ultra** (`32.3 MB FP32 GPU/CPU` + 6 official plugins) with:
+This guide provides step-by-step instructions, turnkey Docker Compose stacks, and reference HTTP adapters for integrating **Armiger** (`15.7 MB INT8 CPU`) and **Armiger Ultra** (`32.5 MB FP32 GPU/CPU` + 6 official plugins) with:
 
 1. **[Part A — Integrating with `DH-Waypoint`](#part-a--integrating-armiger-with-dh-waypoint)** (`https://github.com/spencernorton/DH-Waypoint`):
    - Native `dh-waypoint.processor.v1` processor contract (`GET /v1/manifest`, `GET /v1/status`, `POST /v1/process`, and batch `POST /v1/classify`)
@@ -116,7 +116,7 @@ If you configure `DH-Waypoint` via environment variables instead of `plugins.d`:
 
 ## Part B — Integrating Armiger with `Bitmagnet`
 
-`Bitmagnet` includes a built-in rule engine and TMDB workflow focused on video and common media types. Deploying [`examples/bitmagnet/bitmagnet_armiger_bridge.py`](../examples/bitmagnet/bitmagnet_armiger_bridge.py) complements a `Bitmagnet` instance with **11-class neural + structural classification (`95.49%` accuracy on `oct15_confirmation` `N=2,835`)**, `torrentContent.putTags` enrichment, and automatic pruning of disguised executable files (`.mkv.exe`, `.scr`, `.lnk`, `.vbs`) via Bitmagnet's GraphQL `torrent.delete` mutation.
+`Bitmagnet` includes a built-in rule engine and TMDB workflow focused on video and common media types. Deploying [`examples/bitmagnet/bitmagnet_armiger_bridge.py`](../examples/bitmagnet/bitmagnet_armiger_bridge.py) complements a `Bitmagnet` instance with **11-class neural + structural classification (`94.85%` accuracy on `oct15_confirmation` `N=2,835`)**, `torrentContent.putTags` enrichment, and automatic pruning of disguised executable files (`.mkv.exe`, `.scr`, `.lnk`, `.vbs`) via Bitmagnet's GraphQL `torrent.delete` mutation.
 
 ### 1. Turnkey `Bitmagnet` + `Armiger` Docker Compose Stack
 
@@ -191,7 +191,7 @@ docker compose -f examples/arr-stack/docker-compose.yml up -d
 | Variable | Default | Description |
 | :--- | :---: | :--- |
 | `UPSTREAM_TORZNAB_URL` | `http://dh-waypoint:3333/torznab` | Upstream Torznab base URL (`DH-Waypoint`, `Bitmagnet`, or `Prowlarr`). |
-| `ARMIGER_VARIANT` | `int8` | `int8` (`8.3 MB` CPU fast-path, `2.44 ms` p50) or `fp32` (`32.3 MB` GPU/CPU). |
+| `ARMIGER_VARIANT` | `int8` | `int8` (`15.7 MB` CPU fast-path, `2.51 ms` single-item) or `fp32` (`32.5 MB` GPU/CPU). |
 | `ARMIGER_REJECT_DEAD_SWARMS` | `true` | Drops Torznab items whose `SwarmSurvivalNet` viability tier is `dead`. |
 | `ARMIGER_REQUIRE_ENGLISH_AUDIO` | `false` | When `true`, blocks releases classified as `non_english` audio by `AudioLanguageGuard`. |
 | `ARMIGER_ALLOW_ENGLISH_SUBS` | `true` | When `ARMIGER_REQUIRE_ENGLISH_AUDIO=true`, permits foreign-audio anime/films that carry verified English subtitles (`has_eng_subs`). |

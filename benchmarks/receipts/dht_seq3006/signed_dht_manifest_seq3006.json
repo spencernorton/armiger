@@ -1,0 +1,12 @@
+{
+  "bundle_sha256": "eb51b68282ec0b0f2690b6e51ee60faf1d847ba3d89d4146cea42b3e41b2c47a",
+  "ed25519_pubkey_hex": "5ab95992ae2abac444e1caaf45e03fc386f53d3c902348492231d3d4c887aaa6",
+  "ed25519_signature_hex": "35260f69bbbeb8aed0d8eae5eedba113c50d1dbecf23e1e01b10e0c775f2d51649b98c0418b6e8a5f341bb673931f97a65ec6ec8cf8f875c2faee4c48ebace07",
+  "infohash": "7af84111a1b0f7e1ef36b26eda9a376cf3df4037",
+  "note": "XMSS signature carried by HeadDeltaBundle + ModelReleasePointer; manifest binds bundle sha under same Ed25519 authority.",
+  "pq_pubkey_hex": "e942e72beb12adb41b772292efb34518971eaba014d28ec57633a4e879cb0ff2",
+  "quorum_attestations": 0,
+  "seq": 3006,
+  "timestamp": 1792615036,
+  "version": "3.0.0"
+}

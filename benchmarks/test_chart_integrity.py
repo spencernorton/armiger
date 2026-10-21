@@ -65,7 +65,8 @@ def test_identical_denominator_lock_enforced():
 
 
 def test_anti_circularity_lock_enforced():
-    """Verify that scoring a teacher model against its own circular majority vote raises AssertionError."""
+    """Verify that scoring a teacher model against its own circular majority vote raises AssertionError,
+    and that support-restricted circularity inflation is separated from Manski lower-bound unanimity drop."""
     d = _load_vectors(BENCH_DIR / "canonical_eval_vectors.json")
 
     with pytest.raises(AssertionError, match="Anti-Circularity Lock violated"):
@@ -78,23 +79,33 @@ def test_anti_circularity_lock_enforced():
         "OpenAI GPT (Fast Tier)",
         eval_mode="leave_one_teacher_out",
         self_vote_weight=0.0,
-        noncirc_vec=d["beyond_cat11_corr_gpt_noncirc"],
+        noncirc_vec=d["beyond_cat11_sup_no_gpt_corr_gpt"],
         circ_vec=d["beyond_cat11_corr_gpt_circ"],
+        loto_lower_bound_vec=d["beyond_cat11_corr_gpt_loto_lower_bound"],
     )
-    assert gpt_audit["non_circular_pct"] == 95.12
-    assert gpt_audit["circular_self_vote_pct"] == 96.59
-    assert gpt_audit["circularity_inflation_pp"] > 1.0
+    assert gpt_audit["non_circular_support_n"] == 974
+    assert gpt_audit["non_circular_support_pct"] == 97.84
+    assert gpt_audit["circular_self_vote_pct"] == 97.95
+    expected_gpt_inf = round(float(np.mean(d["beyond_cat11_corr_gpt_circ"]) * 100.0 - np.mean(d["beyond_cat11_sup_no_gpt_corr_gpt"]) * 100.0), 2)
+    assert gpt_audit["circularity_inflation_pp"] == expected_gpt_inf
+    assert gpt_audit["manski_lower_bound_n1025_pct"] == 92.98
+    assert gpt_audit["manski_unanimity_drop_pp"] == 4.87
 
     gem_audit = assert_non_circular_teacher_eval(
         "Google Gemini Flash",
         eval_mode="leave_one_teacher_out",
         self_vote_weight=0.0,
-        noncirc_vec=d["beyond_cat11_corr_gemini_noncirc"],
+        noncirc_vec=d["beyond_cat11_sup_no_gemini_corr_gemini"],
         circ_vec=d["beyond_cat11_corr_gemini_circ"],
+        loto_lower_bound_vec=d["beyond_cat11_corr_gemini_loto_lower_bound"],
     )
-    assert gem_audit["non_circular_pct"] == 93.80
-    assert gem_audit["circular_self_vote_pct"] == 95.61
-    assert gem_audit["circularity_inflation_pp"] > 1.5
+    assert gem_audit["non_circular_support_n"] == 982
+    assert gem_audit["non_circular_support_pct"] == 97.05
+    assert gem_audit["circular_self_vote_pct"] == 97.17
+    expected_gem_inf = round(float(np.mean(d["beyond_cat11_corr_gemini_circ"]) * 100.0 - np.mean(d["beyond_cat11_sup_no_gemini_corr_gemini"]) * 100.0), 2)
+    assert gem_audit["circularity_inflation_pp"] == expected_gem_inf
+    assert gem_audit["manski_lower_bound_n1025_pct"] == 92.98
+    assert gem_audit["manski_unanimity_drop_pp"] == 4.07
 
 
 def test_eval_vectors_privacy_and_dtypes():
@@ -126,10 +137,10 @@ def test_paired_bootstrap_and_mcnemar_reproducibility():
         assert st["n"] == 545
         assert st["ci95_lo"] <= st["point_pct"] <= st["ci95_hi"]
         assert 0.0 <= st["p_value_vs_ref"] <= 1.0
-    assert res1["models"]["Armiger Ultra"]["point_pct"] == 97.80
+    assert res1["models"]["Armiger Ultra"]["point_pct"] == 96.7
     assert res1["models"]["GuessIt"]["point_pct"] == 94.86
     assert res1["models"]["OpenAI GPT (Fast Tier)"]["point_pct"] == 94.68
-    assert res1["models"]["OpenAI GPT (Fast Tier)"]["p_value_vs_ref"] < 0.01
+    assert res1["models"]["OpenAI GPT (Fast Tier)"]["p_value_vs_ref"] == pytest.approx(0.1262895, abs=1e-5)
 
 
 def test_manifest_sha256_and_png_chunks(tmp_path: pathlib.Path):
@@ -184,9 +195,17 @@ def test_readme_tables_match_charts_manifest():
     text = readme_path.read_text(encoding="utf-8")
 
     # Canonical numbers that must appear in README
-    for required_token in ("95.49%", "97.30%", "96.53%", "97.80%", "96.83%"):
+    for required_token in ("94.85%", "95.83%", "95.06%", "96.70%", "96.83%", "93.07%", "97.84%", "97.05%"):
         assert required_token in text, f"Missing canonical metric {required_token} in {readme_path}"
 
+    # Fresh non-teacher LLM numbers are allowed only because they are backed by an
+    # on-disk receipt with full coverage (982/982 records per model).
+    if "Claude Haiku" in text:
+        receipt = REPO_ROOT / "benchmarks" / "receipts" / "llm_beyond_fresh_receipt.json"
+        assert receipt.is_file(), "Claude Haiku claim in README without llm_beyond_fresh_receipt.json"
+        for required_token in ("92.45%", "47.67%", "llm_beyond_fresh_receipt.json"):
+            assert required_token in text, f"Missing receipt-backed LLM metric {required_token} in {readme_path}"
+
     # Stale pre-audit numbers that must never reappear in README
-    for stale_token in ("97.13%", "96.35%", "72.35%", "35.29%", "35.17%", "86.24%", "97.55%", "true" + "spec", "tru" + "spec", "tc" + "2000", "multilang" + "3000"):
+    for stale_token in ("99.95%", "98.48%", "97.13%", "72.35%", "35.29%", "97.55%", "Vinci-MLE", "true" + "spec", "tru" + "spec", "tc" + "2000", "multilang" + "3000"):
         assert stale_token not in text, f"Stale metric {stale_token} found in {readme_path}"

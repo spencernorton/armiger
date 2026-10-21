@@ -1,23 +1,23 @@
 {
   "model_name": "armiger-ultra",
-  "version": "2.1.0",
+  "version": "3.0.0",
   "bundle_type": "unified_armiger_plus_ultra_plus_swarm",
-  "architecture": "armiger-v2-byte-rope-transformer-8head + residual-swarm-health-adapter",
+  "architecture": "armiger-v3-byte-rope-transformer-9head (incl. byte-level span_bio + 7x7 BIO Viterbi) + residual-swarm-health-adapter",
   "artifacts": {
     "armiger_cpu_int8_onnx": {
       "file": "armiger.int8.onnx",
-      "size_bytes": 8283542,
-      "sha256": "c750e034aace4ff28c0eb1e1112b28f744a5770abd78618127258f283e54e4da"
+      "size_bytes": 15721824,
+      "sha256": "a0dab886be6252739d4c89ce01d65d8d2135204beaec6b00159d038cf420f329"
     },
     "armiger_ultra_fp32_onnx": {
       "file": "armiger_ultra.fp32.onnx",
-      "size_bytes": 32287709,
-      "sha256": "24c65e1af1be68c923bfdf774afb862c54b66a30f40c4b65cf5961929f149d48"
+      "size_bytes": 32543999,
+      "sha256": "6459a20d7bf45d46d59efbcb50ffb8a519bacda14ae36403dcc510eceaa38f44"
     },
     "armiger_ultra_pytorch": {
       "file": "armiger_ultra.pt",
-      "size_bytes": 32235023,
-      "sha256": "368af70847ddf46a5abf05ae9f44253d37b146a734e42fd5f28ad60e21724e19"
+      "size_bytes": 32493659,
+      "sha256": "44cdcf1fac8ebc036262b2d3150b3ba0f27002669bf81e3480b1bc65e3ef8156"
     },
     "swarm_health_adapter": {
       "file": "swarm_adapter.pt",
@@ -68,6 +68,15 @@
     "title_language": [
       "english_title",
       "non_english_title"
+    ],
+    "span_bio": [
+      "O",
+      "B-TITLE",
+      "I-TITLE",
+      "B-YEAR",
+      "I-YEAR",
+      "B-EP",
+      "I-EP"
     ]
   },
   "mondrian_thresholds": {
@@ -76,19 +85,25 @@
     "owner_scope": 0.477
   },
   "benchmarks": {
-    "gold_standard_11class_category_acc": 98.48,
-    "movie_vs_tv_acc": 99.46,
-    "catalog_matching_rate_acc": 98.69,
-    "audio_language_acc": 98.72,
-    "anime_and_dub_acc": 97.92,
-    "adult_safety_gate_acc": 98.63,
-    "junk_malware_filter_acc": 99.95,
+    "gold_standard_11class_category_acc": 94.85,
+    "movie_vs_tv_acc": 95.83,
+    "catalog_matching_rate_acc": 95.06,
+    "audio_language_acc": 96.7,
+    "anime_and_dub_acc": 99.61,
+    "adult_safety_gate_acc": 98.49,
     "swarm_liveliness_auroc": 96.83,
     "fake_seeder_honeypot_recall": 100.0,
-    "overall_6dim_composite_mean": 98.74,
+    "overall_6dim_composite_mean": 95.66,
     "gpu_batched_latency_ms": 0.5,
     "gpu_single_item_latency_ms": 1.12,
-    "cpu_int8_batched_latency_ms": 0.42
+    "cpu_int8_batched_latency_ms": 0.42,
+    "junk_malware_filter_beyond_n977_balanced_acc": 99.23,
+    "oct15_junk_status": "n_pos = 1, not estimable",
+    "public_tracker_swarm_auroc": 92.42,
+    "cpu_int8_single_item_latency_ms": 2.512,
+    "cpu_fp32_single_item_latency_ms": 2.637,
+    "cpu_int8_batch64_items_per_sec": 396.9,
+    "cpu_fp32_batch64_items_per_sec": 376.0
   },
   "bundled_plugins": {
     "armiger-swarm-survival": {
@@ -99,7 +114,7 @@
       ],
       "sha256": {
         "swarm_adapter.pt": "85effcb9e70af7bff6047d4ae45d2155444e9b691dc84431f19ad14f9daee9ea",
-        "swarm_survival.py": "0bcae845363ad7b81fb136fed06e719a40e64dd4de4a8241da19c5e5c8b1f456"
+        "swarm_survival.py": "9dfbe7c4961f5a53bb4e40fc4450ebf958398157148d9f54da100d75dd24caf0"
       }
     },
     "armiger-swarm-priors": {
@@ -108,7 +123,7 @@
         "swarm_priors.py"
       ],
       "sha256": {
-        "swarm_priors.py": "c208d39207be6255540b15733bc9a83dd6e1371f24278789fd1f28ac3bc1f2fa"
+        "swarm_priors.py": "49b2b6857802606158e4a1de8cdc335e485be83aaec5405b9f2fd103ca90b394"
       }
     },
     "armiger-zero-cue-catalog": {
@@ -118,8 +133,8 @@
         "validated_zero_cue_catalog.json"
       ],
       "sha256": {
-        "zero_cue_plugin.py": "9e0fd58810f66bfffbef828dc1488f223833ec16111a49cb2633fbdfdf0db48c",
-        "validated_zero_cue_catalog.json": "a43193a7d9982f1b83e9e6968c47dbbe8d058b113af5020d6d5ea45ed2af7fcd"
+        "zero_cue_plugin.py": "90039f19d36f2bcd0f0103deefe77705caf46e60c9f170d23d4719bc4a2ca020",
+        "validated_zero_cue_catalog.json": "8a8b7a4ba97cb22c3aa1f75ab33762052deb09580df464b1eabfe622a2837d26"
       }
     },
     "armiger-audio-guard": {
@@ -128,7 +143,7 @@
         "audio_language_guard.py"
       ],
       "sha256": {
-        "audio_language_guard.py": "e8b26fbb03f30eb47f2ff62f70f1670905ce17268ee1eabefc0a8f933b9d36ab"
+        "audio_language_guard.py": "f6f2820d4230faa4f07b9662e1e597c5b893f6855478fceb09b78d2d282ecde2"
       }
     },
     "armiger-calibration-dht": {
@@ -140,10 +155,10 @@
         "test_armiger_dht_rsi.py"
       ],
       "sha256": {
-        "calibration.json": "bd49efbc3e04e24a3bfeb0828e0c4dd69497f1902ed81d5d883c795e1504538b",
-        "calibration_and_dht.py": "de0d87b16711cf500251d5fc4f4908f327792063f36589dc6db47fb026bd3fbe",
-        "armiger_dht_rsi.py": "918ffb7b50490fa41213772e0a32debcfff177dadca3a41a603eaf67961c5271",
-        "test_armiger_dht_rsi.py": "f284d290cc2a847f152e51ff40112556caf6c256ee2629aa9f31afbefa73d2df"
+        "calibration.json": "e5b58fc6a8380b982f09296822b0244b28aa5b9b38c32d690c9e25160a8860bb",
+        "calibration_and_dht.py": "b5feaf9e9c5a8304c31675e6c0d4ab14a6ec3fd40bd24bafac109c5b139cbd23",
+        "armiger_dht_rsi.py": "a765952f40c384777af82bb7a7ce4d695e7f9cf12b9487aabb08d7bc3f60c707",
+        "test_armiger_dht_rsi.py": "af765f049fe684aedd5b20cf58e8a0cb8c4cc40fd501e50a78844bcc256ad1c4"
       }
     },
     "armiger-dht-db-sync": {
@@ -154,9 +169,9 @@
         "test_dht_db_sync.py"
       ],
       "sha256": {
-        "csam_guard.py": "24d58db9aea6a5efe9f9b7cc483636190ab37f60ffa76a16b2b97921ef0fd71f",
-        "armiger_dht_db_sync.py": "4ef834f352b3725be2e5d92ce6c29f92f59ef0e5c584971a9d26954ad9502539",
-        "test_dht_db_sync.py": "ed6cebbcbaebc0d43516f68952937696a6b6c88ec54da8536112f9127b4f4290"
+        "csam_guard.py": "fa1fc613034476247587ce8e43044433df38a8092df1210254d7715594ee23b8",
+        "armiger_dht_db_sync.py": "a942043f4aa5887a20b9a1cb5e6632ca248c8dc8d2c905bfaa667f489d751f2d",
+        "test_dht_db_sync.py": "3e3bd272a6adb1e217330c2732a8528cecb46a2d34beaa6b4d7d42518ea22a5d"
       }
     }
   },
@@ -178,8 +193,8 @@
       "csam_safety"
     ],
     "sha256": {
-      "armiger_ultra_pipeline.py": "92c379a3e6c1dfd50312011264c407462e85daef11ec2ee203cc6963395be293",
-      "test_armiger_ultra_pipeline.py": "b309d0edf87a189f41e95c18511fd26b0d748f981d93f1a0782cd8163015e18d"
+      "armiger_ultra_pipeline.py": "5a759dec66b9e13e532240d745afbb38826af90c5a9021c0eb845e6182cd1717",
+      "test_armiger_ultra_pipeline.py": "d4aeaf2143ac192a839e5fc0e14b1b5e03c84434274526dd1f38490d4de59f47"
     }
   },
   "parameter_count": 8050139

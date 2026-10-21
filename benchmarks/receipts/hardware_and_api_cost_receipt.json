@@ -1,0 +1,76 @@
+{
+  "schema": "armiger.hardware_and_api_cost_receipt.v1",
+  "created_at": "2026-10-21T00:00:00Z",
+  "usage_summary_source_path": "usage-summary-all.json",
+  "usage_summary_source_sha256": "7da8addabfbafde0b98f4440a3e05c50b9ced02a5ecfc53c0c394b2dac849472",
+  "measured_local_onnx_cpu": {
+    "host": "Apple M4 Pro CPU (8 intra-op threads)",
+    "int8_single_item_ms": 2.512,
+    "int8_batch64_items_per_sec": 396.9,
+    "fp32_single_item_ms": 2.637,
+    "fp32_batch64_items_per_sec": 376.0,
+    "fp32_onnx_sha256": "6459a20d7bf45d46d59efbcb50ffb8a519bacda14ae36403dcc510eceaa38f44",
+    "int8_onnx_sha256": "a0dab886be6252739d4c89ce01d65d8d2135204beaec6b00159d038cf420f329",
+    "method": "ONNX Runtime CPU, all 9 outputs, packed calibration tensors; 300 single-item runs after warmup; batch-64 throughput over 10,240 items"
+  },
+  "logged_provider_usage": {
+    "gpt": {
+      "calls": 540,
+      "records": 15909,
+      "reported_tokens": 11692736,
+      "tokens_per_record": 734.98,
+      "records_per_sec": 2.57
+    },
+    "muse": {
+      "calls": 472,
+      "records": 14821,
+      "reported_tokens": 14426307,
+      "tokens_per_record": 973.37,
+      "records_per_sec": 0.66
+    }
+  },
+  "models": {
+    "Armiger (15.7 MB M4 Pro CPU INT8)": {
+      "in_usd_per_1m_tokens": 0.0,
+      "out_usd_per_1m_tokens": 0.0,
+      "batched_usd_per_1m_tasks": 0.0019,
+      "realtime_usd_per_1m_tasks": 0.003,
+      "single_item_ms": 2.512,
+      "batch64_items_per_sec": 396.9,
+      "rate_label": "$0.00 API (2.51 ms single / 397 items/s batch-64 M4 Pro CPU)"
+    },
+    "Armiger Ultra (M4 Pro CPU FP32)": {
+      "in_usd_per_1m_tokens": 0.0,
+      "out_usd_per_1m_tokens": 0.0,
+      "batched_usd_per_1m_tasks": 0.0024,
+      "realtime_usd_per_1m_tasks": 0.004,
+      "single_item_ms": 2.637,
+      "batch64_items_per_sec": 376.0,
+      "rate_label": "$0.00 API (2.64 ms single / 376 items/s batch-64 M4 Pro CPU)"
+    },
+    "Google Gemini Flash": {
+      "in_usd_per_1m_tokens": 0.15,
+      "out_usd_per_1m_tokens": 0.6,
+      "batched_usd_per_1m_tasks": 183.01,
+      "realtime_usd_per_1m_tasks": 243.2,
+      "tokens_per_record_logged": 734.98,
+      "rate_label": "$0.15 In | $0.60 Out (735 tok/item logged)"
+    },
+    "OpenAI GPT (Fast Tier)": {
+      "in_usd_per_1m_tokens": 0.25,
+      "out_usd_per_1m_tokens": 1.0,
+      "batched_usd_per_1m_tasks": 305.02,
+      "realtime_usd_per_1m_tasks": 405.34,
+      "tokens_per_record_logged": 734.98,
+      "rate_label": "$0.25 In | $1.00 Out (735 tok/item logged, 540 calls)"
+    },
+    "Meta Muse Spark 1.3": {
+      "in_usd_per_1m_tokens": 0.4,
+      "out_usd_per_1m_tokens": 1.6,
+      "batched_usd_per_1m_tasks": 646.32,
+      "realtime_usd_per_1m_tasks": 858.9,
+      "tokens_per_record_logged": 973.37,
+      "rate_label": "$0.40 In | $1.60 Out (973 tok/item logged, 472 calls)"
+    }
+  }
+}

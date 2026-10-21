@@ -1,99 +1,59 @@
 {
   "temperature_scaling_stop_fit": {
     "category": {
-      "temperature_T": 1.225,
-      "cal_uncalibrated": {
-        "n": 424,
-        "acc": 96.7,
-        "nll": 0.0905
-      },
+      "temperature_T": 0.65,
       "cal_temp_scaled": {
-        "n": 424,
-        "acc": 96.7,
-        "nll": 0.0967
-      }
-    },
-    "adult": {
-      "temperature_T": 1.4,
-      "cal_uncalibrated": {
-        "n": 409,
-        "acc": 99.76,
-        "nll": 0.0127
-      },
-      "cal_temp_scaled": {
-        "n": 409,
-        "acc": 99.76,
-        "nll": 0.0211
-      }
-    },
-    "anime": {
-      "temperature_T": 1.0,
-      "cal_uncalibrated": {
-        "n": 64,
-        "acc": 100.0,
-        "nll": 0.0041
-      },
-      "cal_temp_scaled": {
-        "n": 64,
-        "acc": 100.0,
-        "nll": 0.0038
+        "n": 995,
+        "fitted_on": "snap_wave13_r5_20261021T115351Z_bfb9dfb67b41_val_guarded"
       }
     },
     "lang": {
-      "temperature_T": 1.275,
-      "cal_uncalibrated": {
-        "n": 103,
-        "acc": 97.09,
-        "nll": 0.0932
-      },
+      "temperature_T": 0.7,
       "cal_temp_scaled": {
-        "n": 103,
-        "acc": 97.09,
-        "nll": 0.0992
-      }
-    },
-    "junk": {
-      "temperature_T": 1.4,
-      "cal_uncalibrated": {
-        "n": 341,
-        "acc": 99.71,
-        "nll": 0.011
-      },
-      "cal_temp_scaled": {
-        "n": 341,
-        "acc": 99.71,
-        "nll": 0.0146
+        "n": 368,
+        "fitted_on": "snap_wave13_r5_20261021T115351Z_bfb9dfb67b41_val_guarded"
       }
     },
     "owner_scope": {
-      "temperature_T": 1.125,
-      "cal_uncalibrated": {
-        "n": 408,
-        "acc": 98.77,
-        "nll": 0.0243
-      },
+      "temperature_T": 0.55,
       "cal_temp_scaled": {
-        "n": 408,
-        "acc": 99.02,
-        "nll": 0.0269
+        "n": 995,
+        "fitted_on": "snap_wave13_r5_20261021T115351Z_bfb9dfb67b41_val_guarded"
+      }
+    },
+    "title_language": {
+      "temperature_T": 0.95,
+      "cal_temp_scaled": {
+        "n": 566,
+        "fitted_on": "snap_wave13_r5_20261021T115351Z_bfb9dfb67b41_val_guarded"
       }
     },
     "english_subs": {
-      "temperature_T": 1.2,
-      "cal_uncalibrated": null,
-      "cal_temp_scaled": null
-    },
-    "title_language": {
-      "temperature_T": 1.55,
-      "cal_uncalibrated": {
-        "n": 162,
-        "acc": 94.44,
-        "nll": 0.1087
-      },
+      "temperature_T": 0.5,
       "cal_temp_scaled": {
-        "n": 162,
-        "acc": 94.44,
-        "nll": 0.1087
+        "n": 137,
+        "fitted_on": "snap_wave13_r5_20261021T115351Z_bfb9dfb67b41_val_guarded"
+      }
+    },
+    "anime": {
+      "temperature_T": 0.9,
+      "cal_temp_scaled": {
+        "n": 243,
+        "fitted_on": "snap_wave13_r5_20261021T115351Z_bfb9dfb67b41_val_guarded"
+      }
+    },
+    "adult": {
+      "temperature_T": 0.65,
+      "cal_temp_scaled": {
+        "n": 864,
+        "fitted_on": "snapshot_wave5a_val"
+      }
+    },
+    "junk": {
+      "temperature_T": 0.65,
+      "cal_temp_scaled": {
+        "n": 864,
+        "fitted_on": "snapshot_wave5a_val"
       }
     }
   },
@@ -126,18 +86,103 @@
   "mondrian_conformal_thresholds": {
     "owner_scope": {
       "alpha": 0.02,
-      "threshold_I350": 0.5917,
-      "threshold_H350": 0.6433
+      "threshold_r5clean": 0.52486
+    }
+  },
+  "calibration_version": "v3.0-gold-mit3-final-guarded",
+  "temperature_audit": {
+    "category": {
+      "n": 995,
+      "nll_at_T1": 0.284156,
+      "nll_at_best_T": 0.250881,
+      "best_T_unclamped": 0.65,
+      "shipped_T_guarded": 0.65,
+      "ece5_at_T1_pct": 6.6104,
+      "ece5_guarded_pct": 2.1656,
+      "acc_pct": 91.4573
     },
-    "junk": {
-      "alpha": 0.005,
-      "threshold_I350": 0.0631,
-      "threshold_H350": 0.0564
+    "lang": {
+      "n": 368,
+      "nll_at_T1": 0.308272,
+      "nll_at_best_T": 0.289053,
+      "best_T_unclamped": 0.7,
+      "shipped_T_guarded": 0.7,
+      "ece5_at_T1_pct": 6.9697,
+      "ece5_guarded_pct": 3.2334,
+      "acc_pct": 89.9457
+    },
+    "owner_scope": {
+      "n": 995,
+      "nll_at_T1": 0.042003,
+      "nll_at_best_T": 0.027084,
+      "best_T_unclamped": 0.55,
+      "shipped_T_guarded": 0.55,
+      "ece5_at_T1_pct": 2.1499,
+      "ece5_guarded_pct": 0.202,
+      "acc_pct": 98.995
+    },
+    "title_language": {
+      "n": 566,
+      "nll_at_T1": 0.137678,
+      "nll_at_best_T": 0.13748,
+      "best_T_unclamped": 0.95,
+      "shipped_T_guarded": 0.95,
+      "ece5_at_T1_pct": 1.0472,
+      "ece5_guarded_pct": 0.7014,
+      "acc_pct": 95.4064
+    },
+    "english_subs": {
+      "n": 137,
+      "nll_at_T1": 0.189409,
+      "nll_at_best_T": 0.132055,
+      "best_T_unclamped": 0.5,
+      "shipped_T_guarded": 0.5,
+      "ece5_at_T1_pct": 9.9213,
+      "ece5_guarded_pct": 2.5349,
+      "acc_pct": 96.3504
+    },
+    "anime": {
+      "n": 243,
+      "nll_at_T1": 0.391146,
+      "nll_at_best_T": 0.389958,
+      "best_T_unclamped": 0.9,
+      "shipped_T_guarded": 0.9,
+      "ece5_at_T1_pct": 3.8909,
+      "ece5_guarded_pct": 2.9506,
+      "acc_pct": 84.7737
     },
     "adult": {
-      "alpha": 0.01,
-      "threshold_I350": 0.7801,
-      "threshold_H350": 0.7175
+      "inherited": true,
+      "reason": "no Gold-val label support; retained wave5a fit"
+    },
+    "junk": {
+      "inherited": true,
+      "reason": "no Gold-val label support; retained wave5a fit"
     }
-  }
+  },
+  "mondrian_thresholds": {
+    "adult": 0.5451,
+    "junk": 0.101,
+    "owner_scope": 0.477
+  },
+  "mondrian_audit": {
+    "owner_scope": {
+      "alpha": 0.02,
+      "n_neg": 256,
+      "n_pos": 739,
+      "val_fpr_at_thr": 0.015625,
+      "val_recall_at_thr": 0.994587,
+      "method": "split-conformal FPR quantile ceil((n+1)(1-alpha)) on val negatives, temperature-scaled probs"
+    }
+  },
+  "fitted_snapshot_id": "snap_wave13_r5_20261021T115351Z_bfb9dfb67b41",
+  "calibrated_onnx_fp32_sha256": "6459a20d7bf45d46d59efbcb50ffb8a519bacda14ae36403dcc510eceaa38f44",
+  "mondrian_fitted_calibration_split": {
+    "adult": 0.799935,
+    "junk": 0.259358,
+    "owner_scope": 0.944382,
+    "method": "split-conformal FPR quantile on packed calibration split (512), temperature-scaled; NOT shipped as gates (recall cost on confirmation) - see mondrian_refit_report"
+  },
+  "mondrian_provenance": "Inherited production gates retained for v3.0.0 (higher adult/owner recall on confirmation splits than calibration-fitted FPR gates; fitted alternates recorded for operators).",
+  "calibrated_onnx_int8_sha256": "a0dab886be6252739d4c89ce01d65d8d2135204beaec6b00159d038cf420f329"
 }

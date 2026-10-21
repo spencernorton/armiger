@@ -242,6 +242,7 @@ class BEP44UDPNode:
         if q == b"ping":
             self._send({b"t": t, b"y": b"r", b"r": {b"id": self.node_id}}, addr)
         elif q == b"find_node":
+            import ipaddress, struct
             target = a.get(b"target", b"")
             padded = target.ljust(20, b"\x00")[:20]
             closest = sorted(
@@ -249,7 +250,29 @@ class BEP44UDPNode:
                 key=lambda item: int.from_bytes(bytes(x ^ y_b for x, y_b in zip(item[0], padded)), "big"),
             )[:8]
             nodes_list = [[nid, h.encode("ascii"), p] for nid, h, p in closest]
-            self._send({b"t": t, b"y": b"r", b"r": {b"id": self.node_id, b"nodes_list": nodes_list}}, addr)
+            r_dict: Dict[bytes, Any] = {b"id": self.node_id, b"nodes_list": nodes_list}
+            want_raw = a.get(b"want", [])
+            want_set = set(want_raw) if isinstance(want_raw, list) else set()
+            if not want_set or b"n4" in want_set:
+                n4_buf = bytearray()
+                for nid, h, p in closest:
+                    try:
+                        ip4 = ipaddress.IPv4Address(h)
+                    except ValueError:
+                        ip4 = ipaddress.IPv4Address("127.0.0.1")
+                    n4_buf.extend(nid + ip4.packed + struct.pack(">H", int(p)))
+                r_dict[b"nodes"] = bytes(n4_buf)
+            if b"n6" in want_set:
+                n6_buf = bytearray()
+                for nid, h, p in closest:
+                    v6_str = getattr(self, "ipv6_host", "::1")
+                    try:
+                        ip6 = ipaddress.IPv6Address(h if ":" in h else v6_str)
+                    except ValueError:
+                        ip6 = ipaddress.IPv6Address("::1")
+                    n6_buf.extend(nid + ip6.packed + struct.pack(">H", int(p)))
+                r_dict[b"nodes6"] = bytes(n6_buf)
+            self._send({b"t": t, b"y": b"r", b"r": r_dict}, addr)
         elif q == b"get":
             await self._handle_get(t, a, addr)
         elif q == b"put":

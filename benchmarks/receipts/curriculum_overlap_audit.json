@@ -1,0 +1,25 @@
+{
+  "base_curriculum_dropped_for_overlap": 0,
+  "base_curriculum_kept": 384,
+  "closest_pair": {
+    "curriculum_title": "StratosDev.PlayerStudio.Ultimate.NadirCore.7.3.8.Setup.x64.exe",
+    "protected_title": "PotPlayer.Setup.240618.x64.exe"
+  },
+  "combined_curriculum_rows": 1908,
+  "enforced_filter_threshold": 0.35,
+  "heldout_safety_templates_sha256": "58537a51b953adc518bef99d98ec4c10171401985b9f6ffb4e95a40fc4222384",
+  "max_allowed_jaccard": 0.35,
+  "measured_max_content_token_jaccard": 0.333333,
+  "measured_max_full_token_jaccard": 0.333333,
+  "measured_max_token_3gram_jaccard": 0.181818,
+  "post_hoc_weight_edits_applied": false,
+  "protected_counts": {
+    "audit_and_test_probes": 1379,
+    "canary_500": 500,
+    "heldout_safety_50": 50
+  },
+  "schema": "armiger-curriculum-overlap-audit/v1",
+  "test_fixtures_imported_in_training": false,
+  "total_protected_strings": 1929,
+  "v23_curriculum_kept": 1524
+}

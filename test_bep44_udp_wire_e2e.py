@@ -347,5 +347,174 @@ class TestBEP44UDPWireE2E(unittest.TestCase):
         asyncio.run(_run())
 
 
+
+    def test_bep45_multi_address_want_n4_n6_and_dual_stack_sybil_quorum(self) -> None:
+        """Verify BEP-45 dual-stack want=[n4, n6] compact routing (26B IPv4 + 38B IPv6)
+        and multi-address IPv4/IPv6/mapped-IPv6 Sybil quorum deduplication."""
+        import numpy as np
+        from cryptography.hazmat.primitives.serialization import Encoding, PublicFormat
+        from armiger_dht_rsi import AuthoritativeASNVerifier, PeerAttestation, SybilQuorumVerifier
+
+        async def _run() -> None:
+            swarm = LocalKademliaSwarm(count=12)
+            await swarm.start()
+            try:
+                host0, port0, _ = swarm.nodes[0]
+                target = hashlib.sha1(b"bep45-dual-stack-target").digest()
+                fn_resp = await udp_query(
+                    host0,
+                    port0,
+                    {
+                        b"t": b"b45",
+                        b"y": b"q",
+                        b"q": b"find_node",
+                        b"a": {b"target": target, b"want": [b"n4", b"n6"]},
+                    },
+                )
+                self.assertEqual(fn_resp[b"y"], b"r")
+                r_body = fn_resp[b"r"]
+                self.assertIn(b"nodes", r_body)
+                self.assertIn(b"nodes6", r_body)
+                # 8 closest nodes * 26 bytes (20B id + 4B IPv4 + 2B port) = 208 bytes
+                self.assertEqual(len(r_body[b"nodes"]), 8 * 26)
+                # 8 closest nodes * 38 bytes (20B id + 16B IPv6 + 2B port) = 304 bytes
+                self.assertEqual(len(r_body[b"nodes6"]), 8 * 38)
+            finally:
+                swarm.close()
+
+        asyncio.run(_run())
+
+        verifier = AuthoritativeASNVerifier()
+        asn_routes = [
+            (13335, "104.16.10.0/24", "2606:4700:10::/48", "104.16.10.5", "2606:4700:10::5"),
+            (15169, "8.8.8.0/24",     "2001:4860:4860::/48", "8.8.8.8", "2001:4860:4860::8888"),
+            (16509, "54.239.28.0/24", "2600:1f18:20::/48", "54.239.28.10", "2600:1f18:20::10"),
+            (8075,  "20.190.128.0/24","2603:1030:10::/48", "20.190.128.7", "2603:1030:10::7"),
+            (14061, "167.99.1.0/24",  "2604:a880:800::/48", "167.99.1.9", "2604:a880:800::9"),
+        ]
+        keys = []
+        for asn, v4_cidr, v6_cidr, _, _ in asn_routes:
+            priv, pub = generate_ed25519_keypair()
+            verifier.register_cidr(v4_cidr, asn)
+            verifier.register_cidr(v6_cidr, asn)
+            verifier.register_pinned_key(pub.hex(), asn)
+            keys.append((asn, priv, pub))
+
+        self.assertEqual(verifier.extract_subnet_prefix("::ffff:104.16.10.99"), "104.16.10.0/24")
+        self.assertEqual(verifier.lookup_ip_asn("::ffff:104.16.10.99"), 13335)
+
+        def _sign_att(peer_id: str, asn: int, th: str, priv_b: bytes, ip_s: str, ts: int) -> PeerAttestation:
+            sk = Ed25519PrivateKey.from_private_bytes(priv_b)
+            pub_h = sk.public_key().public_bytes(Encoding.Raw, PublicFormat.Raw).hex()
+            u = PeerAttestation(peer_id=peer_id, asn=asn, peer_pubkey_hex=pub_h, timestamp=ts, signature_hex="", ip_address=ip_s)
+            sig_h = sk.sign(u.canonical_bytes(th)).hex()
+            return PeerAttestation(peer_id=peer_id, asn=asn, peer_pubkey_hex=pub_h, timestamp=ts, signature_hex=sig_h, ip_address=ip_s)
+
+        target_hash = hashlib.sha256(b"v3.0-gold-r5-manifest").hexdigest()
+        now_ts = int(time.time())
+        asn0, priv0, _ = keys[0]
+        _, _, _, v4_0, v6_0 = asn_routes[0]
+        dual_single = [
+            _sign_att("node-0-v4", asn0, target_hash, priv0, v4_0, now_ts),
+            _sign_att("node-0-v6", asn0, target_hash, priv0, v6_0, now_ts),
+        ]
+        ok_single, _, _ = SybilQuorumVerifier.verify_quorum(
+            dual_single, target_hash, min_distinct_asns=2, now_timestamp=now_ts, asn_verifier=verifier
+        )
+        self.assertFalse(ok_single)
+
+        mixed_atts = [
+            _sign_att(f"bep45-node-{i}", keys[i][0], target_hash, keys[i][1], asn_routes[i][4 if i % 2 else 3], now_ts)
+            for i in range(5)
+        ]
+        ok_5, reason_5, asns_5 = SybilQuorumVerifier.verify_quorum(
+            mixed_atts, target_hash, min_distinct_asns=5, now_timestamp=now_ts, asn_verifier=verifier
+        )
+        self.assertTrue(ok_5, reason_5)
+        self.assertEqual(len(asns_5), 5)
+
+    def test_bep44_bep46_9head_delta_xmss_and_wire_firewall_over_udp(self) -> None:
+        """Verify 9-head (including span_bio) Ed25519 + XMSS delta transfer over BEP-44/46 UDP."""
+        import numpy as np
+        from dht_head_delta import compute_trunk_sha256, extract_head_delta_bundle, load_state_tensors, reconstruct_from_head_delta
+        from pq_xmss_merkle import XMSSMerkleTree
+
+        def _mock_9head(delta: float = 0.0) -> dict:
+            rng = np.random.default_rng(42)
+            st = {
+                "trunk.conv1.weight": rng.standard_normal((64, 32, 3)).astype(np.float32),
+                "heads.category.0.weight": (rng.standard_normal((128, 384)) + delta).astype(np.float32),
+                "heads.category.0.bias": np.zeros((128,), dtype=np.float32),
+                "heads.category.2.weight": (rng.standard_normal((10, 128)) + delta).astype(np.float32),
+                "heads.category.2.bias": np.zeros((10,), dtype=np.float32),
+                "heads.span_bio.0.weight": (rng.standard_normal((64, 192)) + delta).astype(np.float32),
+                "heads.span_bio.0.bias": np.zeros((64,), dtype=np.float32),
+                "heads.span_bio.3.weight": (rng.standard_normal((7, 64)) + delta).astype(np.float32),
+                "heads.span_bio.3.bias": np.zeros((7,), dtype=np.float32),
+            }
+            for h_name in ["adult", "junk", "anime", "english_subs", "lang", "owner_scope", "title_language"]:
+                st[f"heads.{h_name}.0.weight"] = (rng.standard_normal((64, 384)) + delta).astype(np.float32)
+                st[f"heads.{h_name}.0.bias"] = np.zeros((64,), dtype=np.float32)
+                st[f"heads.{h_name}.2.weight"] = (rng.standard_normal((2, 64)) + delta).astype(np.float32)
+                st[f"heads.{h_name}.2.bias"] = np.zeros((2,), dtype=np.float32)
+            return st
+
+        async def _run() -> None:
+            swarm = LocalKademliaSwarm(count=12, enforce_anonymity_guard=False)
+            await swarm.start()
+            try:
+                root_priv, root_pub = generate_ed25519_keypair()
+                xmss_tree = XMSSMerkleTree(
+                    master_seed=b"armiger-r5-xmss-seed-32-bytes!!!",
+                    height=4,
+                    provision_new_state=True,
+                    allow_ephemeral_state=True,
+                )
+                base_state = _mock_9head(0.0)
+                cand_state = _mock_9head(0.015)
+                trunk_sha = compute_trunk_sha256(load_state_tensors(base_state)[0])
+
+                bundle = extract_head_delta_bundle(
+                    cand_state,
+                    precision="fp16",
+                    base_trunk_sha256=trunk_sha,
+                    version="3.0.0-gold-r5",
+                    seq=15,
+                    ed25519_privkey_bytes=root_priv,
+                    xmss_tree=xmss_tree,
+                )
+                packed_bytes = bundle.to_bytes()
+                ih_hex = await swarm.put_bep46_bundle(packed_bytes)
+                ptr_payload = json.dumps(
+                    {"ih": ih_hex, "sha256": hashlib.sha256(packed_bytes).hexdigest(), "version": "3.0.0-gold-r5", "seq": 15},
+                    sort_keys=True,
+                    separators=(",", ":"),
+                ).encode("utf-8")
+                await swarm.put_mutable(root_priv, b"armiger/model-delta/v3", ptr_payload, seq=15)
+
+                got_ptr = await swarm.get_mutable(root_pub, b"armiger/model-delta/v3")
+                self.assertIsNotNone(got_ptr)
+                ptr_info = json.loads(got_ptr.v.decode("utf-8"))
+                fetched_bundle = await swarm.get_bep46_bundle(ptr_info["ih"], expected_sha256_hex=ptr_info["sha256"])
+                self.assertEqual(fetched_bundle, packed_bytes)
+
+                reconstructed = reconstruct_from_head_delta(
+                    base_state,
+                    fetched_bundle,
+                    expected_trunk_sha256=trunk_sha,
+                    ed25519_pubkey_bytes=root_pub,
+                    xmss_root_hex=xmss_tree.merkle_root_hex,
+                    last_verified_seq=14,
+                )
+                sd = reconstructed["state_dict"]
+                self.assertIn("heads.span_bio.3.weight", sd)
+                diff = np.max(np.abs(sd["heads.category.2.weight"] - cand_state["heads.category.2.weight"]))
+                self.assertLess(float(diff), 0.01)
+            finally:
+                swarm.close()
+
+        asyncio.run(_run())
+
+
 if __name__ == "__main__":
     unittest.main()

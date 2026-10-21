@@ -1,6 +1,6 @@
 # Armiger & Armiger Ultra Integration Examples
 
-Turnkey reference adapters, HTTP services, and Docker Compose stacks for integrating **Armiger** (`8.3 MB INT8`) and **Armiger Ultra** (`32.3 MB FP32` + 6 plugins) across the self-hosted indexer and media automation ecosystem:
+Turnkey reference adapters, HTTP services, and Docker Compose stacks for integrating **Armiger** (`15.7 MB INT8`) and **Armiger Ultra** (`32.5 MB FP32` + 6 plugins) across the self-hosted indexer and media automation ecosystem:
 
 | Stack | Directory | Description |
 | :--- | :--- | :--- |

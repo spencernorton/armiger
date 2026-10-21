@@ -1,0 +1,15 @@
+{
+  "cat_ih": "bd2808e12d7158927f07d477f54a853b8ee94a09",
+  "delta_ih": "7af84111a1b0f7e1ef36b26eda9a376cf3df4037",
+  "ed25519_sig_hex": "90c39b364f12d4a4a444011b25a0b1fed37d6998c538173f2a3889955615e10d632325b4ed2b6e0d7aff3a0ace6d73fd90e7ce255e874e1ebf23bfab08e30801",
+  "int8_onnx_sha256": "a0dab886be6252739d4c89ce01d65d8d2135204beaec6b00159d038cf420f329",
+  "leaf_index": 957,
+  "man_ih": "18f5810ac1edbba2d6993fe035f6a00ecfb8b5a5",
+  "manifest_sha256": "e77614db6da8483c05a35c62de2c46d45b2be029de74727846c65bb91f5a49b5",
+  "prev_seq": 3005,
+  "ptr_ih": "95bc1404c590606ff75657193d07be21c416872d",
+  "seq": 3006,
+  "v": "3.0.0",
+  "xmss_merkle_root_hex": "e942e72beb12adb41b772292efb34518971eaba014d28ec57633a4e879cb0ff2",
+  "xmss_sig_sha256": "e2ce5289c0d7f28046ad7689004fa97d829f3bb93d63a1a9043d033708cf5ec9"
+}
