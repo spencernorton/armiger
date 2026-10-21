@@ -89,6 +89,8 @@ from zero_cue_plugin import (
 from audio_language_guard import (
     SUB_SEGMENT_STRIP_RE,
     apply_audio_language_guard,
+    apply_english_subs_guard,
+    apply_title_language_guard,
     classify_audio_and_anime_dub,
 )
 
@@ -241,21 +243,39 @@ from armiger_inference import (
 
 
 _EPISODE_FILE_RE = re.compile(r"(?i)(?:\bS\d{1,2}E\d{1,3}\b|\bS\d{1,2}\b|\bSeason\s*\d+\b)")
+_GAME_FILE_TREE_RE = re.compile(
+    r"(?i)(?:supertux|super-tux-kart|org\.supertuxkart|\bfreeciv|\bopenttd|\b0ad[-_\b]|\bminetest|\bfreedoom|"
+    r"\bwesnoth|segasoft|gremlin[\s\._-]+interactive|crosscountrycanada|petepilotti|\.levelset\.|"
+    r"\.(?:pk3|wad|pck|bsp|unity3d|vpk)$)"
+)
+_AUDIOBOOK_FILE_TREE_RE = re.compile(
+    r"(?i)(?:synapseml_gutenberg|_hour_\d{2}_|-\s*\d+\.(?:afpk|mp3)$|librivox)"
+)
 
 
 def _file_tree_structural_override(row: Mapping[str, Any]) -> Tuple[Optional[str], str]:
-    """Check physical file-tree extensions (.m4b audiobooks, .cbz/.cbr comics, multi-episode packs) before title lookup."""
+    """Check physical file-tree extensions (.m4b/.afpk audiobooks, .cbz/.cbr comics, game engine trees, multi-episode packs) before title lookup."""
+    raw_name = str(row.get("name") or row.get("title") or "")
     files = row.get("files") or []
     ep_files = 0
+    has_afpk = False
     for f in files:
         p = (f.get("path") if isinstance(f, Mapping) else str(f or "")) or ""
         low = p.lower().strip()
         if low.endswith(".m4b"):
             return "audiobook", "structural_m4b"
+        if low.endswith(".afpk"):
+            has_afpk = True
         if low.endswith((".cbz", ".cbr", ".cb7")):
             return "comic", "structural_comic_archive"
-        if low.endswith((".mkv", ".mp4", ".avi", ".ts")) and _EPISODE_FILE_RE.search(p):
+        if _GAME_FILE_TREE_RE.search(p):
+            return "game", "structural_game_file_tree"
+        if low.endswith((".mkv", ".mp4", ".avi", ".ts", ".ogv", ".mov")) and _EPISODE_FILE_RE.search(p):
             ep_files += 1
+    if has_afpk and (_AUDIOBOOK_FILE_TREE_RE.search(raw_name) or any(_AUDIOBOOK_FILE_TREE_RE.search(str(f)) for f in files[:8])):
+        return "audiobook", "structural_audiobook_afpk"
+    if _GAME_FILE_TREE_RE.search(raw_name):
+        return "game", "structural_game_archive"
     if ep_files >= 2:
         return "tv_show", "structural_multi_episode_pack"
     return None, "none"
@@ -825,8 +845,16 @@ class ArmigerUltraPipeline:
                     cat_probs[c_idx] = max(float(cat_probs[c_idx]), 0.92)
                     cat_probs /= cat_probs.sum()
 
-            # Step 4: Plugin #4 (`AudioLanguageGuard`) — Cross-Head Audio Language & Anime Dub Guard
+            # Step 4: Plugin #4 (`AudioLanguageGuard`) — Cross-Head Audio, Title Language, & Subtitle Guard
             pred_lang, lang_probs, _ = self.audio_guard.apply(row_dict, lang_probs, title_lang_probs)
+            title_lang_probs = np.asarray(
+                apply_title_language_guard(raw_title, title_lang_probs, lang_probs=lang_probs, anime_probs=anime_probs),
+                dtype=np.float64,
+            )
+            eng_subs_probs = np.asarray(
+                apply_english_subs_guard(row_dict, eng_subs_probs),
+                dtype=np.float64,
+            )
             audio_dub_report = self.audio_guard.classify_audio_and_dub(
                 row_dict,
                 lang_probs=lang_probs,
@@ -1620,8 +1648,14 @@ class ArmigerUltraPipeline:
                     raise DHTUpdateRejected(f"adapter_delta_shape_mismatch:{name}")
                 if not np.all(np.isfinite(d)):
                     raise DHTUpdateRejected(f"adapter_delta_not_finite:{name}")
-                if float(np.max(np.abs(d))) > MAX_ADAPTER_DELTA_ABS:
+                max_d = float(np.max(np.abs(d)))
+                if max_d > MAX_ADAPTER_DELTA_ABS:
                     raise DHTUpdateRejected(f"adapter_delta_magnitude_out_of_bounds:{name}")
+                if (
+                    name.startswith(("way2_encoders.category", "content_gates.category"))
+                    or name == "head_scales.category"
+                ) and max_d > 5.0:
+                    raise DHTUpdateRejected(f"adapter_delta_extreme_category_weight_rejected:{name}:{max_d:.4f}>5.0")
             with torch.no_grad():
                 for name, d in deltas.items():
                     tensors[name].add_(torch.from_numpy(np.ascontiguousarray(d)).to(tensors[name].dtype))

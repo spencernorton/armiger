@@ -24,12 +24,19 @@ from typing import Any
 import zlib
 
 ZCB3_MAGIC = b"ZCB3"
+ZCB3_VERSION = 3
+ZCB3_EXT_FLAG = 0x5A434233
 ZCB3_HEADER_STRUCT = struct.Struct("<4s3I")
 ZCB3_HEADER_SIZE = ZCB3_HEADER_STRUCT.size  # 16 bytes
+ZCB3_EXT_HEADER_STRUCT = struct.Struct("<4sIIIQQ32s")
+ZCB3_EXT_HEADER_SIZE = ZCB3_EXT_HEADER_STRUCT.size  # 64 bytes
+ZCB3_EXT_RECORD_STRUCT = struct.Struct("<QIIBB6s")
+ZCB3_EXT_RECORD_SIZE = ZCB3_EXT_RECORD_STRUCT.size  # 24 bytes
 ZCB3_RECORD_SIZE = 9  # 8-byte BLAKE2b-64 key + 1-byte category code
 ZCB3_SECTION_NAMES: tuple[str, str, str] = ("anime_map", "title_year_map", "title_only_map")
 MAX_ZCB3_UNCOMPRESSED_BYTES = 64 * 1024 * 1024  # 64 MiB hard bound against decompression bombs
 MAX_ZCB3_LZMA_MEMLIMIT_BYTES = 64 * 1024 * 1024  # 64 MiB LZMA decoder memory bound (supports preset 6)
+MAX_EAGER_VALIDATE_RECORDS = 100_000
 
 CAT_TO_CODE: dict[str, int] = {
     "movie": 0,
@@ -111,6 +118,51 @@ def pack_zcb3_bytes(catalog: Mapping[str, Any]) -> bytes:
     return header + b"".join(packed_sections)
 
 
+def pack_zcb3_extended_bytes(
+    records: list[tuple[int, str, int]],
+    *,
+    version: int = ZCB3_VERSION,
+) -> bytes:
+    """Pack `(prefix64, title_str, category_id)` tuples into the 64-byte extended `ZCB3` header
+    + 24-byte index records + UTF-8 string table, embedding `sha256(payload)` in `catalog_sha256`.
+    """
+    sorted_recs = sorted(records, key=lambda r: int(r[0]))
+    index_offset = ZCB3_EXT_HEADER_SIZE
+    string_table_offset = index_offset + len(sorted_recs) * ZCB3_EXT_RECORD_SIZE
+
+    index_buf = bytearray(len(sorted_recs) * ZCB3_EXT_RECORD_SIZE)
+    str_chunks: list[bytes] = []
+    cur_str_off = string_table_offset
+
+    for idx, (prefix64, title_str, cat_id) in enumerate(sorted_recs):
+        t_bytes = str(title_str).encode("utf-8")
+        str_chunks.append(t_bytes)
+        ZCB3_EXT_RECORD_STRUCT.pack_into(
+            index_buf,
+            idx * ZCB3_EXT_RECORD_SIZE,
+            int(prefix64) & 0xFFFFFFFFFFFFFFFF,
+            cur_str_off,
+            len(t_bytes),
+            int(cat_id) & 0xFF,
+            0,
+            b"\x00" * 6,
+        )
+        cur_str_off += len(t_bytes)
+
+    payload = bytes(index_buf) + b"".join(str_chunks)
+    digest = hashlib.sha256(payload).digest()
+    header = ZCB3_EXT_HEADER_STRUCT.pack(
+        ZCB3_MAGIC,
+        int(version),
+        ZCB3_EXT_FLAG,
+        len(sorted_recs),
+        index_offset,
+        string_table_offset,
+        digest,
+    )
+    return header + payload
+
+
 def compress_zcb3_zlib9(zcb3_bytes: bytes) -> bytes:
     """Compress packed `ZCB3` bytes with `zlib` level 9 (~`7.43 MB` for full catalog)."""
     return zlib.compress(zcb3_bytes, level=9)
@@ -150,6 +202,8 @@ def decompress_zcb3(
             raise ValueError(f"zcb3_lzma_decompression_error:{exc}") from exc
         if len(out) > max_b or not dec.eof:
             raise ValueError("zcb3_lzma_decompression_limit_exceeded")
+        if dec.unused_data:
+            raise ValueError("zcb3_lzma_trailing_garbage_bytes")
         if not out.startswith(ZCB3_MAGIC):
             raise ValueError("Decompressed LZMA payload does not start with ZCB3 magic")
         return out
@@ -168,6 +222,8 @@ def decompress_zcb3(
         raise ValueError("zcb3_zlib_decompression_limit_exceeded")
     if not zdec.eof:
         raise ValueError("zcb3_zlib_incomplete_stream")
+    if zdec.unused_data:
+        raise ValueError("zcb3_zlib_trailing_garbage_bytes")
     if not out.startswith(ZCB3_MAGIC):
         raise ValueError("Decompressed Zlib payload does not start with ZCB3 magic")
     return out
@@ -196,9 +252,15 @@ class ZCB3MapSectionView(Mapping[str, str]):
             mid = (lo + hi) >> 1
             off = base + mid * ZCB3_RECORD_SIZE
             k8 = buf[off : off + 8]
+            if mid > 0 and buf[off - ZCB3_RECORD_SIZE : off - 1] >= k8:
+                raise ValueError(f"ZCB3 keys out of ascending order at index {mid}")
+            if mid + 1 < self._count and k8 >= buf[off + ZCB3_RECORD_SIZE : off + ZCB3_RECORD_SIZE + 8]:
+                raise ValueError(f"ZCB3 keys out of ascending order at index {mid}")
+            code = buf[off + 8]
+            if code not in CODE_TO_CAT:
+                raise ValueError(f"Invalid ZCB3 category_id enum index: {code}")
             if k8 == target8:
-                code = buf[off + 8]
-                return CODE_TO_CAT.get(code, "unknown")
+                return CODE_TO_CAT[code]
             if k8 < target8:
                 lo = mid + 1
             else:
@@ -227,11 +289,17 @@ class ZCB3MapSectionView(Mapping[str, str]):
         """Yield `(key_hex, category_str)` in sorted order without building a dict in memory."""
         base = self._base
         buf = self._buf
+        prev_k8: bytes | None = None
         for i in range(self._count):
             off = base + i * ZCB3_RECORD_SIZE
-            k_hex = bytes(buf[off : off + 8]).hex()
+            k8 = bytes(buf[off : off + 8])
+            if prev_k8 is not None and prev_k8 >= k8:
+                raise ValueError(f"ZCB3 keys out of ascending order at index {i}")
+            prev_k8 = k8
             code = buf[off + 8]
-            yield k_hex, CODE_TO_CAT.get(code, "unknown")
+            if code not in CODE_TO_CAT:
+                raise ValueError(f"Invalid ZCB3 category_id enum index: {code}")
+            yield k8.hex(), CODE_TO_CAT[code]
 
 
 class ZCB3MmapCatalog(Mapping[str, Any]):
@@ -240,12 +308,15 @@ class ZCB3MmapCatalog(Mapping[str, Any]):
     def __init__(
         self,
         path_or_bytes: str | Path | bytes | bytearray | memoryview,
+        *,
+        expected_sha256: str | None = None,
     ) -> None:
         self._file_obj: Any = None
         self._mmap_obj: mmap.mmap | None = None
         self._raw_bytes: bytes | None = None
         self.source_path: Path | None = None
         self.storage_mode: str = "memory_zcb3"
+        self.extended_records: list[dict[str, Any]] | None = None
 
         if isinstance(path_or_bytes, (bytes, bytearray, memoryview)):
             self._raw_bytes = decompress_zcb3(bytes(path_or_bytes))
@@ -255,6 +326,9 @@ class ZCB3MmapCatalog(Mapping[str, Any]):
             if not p.exists():
                 raise FileNotFoundError(f"ZCB3 catalog file not found: {p}")
             self.source_path = p
+            file_len = p.stat().st_size
+            if file_len == 0:
+                raise ValueError("Empty ZCB3 file")
             with p.open("rb") as f_peek:
                 head4 = f_peek.read(4)
             if head4 == ZCB3_MAGIC:
@@ -269,7 +343,21 @@ class ZCB3MmapCatalog(Mapping[str, Any]):
 
         if len(buf) < ZCB3_HEADER_SIZE:
             self.close()
-            raise ValueError(f"ZCB3 buffer too short for 16-byte header: {len(buf)} bytes")
+            raise ValueError(f"ZCB3 buffer too short for header: {len(buf)} bytes")
+
+        if expected_sha256 is not None:
+            actual_sha = hashlib.sha256(buf).hexdigest().lower()
+            if actual_sha != str(expected_sha256).strip().lower():
+                self.close()
+                raise ValueError(
+                    f"ZCB3 catalog_sha256 mismatch: expected {expected_sha256}, got {actual_sha}"
+                )
+
+        # Check if this is an extended 64-byte ZCB3 indexed header (flags == ZCB3_EXT_FLAG)
+        maybe_flags = struct.unpack_from("<I", buf, 8)[0] if len(buf) >= 12 else 0
+        if maybe_flags == ZCB3_EXT_FLAG:
+            self._init_extended_header(buf)
+            return
 
         magic, n_anime, n_title_year, n_title_only = ZCB3_HEADER_STRUCT.unpack(buf[:ZCB3_HEADER_SIZE])
         if magic != ZCB3_MAGIC:
@@ -300,6 +388,93 @@ class ZCB3MmapCatalog(Mapping[str, Any]):
             "anime_map": ZCB3MapSectionView(buf, off_anime, n_anime),
             "title_year_map": ZCB3MapSectionView(buf, off_title_year, n_title_year),
             "title_only_map": ZCB3MapSectionView(buf, off_title_only, n_title_only),
+        }
+
+        if total_records <= MAX_EAGER_VALIDATE_RECORDS:
+            try:
+                for view in self._sections.values():
+                    for _ in view.iter_records():
+                        pass
+            except Exception:
+                self.close()
+                raise
+
+    def _init_extended_header(self, buf: mmap.mmap | bytes) -> None:
+        if len(buf) < ZCB3_EXT_HEADER_SIZE:
+            self.close()
+            raise ValueError(f"ZCB3 extended header truncated: {len(buf)} < {ZCB3_EXT_HEADER_SIZE} bytes")
+        magic, version, flags, record_count, index_offset, string_table_offset, header_sha256 = (
+            ZCB3_EXT_HEADER_STRUCT.unpack(buf[:ZCB3_EXT_HEADER_SIZE])
+        )
+        if magic != ZCB3_MAGIC:
+            self.close()
+            raise ValueError(f"Invalid ZCB3 magic bytes: {magic!r}")
+        if version != ZCB3_VERSION:
+            self.close()
+            raise ValueError(f"Unsupported ZCB3 version: {version}")
+        if index_offset != ZCB3_EXT_HEADER_SIZE:
+            self.close()
+            raise ValueError(f"Invalid ZCB3 index_offset: {index_offset} != {ZCB3_EXT_HEADER_SIZE}")
+        index_end = index_offset + record_count * ZCB3_EXT_RECORD_SIZE
+        if (
+            record_count > 10_000_000
+            or index_end > string_table_offset
+            or string_table_offset > len(buf)
+            or index_end > len(buf)
+        ):
+            self.close()
+            raise ValueError(
+                f"Out-of-bounds ZCB3 header offsets: record_count={record_count}, "
+                f"index_offset={index_offset}, string_table_offset={string_table_offset}, size={len(buf)}"
+            )
+        actual_payload_sha = hashlib.sha256(buf[ZCB3_EXT_HEADER_SIZE:]).digest()
+        if actual_payload_sha != header_sha256:
+            self.close()
+            raise ValueError("ZCB3 embedded catalog_sha256 header digest mismatch against payload")
+
+        records_out: list[dict[str, Any]] = []
+        prev_prefix: int | None = None
+        for i in range(record_count):
+            rec_off = index_offset + i * ZCB3_EXT_RECORD_SIZE
+            prefix64, title_offset, title_len, category_id, rec_flags, _ = ZCB3_EXT_RECORD_STRUCT.unpack_from(
+                buf, rec_off
+            )
+            if prev_prefix is not None and prefix64 <= prev_prefix:
+                self.close()
+                raise ValueError(f"Out-of-order prefix64 key at index {i}: {prefix64} <= {prev_prefix}")
+            prev_prefix = prefix64
+            if category_id not in CODE_TO_CAT:
+                self.close()
+                raise ValueError(f"Invalid ZCB3 category_id enum index at {i}: {category_id}")
+            if title_offset < string_table_offset or title_offset + title_len > len(buf):
+                self.close()
+                raise ValueError(
+                    f"ZCB3 record {i} title slice out of bounds: {title_offset}+{title_len} > {len(buf)}"
+                )
+            raw_title = bytes(buf[title_offset : title_offset + title_len])
+            try:
+                title_str = raw_title.decode("utf-8", errors="strict")
+            except UnicodeDecodeError as exc:
+                self.close()
+                raise ValueError(f"Invalid UTF-8 sequence in ZCB3 string table at record {i}") from exc
+            records_out.append(
+                {
+                    "prefix64": prefix64,
+                    "title": title_str,
+                    "category": CODE_TO_CAT[category_id],
+                    "category_id": category_id,
+                    "flags": rec_flags,
+                }
+            )
+
+        self.extended_records = records_out
+        self.counts = {"anime_map": 0, "title_year_map": 0, "title_only_map": int(record_count)}
+        self.total_entries = int(record_count)
+        self.size_bytes = len(buf)
+        self._sections = {
+            "anime_map": ZCB3MapSectionView(b"", 0, 0),
+            "title_year_map": ZCB3MapSectionView(b"", 0, 0),
+            "title_only_map": ZCB3MapSectionView(b"", 0, 0),
         }
 
     @classmethod

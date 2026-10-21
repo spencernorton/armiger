@@ -341,7 +341,7 @@ class XMSSSignature:
         )
         return cls(
             seq=int(seq),
-            leaf_index=int(seq) - 1,
+            leaf_index=(int(seq) - 1) % (1 << int(height)),
             height=int(height),
             pub_seed_hex=pub_seed.hex(),
             leaf_pubkey_hex=leaf_pk.hex(),
@@ -362,10 +362,12 @@ class XMSSSignature:
 
     @classmethod
     def from_dict(cls, d: dict[str, Any]) -> XMSSSignature:
+        h_val = int(d.get("height", len(d["auth_path_hex"])))
+        seq_val = int(d["seq"])
         return cls(
-            seq=int(d["seq"]),
-            leaf_index=int(d.get("leaf_index", int(d["seq"]) - 1)),
-            height=int(d.get("height", len(d["auth_path_hex"]))),
+            seq=seq_val,
+            leaf_index=int(d.get("leaf_index", (seq_val - 1) % (1 << h_val))),
+            height=h_val,
             pub_seed_hex=str(d["pub_seed_hex"]).lower(),
             leaf_pubkey_hex=str(d["leaf_pubkey_hex"]).lower(),
             wots_signature_hex=str(d["wots_signature_hex"]).lower(),
@@ -479,18 +481,29 @@ class XMSSMerkleTree:
                 self._external_seal_path = cand_seal
         else:
             self._external_seal_path = self._registry_seal_path
+        self.external_seal_path: Path = self._external_seal_path
 
-        resolved_ext_seal_path = self._external_seal_path.resolve()
+        resolved_ext_seal_path = Path(os.path.realpath(self._external_seal_path))
         resolved_ext_seal_dir = resolved_ext_seal_path.parent
+        resolved_state_path = Path(os.path.realpath(self.state_path))
         resolved_state_dir = resolved_state_path.parent
+        abs_ext_seal_path = Path(os.path.abspath(self._external_seal_path))
+        abs_ext_seal_dir = abs_ext_seal_path.parent
+        abs_state_path = Path(os.path.abspath(self.state_path))
+        abs_state_dir = abs_state_path.parent
         if (
             resolved_ext_seal_dir == resolved_state_dir
             or resolved_state_dir in resolved_ext_seal_path.parents
             or resolved_ext_seal_dir in resolved_state_path.parents
+            or abs_ext_seal_dir == abs_state_dir
+            or abs_state_dir in abs_ext_seal_path.parents
+            or abs_ext_seal_dir in abs_state_path.parents
+            or self._external_seal_path.is_symlink()
+            or self._external_seal_path.parent.is_symlink()
         ):
             raise ValueError(
                 "xmss_independent_seal_location_required: external freshness checkpoint must belong to an "
-                "independent rollback domain and must not reside in or beneath state_path's directory tree"
+                "independent rollback domain and must not reside in, beneath, or symlink into state_path's directory tree"
             )
 
         self._lock: threading.RLock = _get_xmss_state_lock(self._lock_key)
@@ -730,6 +743,7 @@ class XMSSMerkleTree:
         if int(sdoc.get("height", -1)) != self.height:
             raise RuntimeError("xmss_state_recovery_failed:seal_height_mismatch")
         s_max = sdoc.get("max_signed_seq")
+        s_res_leaf = sdoc.get("max_reserved_leaf", 0)
         s_used = sdoc.get("used_seqs")
         s_gen = sdoc.get("state_generation")
         s_nonce = str(sdoc.get("state_nonce", ""))
@@ -737,8 +751,12 @@ class XMSSMerkleTree:
         if (
             isinstance(s_max, bool)
             or not isinstance(s_max, int)
-            or not (0 <= s_max <= self.num_leaves)
+            or not (0 <= s_max <= (1 << 31) - 1)
+            or isinstance(s_res_leaf, bool)
+            or not isinstance(s_res_leaf, int)
+            or not (0 <= s_res_leaf < self.num_leaves)
             or not isinstance(s_used, list)
+            or len(s_used) > self.num_leaves
             or isinstance(s_gen, bool)
             or not isinstance(s_gen, int)
             or s_gen < 1
@@ -747,7 +765,7 @@ class XMSSMerkleTree:
             raise RuntimeError("xmss_state_recovery_failed:invalid_freshness_seal_fields")
         parsed_s_used: set[int] = set()
         for item in s_used:
-            if isinstance(item, bool) or not isinstance(item, int) or not (1 <= item <= self.num_leaves):
+            if isinstance(item, bool) or not isinstance(item, int) or not (1 <= item <= (1 << 31) - 1):
                 raise RuntimeError("xmss_state_recovery_failed:invalid_seal_seq_entry")
             parsed_s_used.add(item)
         expected_seal_mac = self._compute_state_mac(
@@ -916,9 +934,9 @@ class XMSSMerkleTree:
         raw_gen = doc.get("state_generation", 0)
         raw_nonce = str(doc.get("state_nonce", ""))
         raw_bound = str(doc.get("bound_state_path", ""))
-        if isinstance(raw_max, bool) or not isinstance(raw_max, int) or not (0 <= raw_max <= self.num_leaves):
+        if isinstance(raw_max, bool) or not isinstance(raw_max, int) or not (0 <= raw_max <= (1 << 31) - 1):
             raise RuntimeError("xmss_state_recovery_failed:invalid_max_signed_seq")
-        if not isinstance(raw_used, list):
+        if not isinstance(raw_used, list) or len(raw_used) > self.num_leaves:
             raise RuntimeError("xmss_state_recovery_failed:invalid_used_seqs")
         if isinstance(raw_gen, bool) or not isinstance(raw_gen, int) or raw_gen < 1 or not raw_nonce:
             raise RuntimeError("xmss_state_recovery_failed:invalid_state_freshness_fields")
@@ -929,7 +947,7 @@ class XMSSMerkleTree:
 
         parsed_used: set[int] = set()
         for item in raw_used:
-            if isinstance(item, bool) or not isinstance(item, int) or not (1 <= item <= self.num_leaves):
+            if isinstance(item, bool) or not isinstance(item, int) or not (1 <= item <= (1 << 31) - 1):
                 raise RuntimeError("xmss_state_recovery_failed:invalid_seq_entry")
             parsed_used.add(item)
 
@@ -1013,16 +1031,16 @@ class XMSSMerkleTree:
         )
 
     def leaf_pubkey(self, seq: int) -> bytes:
-        """Return the 32-byte WOTS+ public key for 1-based sequence number `seq` (`1..2^H`)."""
-        if not (1 <= int(seq) <= self.num_leaves):
-            raise ValueError(f"seq {seq} out of range [1, {self.num_leaves}]")
-        return self._leaf_pubkeys[int(seq) - 1]
+        """Return the 32-byte WOTS+ public key for 1-based sequence number `seq`."""
+        if int(seq) < 1:
+            raise ValueError(f"seq {seq} must be >= 1")
+        return self._leaf_pubkeys[(int(seq) - 1) % self.num_leaves]
 
     def auth_path(self, seq: int) -> tuple[bytes, ...]:
         """Return the `height`-node (`320-byte` for H=10) Merkle authentication path for `seq`."""
-        if not (1 <= int(seq) <= self.num_leaves):
-            raise ValueError(f"seq {seq} out of range [1, {self.num_leaves}]")
-        idx = int(seq) - 1
+        if int(seq) < 1:
+            raise ValueError(f"seq {seq} must be >= 1")
+        idx = (int(seq) - 1) % self.num_leaves
         siblings: list[bytes] = []
         for lvl in range(self.height):
             sib_idx = idx ^ 1
@@ -1037,10 +1055,14 @@ class XMSSMerkleTree:
         *,
         _simulate_crash_after_reserve: bool = False,
     ) -> XMSSSignature:
-        if seq in self._used_seqs or seq <= self.max_signed_seq:
+        leaf_idx = (seq - 1) % self.num_leaves
+        used_leaves = {(s - 1) % self.num_leaves for s in self._used_seqs}
+        if seq in self._used_seqs or seq <= self.max_signed_seq or leaf_idx in used_leaves:
             raise RuntimeError(
                 f"xmss_wots_one_time_key_reuse_rejected:seq={seq}<=max_signed={self.max_signed_seq}"
             )
+        if len(self._used_seqs) >= self.num_leaves:
+            raise ValueError(f"xmss_tree_exhausted:used={len(self._used_seqs)}>={self.num_leaves}")
 
         next_used = set(self._used_seqs)
         next_used.add(seq)
@@ -1053,7 +1075,6 @@ class XMSSMerkleTree:
         if _simulate_crash_after_reserve:
             raise RuntimeError("xmss_simulated_crash_after_atomic_reservation")
 
-        leaf_idx = seq - 1
         leaf_seed64 = _xmss_leaf_wots_seed(self.master_seed_32, self.pub_seed_32, leaf_idx)
         bound_msg = _xmss_seq_bound_message(seq, self.pub_seed_32, message)
         wots_sig = WOTSPlusSHAKE256.sign(leaf_seed64, bound_msg)
@@ -1077,8 +1098,8 @@ class XMSSMerkleTree:
         *,
         _simulate_crash_after_reserve: bool = False,
     ) -> XMSSSignature:
-        """Atomically reserve and persist `seq` before signing `message` with leaf `seq - 1`."""
-        if isinstance(seq, bool) or not isinstance(seq, int) or not (1 <= seq <= self.num_leaves):
+        """Atomically reserve and persist `seq` before signing `message` with leaf `(seq - 1) % num_leaves`."""
+        if isinstance(seq, bool) or not isinstance(seq, int) or not (1 <= seq <= (1 << 31) - 1):
             raise ValueError(f"xmss_seq_out_of_bounds:{seq} (valid: 1..{self.num_leaves})")
 
         with self._exclusive_state_guard():
@@ -1094,7 +1115,7 @@ class XMSSMerkleTree:
         with self._exclusive_state_guard():
             self._recover_or_init_state_locked(require_existing_state=True)
             next_seq = self.max_signed_seq + 1
-            if next_seq > self.num_leaves:
+            if len(self._used_seqs) >= self.num_leaves:
                 raise ValueError(f"xmss_tree_exhausted:next_seq={next_seq}>{self.num_leaves}")
             return self._sign_seq_locked(next_seq, message)
 
@@ -1133,10 +1154,13 @@ def verify_xmss_signature(
         return False, f"xmss_invalid_height:{sig.height}"
 
     max_leaves = 1 << sig.height
-    if not (1 <= sig.seq <= max_leaves):
+    if isinstance(sig.leaf_index, bool) or not isinstance(sig.leaf_index, int) or not (0 <= sig.leaf_index < max_leaves):
+        return False, f"xmss_leaf_index_out_of_bounds:{sig.leaf_index}"
+    if isinstance(sig.seq, bool) or not isinstance(sig.seq, int) or not (1 <= sig.seq <= (1 << 31) - 1):
         return False, f"xmss_seq_out_of_bounds:{sig.seq}"
-    if sig.leaf_index != sig.seq - 1:
-        return False, f"xmss_leaf_index_mismatch:{sig.leaf_index}!={sig.seq - 1}"
+    expected_leaf_idx = (sig.seq - 1) % max_leaves
+    if sig.leaf_index != expected_leaf_idx:
+        return False, f"xmss_leaf_index_mismatch:{sig.leaf_index}!={expected_leaf_idx}"
     if sig.seq <= int(last_verified_seq):
         return False, f"stale_or_replayed_seq:{sig.seq}<={last_verified_seq}"
     if len(sig.auth_path_hex) != sig.height:
@@ -1463,3 +1487,7 @@ def benchmark_quorum_verification_cache(n_signers: int = 25, cached_rounds: int 
         "cache_hits": qcache.hits,
         "cache_misses": qcache.misses,
     }
+
+
+XMSSStateManager = XMSSMerkleTree
+XMSSVerifier = XMSSStatefulVerifier

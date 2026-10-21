@@ -67,7 +67,14 @@ EXPLICIT_MOVIE_PACK_RE = re.compile(
 
 GAME_ARCHIVE_RE = re.compile(
     r"(?i)(?:\bNTSC-U\b|\bNTSC-J\b|\[linux-x86\]|\[linux-x64\]|\[win64\]|"
-    r"\bInteractive\s+Fiction\b|\bGOG\s+Edition\b|\bLinux\s+Native\b|\((?:Europe|USA|Japan|World)\)\.(?:zip|7z|rar|iso|chd)\b)"
+    r"\bInteractive\s+Fiction\b|\bGOG\s+Edition\b|\bLinux\s+Native\b|\((?:Europe|USA|Japan|World)\)\.(?:zip|7z|rar|iso|chd)\b|"
+    r"supertux|super-tux-kart|org\.supertuxkart|\bfreeciv|\bopenttd|\b0ad[-_\b]|\bminetest|\bfreedoom|\bwesnoth|"
+    r"\bsauerbraten|\bxonotic|\bopenarena|\bwarsow|\barx-libertatis|\bopenglad|\bcrispy-doom|\bflightgear|"
+    r"\bendless-sky|\bmegaglest|\bastromenace|\bspeed-dreams|\btorcs\b|\bvdrift|\bstuntrally|\bredeclipse|"
+    r"\bassaultcube|\bteeworlds|\bddnet\b|\bopenra\b|\bwz2100|\bwarzone2100|\bfheroes2|\bvcmi\b|\bopenmw|"
+    r"\bopenxcom|\bcorsixth|\bsimutrans|\blincity|\bunknown-horizons|\bwidelands|\bhedgewars|\bpingus\b|"
+    r"\bfrogatto|\bflare-game|\bvalyriatear|\bnaev\b|\boolite\b|\bpioneerspacesim|\bvegastrike|\burquan|\buqm\b|"
+    r"segasoft|gremlin[\s\._-]+interactive|crosscountrycanada|petepilotti|\.levelset\.)"
 )
 
 ADULT_SITERIP_RE = re.compile(

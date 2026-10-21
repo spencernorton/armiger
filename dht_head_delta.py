@@ -192,15 +192,81 @@ def load_state_tensors(source: Any) -> tuple[dict[str, np.ndarray], dict[str, np
 
 
 def compute_trunk_sha256(trunk_tensors: Mapping[str, Any]) -> str:
-    """Compute a deterministic SHA-256 digest over all sorted frozen-trunk tensors."""
+    """Compute a deterministic SHA-256 digest over all sorted frozen-trunk tensors.
+
+    Canonicalizes anonymous ONNX exporter `onnx::MatMul_<id>` trunk initializers by
+    their relative numeric order so re-exported ONNX graphs with identical frozen-trunk
+    weights produce an identical `base_trunk_sha256`.
+    """
+    anon_keys = sorted(
+        (k for k in trunk_tensors.keys() if k.startswith("onnx::MatMul_") and k.split("_")[-1].isdigit()),
+        key=lambda x: int(x.split("_")[-1]),
+    )
+    canon_map = {k: f"onnx::MatMul_#{idx:03d}" for idx, k in enumerate(anon_keys)}
+
     hasher = hashlib.sha256()
     hasher.update(b"armiger-frozen-trunk-v3:")
-    for k in sorted(trunk_tensors.keys()):
-        arr = _to_numpy_fp32(trunk_tensors[k])
+    items = [(canon_map.get(k, k), k) for k in trunk_tensors.keys()]
+    for canon_k, orig_k in sorted(items, key=lambda pair: pair[0]):
+        arr = _to_numpy_fp32(trunk_tensors[orig_k])
+        shape_str = ",".join(str(d) for d in arr.shape)
+        hasher.update(f"{canon_k}:{shape_str}:".encode("utf-8"))
+        hasher.update(arr.astype("<f4", copy=False).tobytes())
+    return hasher.hexdigest()
+
+
+def compute_reconstructed_head_sha256(head_tensors: Mapping[str, np.ndarray]) -> str:
+    """Compute deterministic SHA-256 over sorted reconstructed float32 head tensors."""
+    hasher = hashlib.sha256()
+    hasher.update(b"armiger-reconstructed-heads-v3:")
+    for k in sorted(head_tensors.keys()):
+        arr = _to_numpy_fp32(head_tensors[k])
         shape_str = ",".join(str(d) for d in arr.shape)
         hasher.update(f"{k}:{shape_str}:".encode("utf-8"))
         hasher.update(arr.astype("<f4", copy=False).tobytes())
     return hasher.hexdigest()
+
+
+def compute_reconstructed_frobenius_norm(head_tensors: Mapping[str, np.ndarray]) -> float:
+    """Compute total Frobenius (L2) norm across reconstructed float32 head tensors."""
+    sq_sum = 0.0
+    for k in sorted(head_tensors.keys()):
+        arr = _to_numpy_fp32(head_tensors[k]).astype(np.float64)
+        sq_sum += float(np.sum(arr * arr))
+    return float(math.sqrt(sq_sum))
+
+
+@dataclasses.dataclass(frozen=True)
+class DeltaLayerMeta:
+    """Metadata descriptor for a single quantized head tensor layer in a HeadDeltaBundle."""
+
+    name: str
+    shape: tuple[int, ...]
+    numel: int
+    offset: int
+    nbytes: int
+    scale: float = 1.0
+
+    def __post_init__(self) -> None:
+        if isinstance(self.scale, bool) or not isinstance(self.scale, (int, float)):
+            raise ValueError(f"invalid_tensor_scale_type:{self.name}")
+        s = float(self.scale)
+        if not math.isfinite(s) or s <= 0.0 or s > 500.0:
+            raise ValueError(f"invalid_tensor_scale_value:{self.name}:{s}")
+        if not self.shape or any(int(d) <= 0 for d in self.shape):
+            raise ValueError(f"invalid_tensor_shape_dims:{self.name}:{self.shape}")
+        if int(self.numel) != int(math.prod(int(d) for d in self.shape)):
+            raise ValueError(f"tensor_numel_mismatch:{self.name}:{self.numel}")
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "name": str(self.name),
+            "shape": [int(d) for d in self.shape],
+            "numel": int(self.numel),
+            "offset": int(self.offset),
+            "nbytes": int(self.nbytes),
+            "scale": float(self.scale),
+        }
 
 
 @dataclasses.dataclass(frozen=True)
@@ -220,6 +286,8 @@ class HeadDeltaBundle:
     seq: int = 1
     ed25519_signature_hex: str = ""
     xmss_signature_hex: str = ""
+    reconstructed_sha256: str = ""
+    reconstructed_frobenius_norm: float = 0.0
 
     @property
     def weight_size_bytes(self) -> int:
@@ -252,7 +320,7 @@ class HeadDeltaBundle:
         return json.dumps(doc, sort_keys=True, separators=(",", ":")).encode("utf-8")
 
     def to_bytes(self, *, compression: str = "none") -> bytes:
-        meta = {
+        meta: dict[str, Any] = {
             "schema": self.schema,
             "version": self.version,
             "precision": self.precision,
@@ -266,6 +334,10 @@ class HeadDeltaBundle:
             "ed25519_signature_hex": self.ed25519_signature_hex,
             "xmss_signature_hex": self.xmss_signature_hex,
         }
+        if self.reconstructed_sha256:
+            meta["reconstructed_sha256"] = self.reconstructed_sha256
+        if self.reconstructed_frobenius_norm > 0.0:
+            meta["reconstructed_frobenius_norm"] = float(self.reconstructed_frobenius_norm)
         meta_bytes = json.dumps(meta, sort_keys=True, separators=(",", ":")).encode("utf-8")
         raw_wire = HDLT_HEADER_PREFIX.pack(HDLT_MAGIC, len(meta_bytes)) + meta_bytes + self.raw_weight_bytes
         comp = compression.strip().lower()
@@ -297,15 +369,22 @@ class HeadDeltaBundle:
                     raise ValueError(f"hdlt_lzma_decompression_error:{exc}") from exc
                 if len(raw) > max_b or not dec.eof:
                     raise ValueError("hdlt_lzma_decompression_limit_exceeded")
+                if dec.unused_data:
+                    raise ValueError("hdlt_lzma_trailing_garbage_bytes")
             else:
-                zdec = zlib.decompressobj()
-                raw = zdec.decompress(raw, max_length=max_b + 1)
+                try:
+                    zdec = zlib.decompressobj()
+                    raw = zdec.decompress(raw, max_length=max_b + 1)
+                    if len(raw) > max_b or zdec.unconsumed_tail:
+                        raise ValueError("hdlt_zlib_decompression_limit_exceeded")
+                    rem = max_b + 1 - len(raw)
+                    raw += zdec.flush(max(1, rem))
+                except zlib.error as exc:
+                    raise ValueError(f"hdlt_zlib_decompression_error:{exc}") from exc
                 if len(raw) > max_b or zdec.unconsumed_tail:
                     raise ValueError("hdlt_zlib_decompression_limit_exceeded")
-                rem = max_b + 1 - len(raw)
-                raw += zdec.flush(max(1, rem))
-                if len(raw) > max_b or zdec.unconsumed_tail:
-                    raise ValueError("hdlt_zlib_decompression_limit_exceeded")
+                if not zdec.eof or zdec.unused_data:
+                    raise ValueError("hdlt_zlib_trailing_garbage_bytes")
 
         if len(raw) > max_b:
             raise ValueError(f"hdlt_size_limit_exceeded:{len(raw)}>{max_b}")
@@ -314,6 +393,8 @@ class HeadDeltaBundle:
         magic, meta_len = HDLT_HEADER_PREFIX.unpack(raw[: HDLT_HEADER_PREFIX.size])
         if magic != HDLT_MAGIC:
             raise ValueError(f"Invalid HeadDeltaBundle magic: {magic!r}")
+        if meta_len > 100 * 1024:
+            raise ValueError(f"hdlt_metadata_header_exceeds_100kb:{meta_len}")
         meta_start = HDLT_HEADER_PREFIX.size
         meta_end = meta_start + meta_len
         if meta_end > len(raw):
@@ -328,7 +409,12 @@ class HeadDeltaBundle:
         if isinstance(raw_seq, bool) or not isinstance(raw_seq, int) or raw_seq < 1:
             raise ValueError(f"invalid_head_delta_seq:{raw_seq!r}")
 
-        return cls(
+        raw_rec_sha = str(meta.get("reconstructed_sha256", "")).lower()
+        raw_rec_frob = meta.get("reconstructed_frobenius_norm", 0.0)
+        if isinstance(raw_rec_frob, bool) or not isinstance(raw_rec_frob, (int, float)) or not math.isfinite(float(raw_rec_frob)) or float(raw_rec_frob) < 0.0:
+            raise ValueError(f"invalid_reconstructed_frobenius_norm:{raw_rec_frob!r}")
+
+        inst = cls(
             schema=str(meta["schema"]),
             version=str(meta["version"]),
             precision=str(meta["precision"]),
@@ -342,7 +428,10 @@ class HeadDeltaBundle:
             seq=int(raw_seq),
             ed25519_signature_hex=str(meta.get("ed25519_signature_hex", "")),
             xmss_signature_hex=str(meta.get("xmss_signature_hex", "")),
+            reconstructed_sha256=raw_rec_sha,
+            reconstructed_frobenius_norm=float(raw_rec_frob),
         )
+        return inst
 
 
 def extract_head_delta_bundle(
@@ -431,6 +520,14 @@ def extract_head_delta_bundle(
         payload_sha256=payload_sha256,
         seq=int(seq),
     )
+    deq_preview = dequantize_head_delta_tensors(unsigned_bundle)
+    rec_sha = compute_reconstructed_head_sha256(deq_preview)
+    rec_frob = compute_reconstructed_frobenius_norm(deq_preview)
+    unsigned_bundle = dataclasses.replace(
+        unsigned_bundle,
+        reconstructed_sha256=rec_sha,
+        reconstructed_frobenius_norm=rec_frob,
+    )
 
     sig_payload = unsigned_bundle.signing_payload()
     ed_sig_hex = ""
@@ -518,11 +615,17 @@ def validate_head_delta_tensor_specs(
             if shape != tuple(expected_head_shapes[name]):
                 raise ValueError(f"head_tensor_shape_mismatch:{name}:{shape}!={tuple(expected_head_shapes[name])}")
 
+        # 9th-head (span_bio, 7 BIO tags) canonical class-count guard (N-13)
+        if name == "heads.span_bio.3.weight" and (len(shape) != 2 or shape[0] != 7):
+            raise ValueError(f"head_tensor_shape_mismatch:span_bio_class_count_mismatch:{name}:{shape}")
+        if name == "heads.span_bio.3.bias" and shape != (7,):
+            raise ValueError(f"head_tensor_shape_mismatch:span_bio_bias_shape_mismatch:{name}:{shape}")
+
         raw_scale = spec.get("scale", 1.0)
         if isinstance(raw_scale, bool) or not isinstance(raw_scale, (int, float)):
             raise ValueError(f"invalid_tensor_scale_type:{name}")
         scale = float(raw_scale)
-        if not math.isfinite(scale) or scale <= 0.0:
+        if not math.isfinite(scale) or scale <= 0.0 or scale > 500.0:
             raise ValueError(f"invalid_tensor_scale_value:{name}:{scale}")
         if prec in ("fp32", "fp16") and abs(scale - 1.0) > 1e-9:
             raise ValueError(f"unexpected_non_unit_scale_for_{prec}:{name}:{scale}")
@@ -532,14 +635,16 @@ def validate_head_delta_tensor_specs(
         expected_nbytes = computed_numel * bytes_per_elem
         if off != expected_offset or nbytes != expected_nbytes or off < 0 or nbytes <= 0 or (off + nbytes) > total_bytes:
             raise ValueError(
-                f"invalid_tensor_byte_range:{name}:offset={off}(expected={expected_offset}),nbytes={nbytes}(expected={expected_nbytes})"
+                f"invalid_tensor_byte_range:truncated_or_mismatched_payload_buffer:{name}:offset={off}(expected={expected_offset}),nbytes={nbytes}(expected={expected_nbytes})"
             )
 
         expected_offset += nbytes
         total_numel += computed_numel
 
+    if "span_bio" in bundle.head_names and not any(s.startswith("heads.span_bio.") for s in seen_names):
+        raise ValueError("missing_9th_head_span_bio_tensors_in_bundle")
     if expected_offset != total_bytes:
-        raise ValueError(f"tensor_specs_byte_coverage_mismatch:{expected_offset}!={total_bytes}")
+        raise ValueError(f"tensor_specs_byte_coverage_mismatch:truncated_or_mismatched_payload_buffer:{expected_offset}!={total_bytes}")
     if total_numel != int(bundle.head_param_count):
         raise ValueError(f"head_param_count_mismatch:{total_numel}!={bundle.head_param_count}")
 
@@ -583,7 +688,26 @@ def dequantize_head_delta_tensors(
             arr = (np.frombuffer(chunk, dtype=np.int8).astype(np.float32) * scale).reshape(shape)
         else:
             raise ValueError(f"Unsupported precision in bundle: {prec!r}")
+        if not bool(np.all(np.isfinite(arr))):
+            raise ValueError(f"hdlt_reconstructed_tensor_nonfinite:{name}")
+        l2_norm = float(np.linalg.norm(arr.astype(np.float64)))
+        max_l2 = max(500.0, 2.0 * math.sqrt(float(max(arr.size, 1))))
+        if not math.isfinite(l2_norm) or l2_norm > max_l2:
+            raise ValueError(f"hdlt_reconstructed_tensor_l2_norm_explosion:{name}:{l2_norm:.4f}>500.0")
         out[name] = np.ascontiguousarray(arr, dtype=np.float32)
+
+    if bundle.reconstructed_sha256:
+        actual_rec_sha = compute_reconstructed_head_sha256(out)
+        if actual_rec_sha != bundle.reconstructed_sha256.lower():
+            raise ValueError(
+                f"hdlt_reconstructed_sha256_mismatch:{actual_rec_sha}!={bundle.reconstructed_sha256.lower()}"
+            )
+    if bundle.reconstructed_frobenius_norm > 0.0:
+        actual_frob = compute_reconstructed_frobenius_norm(out)
+        if not math.isfinite(actual_frob) or abs(actual_frob - float(bundle.reconstructed_frobenius_norm)) > 1e-2:
+            raise ValueError(
+                f"hdlt_reconstructed_frobenius_norm_mismatch:{actual_frob:.6f}!={bundle.reconstructed_frobenius_norm:.6f}"
+            )
 
     return out
 
@@ -707,5 +831,149 @@ def reconstruct_from_head_delta(
         "state_dict": merged,
         "base_trunk_sha256": actual_trunk_sha,
         "reconstructed_head_tensors": len(deq_heads),
+        "precision": bundle.precision,
+    }
+
+
+LOGICAL_TO_PHYSICAL_9HEAD_MAP: dict[str, str] = {
+    "category": "category",
+    "media_source": "junk",
+    "resolution": "anime",
+    "video_codec": "owner_scope",
+    "english_subs": "english_subs",
+    "title_language": "title_language",
+    "audio_language": "lang",
+    "safety_flags": "adult",
+    "span_bio": "span_bio",
+}
+
+
+def resolve_head_names(heads: Sequence[str] | None = None) -> tuple[str, ...]:
+    """Resolve logical or physical head names to canonical Armiger v3 physical head names."""
+    if heads is None:
+        return ALL_9_HEAD_NAMES
+    resolved: list[str] = []
+    for h in heads:
+        phys = LOGICAL_TO_PHYSICAL_9HEAD_MAP.get(str(h).strip(), str(h).strip())
+        if phys not in ALL_9_HEAD_NAMES:
+            raise ValueError(f"Unknown head name: {h!r}")
+        if phys not in resolved:
+            resolved.append(phys)
+    return tuple(resolved)
+
+
+def extract_residual_head_delta_bundle(
+    base_source: Any,
+    target_source: Any,
+    *,
+    precision: str = "int8",
+    heads: Sequence[str] | None = None,
+    version: str = "3.0.0-gold-r3-residual",
+    seq: int = 3003,
+    ed25519_privkey_bytes: bytes | None = None,
+    xmss_tree: Any | None = None,
+) -> HeadDeltaBundle:
+    """Compute and sign a 9-head residual delta (`target_heads - base_heads`) over an identical frozen trunk."""
+    base_trunk, base_heads = load_state_tensors(base_source)
+    target_trunk, target_heads = load_state_tensors(target_source)
+
+    base_trunk_sha = compute_trunk_sha256(base_trunk)
+    target_trunk_sha = compute_trunk_sha256(target_trunk)
+    if base_trunk_sha != target_trunk_sha:
+        raise ValueError(
+            f"Frozen trunk SHA-256 mismatch between base ({base_trunk_sha}) and target ({target_trunk_sha})"
+        )
+
+    if set(base_heads.keys()) != set(target_heads.keys()):
+        raise ValueError("Head tensor key mismatch between base and target models")
+
+    residual_state: dict[str, np.ndarray] = dict(target_trunk)
+    for k in sorted(target_heads.keys()):
+        b_arr = _to_numpy_fp32(base_heads[k])
+        t_arr = _to_numpy_fp32(target_heads[k])
+        if b_arr.shape != t_arr.shape:
+            raise ValueError(f"Shape mismatch for head tensor {k}: {b_arr.shape} vs {t_arr.shape}")
+        residual_state[k] = np.ascontiguousarray(t_arr - b_arr, dtype=np.float32)
+
+    phys_heads = resolve_head_names(heads)
+    return extract_head_delta_bundle(
+        residual_state,
+        precision=precision,
+        heads=phys_heads,
+        base_trunk_sha256=target_trunk_sha,
+        version=version,
+        seq=seq,
+        ed25519_privkey_bytes=ed25519_privkey_bytes,
+        xmss_tree=xmss_tree,
+    )
+
+
+def reconstruct_from_residual_head_delta(
+    base_trunk_or_model: Any,
+    residual_bundle_or_bytes: HeadDeltaBundle | bytes,
+    *,
+    expected_trunk_sha256: str | None = None,
+    ed25519_pubkey_bytes: bytes | None = None,
+    xmss_root_hex: str | None = None,
+    last_verified_seq: int = 0,
+) -> dict[str, Any]:
+    """Verify signatures, anti-rollback `seq`, and trunk SHA-256, then add dequantized residual head delta to `base_trunk_or_model`."""
+    bundle = (
+        residual_bundle_or_bytes
+        if isinstance(residual_bundle_or_bytes, HeadDeltaBundle)
+        else HeadDeltaBundle.from_bytes(residual_bundle_or_bytes)
+    )
+    verified = reconstruct_from_head_delta(
+        base_trunk_or_model,
+        bundle,
+        expected_trunk_sha256=expected_trunk_sha256,
+        ed25519_pubkey_bytes=ed25519_pubkey_bytes,
+        xmss_root_hex=xmss_root_hex,
+        last_verified_seq=last_verified_seq,
+    )
+    trunk_tensors, base_heads = load_state_tensors(base_trunk_or_model)
+    deq_residuals = dequantize_head_delta_tensors(
+        bundle,
+        expected_head_shapes={k: tuple(int(d) for d in v.shape) for k, v in base_heads.items()},
+        forbidden_trunk_keys=set(trunk_tensors.keys()) | {k.removeprefix("m.") for k in trunk_tensors.keys()},
+    )
+
+    merged: dict[str, Any] = dict(trunk_tensors)
+    reconstructed_heads: dict[str, np.ndarray] = {}
+    for k, base_arr in base_heads.items():
+        if k in deq_residuals:
+            reconstructed_heads[k] = np.ascontiguousarray(
+                _to_numpy_fp32(base_arr) + deq_residuals[k], dtype=np.float32
+            )
+        else:
+            reconstructed_heads[k] = _to_numpy_fp32(base_arr)
+        merged[k] = reconstructed_heads[k]
+
+    if hasattr(base_trunk_or_model, "graph") and hasattr(base_trunk_or_model.graph, "initializer"):
+        from onnx import numpy_helper
+
+        patched_onnx = copy.deepcopy(base_trunk_or_model)
+        _, _, onnx_map = _extract_onnx_tensors(patched_onnx)
+        init_lookup = {init.name: idx for idx, init in enumerate(patched_onnx.graph.initializer)}
+        for canon_name, arr_f32 in reconstructed_heads.items():
+            if canon_name in onnx_map:
+                onnx_init_name, needs_transpose = onnx_map[canon_name]
+                target_arr = np.ascontiguousarray(arr_f32.T if needs_transpose else arr_f32, dtype=np.float32)
+                idx = init_lookup[onnx_init_name]
+                patched_onnx.graph.initializer[idx].CopyFrom(
+                    numpy_helper.from_array(target_arr, name=onnx_init_name)
+                )
+        return {
+            "state_dict": merged,
+            "onnx_model": patched_onnx,
+            "base_trunk_sha256": verified["base_trunk_sha256"],
+            "reconstructed_head_tensors": len(deq_residuals),
+            "precision": bundle.precision,
+        }
+
+    return {
+        "state_dict": merged,
+        "base_trunk_sha256": verified["base_trunk_sha256"],
+        "reconstructed_head_tensors": len(deq_residuals),
         "precision": bundle.precision,
     }

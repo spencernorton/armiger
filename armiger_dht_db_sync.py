@@ -579,10 +579,14 @@ def decompress_payload(
     codec: str = MANDATORY_WIRE_CODEC,
     max_output_bytes: int = MAX_DECOMPRESSED_SHARD_BYTES,
     max_ratio: int = MAX_DECOMPRESSION_RATIO,
+    *,
+    max_uncompressed_bytes: int | None = None,
 ) -> bytes:
     """Decompress payload using specified codec with strict zip-bomb size & ratio caps."""
     if not compressed:
         return b""
+    if max_uncompressed_bytes is not None:
+        max_output_bytes = int(max_uncompressed_bytes)
     hard_cap = min(max_output_bytes, max(65536, len(compressed) * max_ratio))
 
     def _zlib_bounded(data: bytes) -> bytes:

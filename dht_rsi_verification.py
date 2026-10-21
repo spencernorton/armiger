@@ -604,8 +604,14 @@ class AuthoritativeASNVerifier:
 
     @staticmethod
     def extract_subnet_prefix(ip_address: str) -> str:
-        """Return canonical /24 (IPv4) or /48 (IPv6) Sybil aggregation subnet for an IP address."""
+        """Return canonical /24 (IPv4) or /48 (IPv6) Sybil aggregation subnet for an IP address.
+
+        Unwraps IPv4-mapped IPv6 addresses (`::ffff:a.b.c.d`) to their canonical IPv4 `/24`
+        so a dual-stack host cannot bypass `/24` Sybil limits by presenting `::ffff:` addresses.
+        """
         addr = ipaddress.ip_address(str(ip_address).strip())
+        if isinstance(addr, ipaddress.IPv6Address) and addr.ipv4_mapped is not None:
+            addr = addr.ipv4_mapped
         if isinstance(addr, ipaddress.IPv4Address):
             return str(ipaddress.IPv4Network(f"{addr}/24", strict=False))
         return str(ipaddress.IPv6Network(f"{addr}/48", strict=False))
@@ -613,6 +619,8 @@ class AuthoritativeASNVerifier:
     def lookup_ip_asn(self, ip_address: str) -> Optional[int]:
         """Resolve an IPv4 or IPv6 address to its longest-prefix-match ASN, or None if unrouted."""
         addr = ipaddress.ip_address(str(ip_address).strip())
+        if isinstance(addr, ipaddress.IPv6Address) and addr.ipv4_mapped is not None:
+            addr = addr.ipv4_mapped
         if isinstance(addr, ipaddress.IPv4Address):
             for net, asn in self._ipv4_routes:
                 if addr in net:
@@ -1325,5 +1333,28 @@ class SafeFormatValidator:
             return True, "json_valid"
         except Exception as e:
             return False, f"json_parse_error:{e}"
+
+
+class SubnetDiversityLimiter:
+    """Enforces per-subnet (/24 IPv4 and /48 IPv6) vote caps with ::ffff:0:0/96 IPv4-mapped IPv6 normalization."""
+
+    def __init__(self, max_per_ipv4_24: int = 2, max_per_ipv6_48: int = 2) -> None:
+        self.max_per_ipv4_24 = int(max_per_ipv4_24)
+        self.max_per_ipv6_48 = int(max_per_ipv6_48)
+        self._counts: Dict[str, int] = {}
+
+    @staticmethod
+    def normalize_subnet(ip_address: str) -> str:
+        return AuthoritativeASNVerifier.extract_subnet_prefix(ip_address)
+
+    def allow_vote(self, ip_address: str) -> Tuple[bool, str]:
+        subnet = self.normalize_subnet(ip_address)
+        cap = self.max_per_ipv4_24 if subnet.endswith("/24") else self.max_per_ipv6_48
+        cur = self._counts.get(subnet, 0)
+        if cur >= cap:
+            return False, f"subnet_diversity_limit_exceeded:{subnet}:{cur}>={cap}"
+        self._counts[subnet] = cur + 1
+        return True, f"allowed:{subnet}:{cur + 1}/{cap}"
+
 
 

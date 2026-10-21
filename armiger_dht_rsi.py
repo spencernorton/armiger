@@ -94,6 +94,7 @@ from dht_rsi_verification import (
     AuthoritativeASNVerifier,
     PhysicalGroundTruthVerifier,
     SafeFormatValidator,
+    SubnetDiversityLimiter,
     SybilQuorumVerifier,
     ThresholdSignatureVerifier,
 )

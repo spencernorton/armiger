@@ -841,9 +841,13 @@ class ArmigerDHTUpdater:
         xmss_merkle_root_hex: str | None = None,
         xmss_height: int = 10,
         signature_cache: QuorumSignatureCache | None = None,
+        require_pq: bool = True,
     ) -> None:
         if mode not in ("off", "opt_in_verify", "federated_quorum"):
             raise ValueError(f"Unsupported DHT update mode: {mode}")
+        if not isinstance(require_pq, bool):
+            raise TypeError(f"require_pq must be bool, got {type(require_pq).__name__}")
+        self.require_pq = require_pq
         self._min_quorum_is_bool = isinstance(min_quorum, bool)
         self._seq_is_bool = isinstance(current_seq, bool)
         self.root_pubkey_hex = root_pubkey_hex.lower()

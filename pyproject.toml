@@ -57,5 +57,5 @@ py-modules = [
 ]
 
 [tool.pytest.ini_options]
-testpaths = ["."]
+testpaths = [".", "tests/plugin"]
 python_files = ["test_*.py"]

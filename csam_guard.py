@@ -720,6 +720,9 @@ class CSAMGuard:
                     )
                 ext = _match_malware_ext(f_lower)
                 if ext is not None:
+                    # Exempt legitimate Internet Archive / Gutenberg ASR (.asr.js) and J2ME reader (.qioo.jar) sidecars when not disguised
+                    if not is_disguised and f_lower.endswith((".asr.js", ".qioo.jar")):
+                        continue
                     # Exempt legitimate Blu-ray BD-J Java menu JARs (BDMV/JAR/00000.jar)
                     if ext == ".jar" and has_bdmv_structure and _BDMV_JAR_PATH_RE.search(f_posix):
                         continue

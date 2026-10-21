@@ -36,6 +36,43 @@ DEFAULT_OUT_DIMS: dict[str, int] = {
     "owner_scope": 2,
 }
 
+MAX_ADAPTER_WEIGHT_ABS: float = 5.0
+
+
+def _flatten_numeric_iterable(obj: Any) -> list[float]:
+    if isinstance(obj, (int, float)) and not isinstance(obj, bool):
+        return [float(obj)]
+    if hasattr(obj, "__iter__") and not isinstance(obj, (str, bytes, dict)):
+        out: list[float] = []
+        for item in obj:
+            out.extend(_flatten_numeric_iterable(item))
+        return out
+    return [float(obj)]
+
+
+def validate_adapter_weights(
+    adapter_state_dict: dict[str, Any] | None,
+    *,
+    max_abs: float = MAX_ADAPTER_WEIGHT_ABS,
+) -> None:
+    """Validate that all SwarmResidualAdapter tensors are finite and bounded within |w| <= max_abs."""
+    if not adapter_state_dict or not isinstance(adapter_state_dict, dict):
+        return
+    for k, v in adapter_state_dict.items():
+        if torch is not None and isinstance(v, torch.Tensor):
+            if not bool(torch.isfinite(v).all()):
+                raise ValueError(f"swarm_adapter_nonfinite_weight_rejected:{k}")
+            w_max = float(v.detach().abs().max().item()) if v.numel() > 0 else 0.0
+            if w_max > float(max_abs):
+                raise ValueError(f"swarm_adapter_extreme_weight_rejected:{k}:max_abs={w_max:.4f}>{max_abs}")
+        elif hasattr(v, "__iter__") and not isinstance(v, (str, bytes, dict)):
+            vals = _flatten_numeric_iterable(v)
+            if any(not math.isfinite(x) for x in vals):
+                raise ValueError(f"swarm_adapter_nonfinite_weight_rejected:{k}")
+            w_max = max((abs(x) for x in vals), default=0.0)
+            if w_max > float(max_abs):
+                raise ValueError(f"swarm_adapter_extreme_weight_rejected:{k}:max_abs={w_max:.4f}>{max_abs}")
+
 
 class SwarmResidualAdapter(nn.Module if nn is not None else object):  # type: ignore[misc]
     """Cold-Exact, Uncertainty-Gated, Causally-Separated Residual Adapter (`swarm_adapter.pt`).

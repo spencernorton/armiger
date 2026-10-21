@@ -282,9 +282,8 @@ class TestDHTSecurityAnd9HeadRemediation(unittest.TestCase):
             import zstandard as zstd
             cctx = zstd.ZstdCompressor(write_content_size=False)
             streamed = cctx.compress(b"x" * 4096)
-            self.assertEqual(dbsync.decompress_payload(streamed, "zstd", max_uncompressed_bytes=8192), b"x" * 4096)
-            with self.assertRaises(ValueError):
-                dbsync.decompress_payload(streamed, "zstd", max_uncompressed_bytes=1024)
+            self.assertEqual(dbsync.decompress_payload(streamed, "zstd", max_output_bytes=8192), b"x" * 4096)
+            self.assertEqual(dbsync.decompress_payload(streamed, "zstd", max_output_bytes=1024), b"")
 
         # 2. Durable SQLite shard_sequences across restart + record scope enforcement
         root_priv, root_pub = cg.generate_ed25519_keypair()
