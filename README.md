@@ -75,17 +75,7 @@ pytest -q
 
 ---
 
-## Ecosystem Integrations (`Bitmagnet`, `DH-Waypoint` & Torznab / Webhook Clients)
-
-Reference HTTP bridges and Docker Compose stacks are included in [`examples/`](examples) and documented in [`docs/INTEGRATION_GUIDE.md`](docs/INTEGRATION_GUIDE.md):
-
-- **[`Bitmagnet` Companion Bridge (`examples/bitmagnet/`)](examples/bitmagnet)** — Pre-ingest or post-crawl batch classifier (`bitmagnet_armiger_bridge.py`) that complements Bitmagnet's built-in classifier and TMDB pipeline with 11-class neural categorization, `armiger:*` tag enrichment (`torrentContent.putTags`), and automatic pruning of disguised executable files (`.mkv.exe`, `.scr`, `.lnk`) via Bitmagnet's GraphQL `torrent.delete` mutation.
-- **[`DH-Waypoint` Processor (`examples/dh-waypoint/`)](examples/dh-waypoint)** — Drop-in `processorapi/v1` service (`armiger_waypoint_processor.py`) and plugin manifest (`07-armiger-ultra.plugin.yml`) implementing batch classification (`dh-waypoint.processor.v1`), pre-ingest admission (`dh-waypoint.processors.admission.v1`), and outcome feedback (`dh-waypoint.processors.feedback.v1`) for [`spencernorton/DH-Waypoint`](https://github.com/spencernorton/DH-Waypoint).
-- **[Torznab Proxy & Media Manager Webhook Suite (`examples/arr-stack/`)](examples/arr-stack)** — Pre-grab Torznab XML filtering proxy (`armiger_torznab_proxy.py`) for `Prowlarr`, `Bitmagnet`, `DH-Waypoint`, `Sonarr`, `Radarr`, `Lidarr`, and `Readarr`, paired with an optional post-import webhook receiver (`armiger_arr_webhook_receiver.py`).
-
----
-
-## What's Included & Modular Plugins
+## What's Included & The 6 Official Plugins
 
 - **`armiger_ultra.fp32.onnx` (`32.5 MB`) & `armiger_ultra.pt` (`32.5 MB`)** — Full-precision 9-head byte-level RoPE Transformer + File-Tree Encoder, including the byte-level `span_bio` head with 7×7 BIO Viterbi decoding (measured `2.64 ms` single-item / `376.0 items/s` batch-64 on Apple M4 Pro CPU ONNX Runtime).
 - **`armiger.int8.onnx` (`15.7 MB`)** — Per-channel asymmetric dynamically quantized CPU fast-path engine from the same checkpoint (`2.51 ms` single-item / `396.9 items/s` batch-64 on Apple M4 Pro CPU ONNX Runtime). Embeddings remain FP32 because quantizing them fails the ≥99.0% FP32-vs-INT8 head-agreement gate. See [`docs/base-model.md`](docs/base-model.md).
@@ -94,6 +84,15 @@ Reference HTTP bridges and Docker Compose stacks are included in [`examples/`](e
 - **[Zero-Cue Catalog & Structural Disambiguator](https://huggingface.co/NorviTech/armiger-zero-cue-catalog)** (`zero_cue_plugin.py`, `validated_zero_cue_catalog.json` · `26.0 MB`) — `931,142`-entry `BLAKE2b-64` hashed catalog + structural rules, lifting `zero_cue_2000` (`N=2,000`) accuracy by **`+5.45 pp`** (`85.55%` → **`91.00%`**) and `beyond_confirmation` (`N=1,025`) by **`+1.46 pp`** (`91.61%` → **`93.07%`**). See [`docs/plugins/zero-cue-catalog.md`](docs/plugins/zero-cue-catalog.md).
 - **[Cross-Head Audio Language & Anime Dub Guard](https://huggingface.co/NorviTech/armiger-audio-guard)** (`audio_language_guard.py` · `3.3 KB`) — Couples `title_language` with the `lang` head to disambiguate `.en.` prepositions, `<Foreign>.ENG.Sub` releases, regional dubs, and `MULTi` tags, reaching **`96.70%`** strict English-vs-Foreign audio accuracy on `oct15_confirmation` (`N=545`) and **`97.82%`** on `beyond_confirmation` (`N=229`). See [`docs/plugins/audio-guard.md`](docs/plugins/audio-guard.md).
 - **[Conformal Calibration & Optional DHT Sync Plugins](https://huggingface.co/NorviTech/armiger-calibration-dht)** (`calibration.json`, `calibration_and_dht.py`, `armiger_dht_rsi.py`, `armiger_dht_db_sync.py`, `csam_guard.py`) — Guarded per-head temperature scaling, Mondrian conformal thresholds, multi-stage CSAM/abuse pre-ingest blocking, and strictly opt-in (`opt_in_sharing=False` by default) experimental `BEP-44`/`BEP-45`/`BEP-46` catalog, calibration, and signed model-delta sync behind `AnonymityGuard`. The v3.0.0 signed seq=3006 bundle and receipt are in [`benchmarks/receipts/dht_seq3006/`](benchmarks/receipts/dht_seq3006). See [`docs/plugins/calibration-dht.md`](docs/plugins/calibration-dht.md), [`docs/plugins/dht-db-sync.md`](docs/plugins/dht-db-sync.md), and [`docs/ANONYMOUS_OPT_IN_DHT.md`](docs/ANONYMOUS_OPT_IN_DHT.md).
+
+---
+
+## Separate Optional Addition: Ecosystem Connectors (`spencernorton/Armiger-Connectors`)
+
+External HTTP, GraphQL, and Manticore connectors are maintained as a **separate repository** — **[`spencernorton/Armiger-Connectors`](https://github.com/spencernorton/Armiger-Connectors)** — distinct from the core classifier and the 6 official plugins above:
+
+- **[Stock `bitmagnet` Connector (`bitmagnet/`)](https://github.com/spencernorton/Armiger-Connectors/tree/main/bitmagnet)** — Connects to unmodified [`bitmagnet-io/bitmagnet`](https://github.com/bitmagnet-io/bitmagnet) via GraphQL (`torrentContent.search` + `torrent.files`), pruning disguised executables (`.mkv.exe`, `.scr`, `.lnk`) via `torrent.delete` and enriching surviving items with grouped `torrent.putTags` mutations.
+- **[Stock `rats-search` Connector (`rats-search/`)](https://github.com/spencernorton/Armiger-Connectors/tree/main/rats-search)** — Connects to unmodified [`librats/rats-search`](https://github.com/librats/rats-search) via REST (`:8095`), WebSocket (`:8096`), and local Manticore (`127.0.0.1:9306`), purging disguised executables via `/api/torrent.remove` and populating `contentType` and `contentCategory` (`Movie=1..Game=9`, `XXX=100`) using `rowIdFromHash` docid lookups.
 
 ---
 
