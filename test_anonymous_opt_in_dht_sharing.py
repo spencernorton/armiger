@@ -17,13 +17,7 @@ import pytest
 ROOT_DIR = Path(__file__).resolve().parent
 if str(ROOT_DIR) not in sys.path:
     sys.path.insert(0, str(ROOT_DIR))
-for sub in ("examples/dh-waypoint", "examples/bitmagnet", "examples/arr-stack"):
-    p_sub = ROOT_DIR / sub
-    if str(p_sub) not in sys.path:
-        sys.path.insert(0, str(p_sub))
-
 from armiger import ArmigerPipeline
-from armiger_arr_webhook_receiver import ArmigerArrWebhookService
 from armiger_dht_db_sync import ArmigerDHTDBSync, ArmigerDHTDatabaseSync
 from armiger_dht_rsi import (
     AnonymityGuard,
@@ -38,7 +32,6 @@ from armiger_dht_rsi import (
     resolve_opt_in_sharing,
 )
 from armiger_ultra import ArmigerUltraPipeline
-from armiger_waypoint_processor import ArmigerWaypointAdapter
 from bep44_udp_wire_harness import LocalKademliaSwarm
 from benchmarks.proof_anonymous_opt_in_sharing import (
     generate_500_adversarial_canaries,
@@ -46,7 +39,6 @@ from benchmarks.proof_anonymous_opt_in_sharing import (
     run_proof_2_canary_pii_firewall,
     run_proof_3_unlinkability_and_dp_convergence,
 )
-from bitmagnet_armiger_bridge import BitmagnetArmigerBridge
 
 
 def test_opt_in_sharing_env_and_default_resolution(monkeypatch: pytest.MonkeyPatch) -> None:

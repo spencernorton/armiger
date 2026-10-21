@@ -39,25 +39,21 @@ from typing import Any, Dict, List, Tuple
 ROOT_DIR = Path(__file__).resolve().parents[1]
 if str(ROOT_DIR) not in sys.path:
     sys.path.insert(0, str(ROOT_DIR))
-for sub in ("examples/dh-waypoint", "examples/bitmagnet", "examples/arr-stack"):
-    p_sub = ROOT_DIR / sub
-    if str(p_sub) not in sys.path:
-        sys.path.insert(0, str(p_sub))
-
 from armiger import ArmigerPipeline
-from armiger_arr_webhook_receiver import ArmigerArrWebhookService
 from armiger_dht_db_sync import ArmigerDHTDBSync
 from armiger_dht_rsi import (
     AnonymityGuard,
     AnonymityViolationError,
     ArmigerDHTRSIEngine,
+    AudioWebhookAdapter,
     MovieWebhookAdapter,
+    PublicationWebhookAdapter,
+    QBittorrentAdapter,
     SeriesWebhookAdapter,
+    TransmissionAdapter,
 )
 from armiger_ultra import ArmigerUltraPipeline
-from armiger_waypoint_processor import ArmigerWaypointAdapter
 from bep44_udp_wire_harness import LocalKademliaSwarm
-from bitmagnet_armiger_bridge import BitmagnetArmigerBridge
 
 
 # =====================================================================
@@ -76,9 +72,10 @@ async def run_proof_1_default_zero_egress() -> Dict[str, Any]:
         db_sync = ArmigerDHTDBSync()
         series_adapter = SeriesWebhookAdapter()
         movie_adapter = MovieWebhookAdapter()
-        waypoint_bridge = ArmigerWaypointAdapter(ultra_pipe, use_zero_cue_catalog=False)
-        bitmagnet_bridge = BitmagnetArmigerBridge(ultra_pipe, use_zero_cue_catalog=False)
-        arr_bridge = ArmigerArrWebhookService(ultra_pipe, enable_ffprobe=False)
+        audio_adapter = AudioWebhookAdapter()
+        pub_adapter = PublicationWebhookAdapter()
+        qbit_adapter = QBittorrentAdapter()
+        tr_adapter = TransmissionAdapter()
 
         components = {
             "ArmigerUltraPipeline": ultra_pipe,
@@ -87,9 +84,10 @@ async def run_proof_1_default_zero_egress() -> Dict[str, Any]:
             "ArmigerDHTDBSync": db_sync,
             "SeriesWebhookAdapter": series_adapter,
             "MovieWebhookAdapter": movie_adapter,
-            "ArmigerWaypointAdapter": waypoint_bridge,
-            "BitmagnetArmigerBridge": bitmagnet_bridge,
-            "ArmigerArrWebhookService": arr_bridge,
+            "AudioWebhookAdapter": audio_adapter,
+            "PublicationWebhookAdapter": pub_adapter,
+            "QBittorrentAdapter": qbit_adapter,
+            "TransmissionAdapter": tr_adapter,
         }
 
         opt_in_flags = {name: bool(comp.opt_in_sharing) for name, comp in components.items()}
@@ -152,24 +150,10 @@ async def run_proof_1_default_zero_egress() -> Dict[str, Any]:
             if db_pub_ok or db_pub_cnt > 0:
                 outbound_bundles_emitted += 1
 
-            arr_bridge.process_webhook("/webhooks/sonarr", series_payload)
-            waypoint_bridge.handle_feedback_batch({
-                "events": [{
-                    "info_hash": infohash,
-                    "name": f"Synthetic.Movie.{i}.2024.1080p",
-                    "tier": "t4_playback",
-                    "outcome": "verified",
-                    "content_type": "movie",
-                    "size": 4_000_000_000,
-                }]
-            })
-            bitmagnet_bridge.evaluate_batch([{
-                "infoHash": infohash,
-                "name": f"Synthetic.Movie.{i}.2024.1080p.BluRay.x264",
-                "size": 4_000_000_000,
-                "seeders": 25,
-                "leechers": 3,
-            }])
+            _, b_a = audio_adapter.ingest_event(series_payload)
+            _, b_p = pub_adapter.ingest_event(movie_payload)
+            if b_a is not None or b_p is not None:
+                outbound_bundles_emitted += 1
 
             if ultra_pipe.export_signed_bundle(delta_w=[0.05], delta_b=[0.0], n_samples=50) is not None:
                 outbound_bundles_emitted += 1
