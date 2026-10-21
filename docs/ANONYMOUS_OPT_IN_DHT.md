@@ -1,6 +1,6 @@
 # Armiger Distributed Anonymous & Opt-In-By-Default DHT Sharing
 
-This document specifies the cryptographic, differential-privacy, and wire-level firewall architecture governing distributed weight, calibration, and catalog metadata sharing in **Armiger** and **Armiger Ultra** (`armiger_dht_rsi.py`, `armiger_dht_db_sync.py`, `armiger_ultra_pipeline.py`), along with the machine-verifiable results from the 12-node local UDP BEP-44 proof & synthetic DP convergence suite (`benchmarks/proof_anonymous_opt_in_sharing.py`).
+This document specifies the cryptographic, differential-privacy, and wire-level firewall architecture governing distributed weight, calibration, and catalog metadata sharing in **Armiger** and **Armiger Ultra** (`armiger_dht_rsi.py`, `armiger_dht_db_sync.py`, `armiger_ultra_pipeline.py`), along with the local unit/integration test harness (`benchmarks/proof_anonymous_opt_in_sharing.py` and `test_anonymous_opt_in_dht_sharing.py`) that verifies default opt-out behavior and wire-level PII scrubbing.
 
 ---
 

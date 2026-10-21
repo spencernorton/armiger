@@ -1,16 +1,15 @@
-"""Bitmagnet <-> Armiger Ultra Pre-Ingest / Post-Crawl Classifier & Admission Bridge.
+"""Bitmagnet <-> Armiger Sidecar Batch Classifier & GraphQL Tag/Prune Bridge.
 
-Provides two operational modes for upstream Bitmagnet deployments:
-  1. HTTP Classifier & Admission Webhook Bridge (`POST /v1/bitmagnet/classify`):
+Runs Armiger as a local HTTP sidecar alongside a Bitmagnet deployment:
+  1. HTTP Batch Classification Endpoint (`POST /v1/bitmagnet/classify`):
      Accepts batches of newly discovered Bitmagnet torrents, runs `ArmigerUltraPipeline.classify_batch`,
      and returns Bitmagnet-compatible content types (`movie`, `tv_show`, `music`, `ebook`, `audiobook`,
-     `comic`, `software`, `game`, `xxx`), structured tags (`armiger:category:*`, `armiger:lang:*`,
-     `armiger:viability:*`), and `delete` actions for disguised malware (`.mkv.exe`, `.scr`, `.lnk`),
-     fake-seeder honeypot traps, or CSAM/safety gate violations.
-  2. GraphQL Mutation & PostgreSQL Reconciliation Helper (`BitmagnetGraphQLSynchronizer`):
-     Generates Bitmagnet GraphQL ` torrentContentUpdate ` / ` torrentDelete ` mutations or SQL updates
-     so upstream Bitmagnet instances gain Armiger's 95.49% 11-class accuracy (vs. 35.29% built-in rules)
-     and 100% fake-seeder malware trap recall.
+     `comic`, `software`, `game`, `xxx`), structured tags (`armiger:<category>`, `armiger:lang:<lang>`,
+     `armiger:viability:<tier>`), and `delete` actions for disguised executable lures (`.mkv.exe`,
+     `.scr`, `.lnk`) or safety-gate failures.
+  2. Optional Bitmagnet GraphQL Helpers (`build_graphql_delete_mutation`, `build_graphql_put_tags_mutation`):
+     Builds and optionally dispatches Bitmagnet GraphQL `torrent.delete` and `torrentContent.putTags`
+     mutations to complement Bitmagnet's built-in `classifier.yml` workflow and TMDB matching.
 """
 from __future__ import annotations
 
@@ -46,7 +45,7 @@ BITMAGNET_CONTENT_TYPE_MAP: Dict[str, Optional[str]] = {
 
 
 class BitmagnetArmigerBridge:
-    """Classifies, filters, and enriches Bitmagnet torrent items with Armiger Ultra."""
+    """Classifies, filters, and tags Bitmagnet torrent items with Armiger."""
 
     def __init__(
         self,
@@ -99,7 +98,7 @@ class BitmagnetArmigerBridge:
         }
 
     def evaluate_batch(self, items: Sequence[Mapping[str, Any]]) -> Dict[str, Any]:
-        """Run Armiger Ultra on a batch of Bitmagnet torrents and return enrichment/prune actions."""
+        """Run Armiger on a batch of Bitmagnet torrents and return tag/prune actions."""
         rows = [self._bitmagnet_item_to_row(it) for it in items]
         predictions: List[ArmigerUltraPrediction] = self.pipeline.classify_batch(
             rows,
@@ -108,6 +107,7 @@ class BitmagnetArmigerBridge:
 
         actions: List[Dict[str, Any]] = []
         delete_infohashes: List[str] = []
+        tag_mutations: List[Dict[str, Any]] = []
 
         for pred in predictions:
             is_malware_or_unsafe = not pred.csam_safety["is_safe"] or pred.junk == "junk"
@@ -160,6 +160,11 @@ class BitmagnetArmigerBridge:
             if pred.english_subs == "has_eng_subs":
                 tags.append("armiger:eng_subs")
 
+            if pred.infohash:
+                tag_mut = self.build_graphql_put_tags_mutation([pred.infohash], tags)
+                if tag_mut is not None:
+                    tag_mutations.append(tag_mut)
+
             actions.append({
                 "infoHash": pred.infohash,
                 "action": "update",
@@ -178,21 +183,46 @@ class BitmagnetArmigerBridge:
             "deleteInfoHashes": delete_infohashes,
             "actions": actions,
             "graphqlDeleteMutation": self.build_graphql_delete_mutation(delete_infohashes),
+            "graphqlPutTagsMutations": tag_mutations,
         }
 
     @staticmethod
     def build_graphql_delete_mutation(infohashes: Sequence[str]) -> Optional[Dict[str, Any]]:
-        """Build a Bitmagnet GraphQL `torrentDelete` mutation payload for blocked infohashes."""
+        """Build a Bitmagnet GraphQL `torrent.delete` mutation payload for blocked infohashes."""
         clean = [h.strip().lower() for h in infohashes if h and h.strip()]
         if not clean:
             return None
         return {
             "query": (
-                "mutation ArmigerPruneMalwareAndHoneypots($infoHashes: [Hash20!]!) { "
-                "torrent { delete(input: { infoHashes: $infoHashes }) { infoHashes } } "
+                "mutation ArmigerDeleteTorrents($infoHashes: [Hash20!]!) { "
+                "torrent { delete(infoHashes: $infoHashes) } "
                 "}"
             ),
             "variables": {"infoHashes": clean},
+        }
+
+    @staticmethod
+    def build_graphql_put_tags_mutation(
+        infohashes: Sequence[str],
+        tag_names: Sequence[str],
+    ) -> Optional[Dict[str, Any]]:
+        """Build a Bitmagnet GraphQL `torrentContent.putTags` mutation payload."""
+        clean_hashes = [h.strip().lower() for h in infohashes if h and h.strip()]
+        clean_tags = [t.strip() for t in tag_names if t and t.strip()]
+        if not clean_hashes or not clean_tags:
+            return None
+        return {
+            "query": (
+                "mutation ArmigerPutTags($input: TorrentContentPutTagsInput!) { "
+                "torrentContent { putTags(input: $input) } "
+                "}"
+            ),
+            "variables": {
+                "input": {
+                    "infoHashes": clean_hashes,
+                    "tagNames": clean_tags,
+                }
+            },
         }
 
     @staticmethod
@@ -201,7 +231,7 @@ class BitmagnetArmigerBridge:
         infohashes: Sequence[str],
         timeout: float = 5.0,
     ) -> Optional[Dict[str, Any]]:
-        """Execute the `torrentDelete` GraphQL mutation against a running Bitmagnet endpoint."""
+        """Execute the `torrent.delete` GraphQL mutation against a running Bitmagnet endpoint."""
         mutation = BitmagnetArmigerBridge.build_graphql_delete_mutation(infohashes)
         if mutation is None:
             return None
@@ -217,7 +247,7 @@ class BitmagnetArmigerBridge:
 
 def create_server(host: str = "localhost", port: int = 8096) -> ThreadingHTTPServer:
     model_dir = os.environ.get("ARMIGER_MODEL_DIR", str(ROOT_DIR))
-    variant = os.environ.get("ARMIGER_VARIANT", "fp32")
+    variant = os.environ.get("ARMIGER_VARIANT", "int8")
     pipeline = ArmigerUltraPipeline.from_directory(
         model_dir,
         variant=variant,
@@ -273,5 +303,5 @@ if __name__ == "__main__":
     listen_host = os.environ.get("ARMIGER_BRIDGE_HOST", "localhost")
     listen_port = int(os.environ.get("ARMIGER_BRIDGE_PORT", "8096"))
     srv = create_server(listen_host, listen_port)
-    print(f"Bitmagnet <-> Armiger Ultra bridge listening on {listen_host}:{listen_port}")
+    print(f"Bitmagnet <-> Armiger sidecar bridge listening on {listen_host}:{listen_port}")
     srv.serve_forever()
