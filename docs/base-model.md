@@ -1,5 +1,7 @@
 <h1 align="center">Armiger (15.7 MB INT8 CPU Engine)</h1>
 
+<p align="center"><strong>Release:</strong> Armiger <code>v3.0.0</code> (<code>32.5 MB</code> FP32 + <code>15.7 MB</code> INT8) · Apache-2.0</p>
+
 <p align="center">
   <strong>Fast 15.7 MB universal CPU torrent &amp; media classifier for Bitmagnet and self-hosted media libraries.</strong><br>
   Predicts 9 decision heads simultaneously (8 calibrated classification heads plus byte-level `span_bio`) in 2.51 ms single-item (396.9 items/s batch-64) on Apple M4 Pro CPU ONNX Runtime INT8 — with a self-contained zero-tokenizer Python inference script (<code>armiger_inference.py</code> + <code>vocab.json</code>) included out of the box.
@@ -32,9 +34,9 @@ Fresh non-teacher LLM baselines for this release (identical inputs, no label-cur
 **Armiger** (`armiger.int8.onnx`, `15.7 MB`) is a zero-tokenizer byte-level RoPE Transformer + File-Tree Encoder designed for real-time BitTorrent, DHT, Usenet, and media automation classification on any CPU:
 
 ```python
-from armiger_inference import ArmigerONNXClassifier
+from armiger_inference import ArmigerStandaloneONNX
 
-clf = ArmigerONNXClassifier(
+clf = ArmigerStandaloneONNX(
     onnx_path="armiger.int8.onnx",
     vocab_path="vocab.json",
     calibration_path="calibration.json",
