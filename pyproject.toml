@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "armiger"
-version = "2.1.0"
+version = "3.1.0"
 description = "Armiger & Armiger Ultra: 8.1M-parameter multi-head neural torrent metadata classifier, Mondrian safety gates, and 6-plugin SDK"
 readme = "README.md"
 license = {text = "Apache-2.0"}
@@ -32,30 +32,30 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+ultra = ["torch>=2.1.0"]
 torch = ["torch>=2.1.0"]
-dev = ["pytest>=7.4.0", "torch>=2.1.0"]
+dev = ["pytest>=7.4.0", "build>=1.0", "onnx>=1.16.0"]
+charts = ["matplotlib>=3.8", "pillow>=10"]
 
 [project.urls]
 Homepage = "https://github.com/spencernorton/armiger"
 Repository = "https://github.com/spencernorton/armiger"
 Issues = "https://github.com/spencernorton/armiger/issues"
-Security = "https://github.com/spencernorton/armiger/blob/main/SECURITY.md"
+Security = "https://github.com/spencernorton/armiger/blob/main/.github/SECURITY.md"
 Legal = "https://github.com/spencernorton/armiger/blob/main/LEGAL.md"
 
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["armiger"]
+
 [tool.setuptools]
-py-modules = [
-  "armiger_inference",
-  "armiger_ultra_pipeline",
-  "swarm_priors",
-  "swarm_survival",
-  "zero_cue_plugin",
-  "audio_language_guard",
-  "calibration_and_dht",
-  "armiger_dht_rsi",
-  "armiger_dht_db_sync",
-  "csam_guard",
-]
+package-dir = {"" = "src"}
+py-modules = ["armiger_dht_db_sync", "armiger_dht_rsi", "armiger_inference", "armiger_ultra", "armiger_ultra_pipeline", "audio_language_guard", "calibration_and_dht", "csam_guard", "swarm_priors", "swarm_survival", "zero_cue_plugin"]
+
+[tool.setuptools.package-data]
+armiger = ["*.json"]
 
 [tool.pytest.ini_options]
-testpaths = [".", "tests/plugin"]
+testpaths = ["tests", "benchmarks/test_chart_integrity.py"]
+pythonpath = ["benchmarks", "tests"]
 python_files = ["test_*.py"]

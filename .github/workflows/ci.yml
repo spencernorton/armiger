@@ -11,14 +11,31 @@ jobs:
   test:
     runs-on: ubuntu-24.04
     timeout-minutes: 20
+    strategy:
+      matrix:
+        python: ['3.10', '3.12']
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - name: Install runtime and test dependencies
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: ${{ matrix.python }}
+      - name: Install dependencies and package
         run: |
-          python3 -m pip install --upgrade pip
-          python3 -m pip install numpy onnxruntime cryptography pytest
-          python3 -m pip install torch --index-url https://download.pytorch.org/whl/cpu
-      - name: Run full verification suite
-        run: python3 -m pytest -v
+          python -m pip install torch --index-url https://download.pytorch.org/whl/cpu
+          python -m pip install '.[ultra,dev]'
+      - name: Download verified model data
+        run: python -m armiger download --variant all
+      - name: Test runtime and evaluation integrity
+        run: python -m pytest -q
+      - name: Build and verify installed wheel outside checkout
+        run: |
+          python -m build
+          python -m pip install --force-reinstall --no-deps dist/*.whl
+          cd "$RUNNER_TEMP"
+          python -I "$GITHUB_WORKSPACE/tests/smoke_installed.py"
+      - name: Validate supported Compose manifests
+        run: |
+          docker compose --env-file examples/bitmagnet/.env.example -f examples/bitmagnet/docker-compose.yml config --quiet
+          docker compose --env-file examples/rats-search/.env.example -f examples/rats-search/docker-compose.yml config --quiet

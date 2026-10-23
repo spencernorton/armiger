@@ -1,76 +1,1767 @@
 {
-  "schema_version": "3.1.0",
-  "bootstrap_seed": 20261018,
-  "bootstrap_resamples": 10000,
-  "invariants_verified": {
-    "receipt_backed_provenance_lock": true,
-    "identical_denominator_lock": true,
-    "identical_reference_key_lock": true,
-    "anti_circularity_lock": true,
-    "family_clustered_bootstrap": true,
-    "single_armiger_bar_per_comparator_panel_h1": true,
-    "png_metadata_stripped_ihdr_idat_iend_only": true
-  },
   "anti_circularity_audit": [
     {
-      "model_name": "OpenAI GPT (Fast Tier)",
-      "is_teacher": true,
+      "circular_self_vote_pct": 97.95,
+      "circular_stratum_n": 1025,
+      "circularity_inflation_pp": 0.11,
       "eval_mode": "leave_one_teacher_out",
-      "self_vote_weight": 0.0,
-      "model_vendor": "openai",
+      "is_teacher": true,
       "key_pool_vendors": [
         "google",
         "meta"
       ],
-      "non_circular_support_n": 974,
-      "circular_stratum_n": 1025,
-      "non_circular_support_pct": 97.84,
-      "non_circular_pct": 97.84,
-      "circular_self_vote_pct": 97.95,
-      "circularity_inflation_pp": 0.11,
       "manski_lower_bound_n1025_pct": 92.98,
-      "manski_unanimity_drop_pp": 4.87
+      "manski_unanimity_drop_pp": 4.87,
+      "model_name": "OpenAI GPT (Fast Tier)",
+      "model_vendor": "openai",
+      "non_circular_pct": 97.84,
+      "non_circular_support_n": 974,
+      "non_circular_support_pct": 97.84,
+      "self_vote_weight": 0.0
     },
     {
-      "model_name": "Google Gemini Flash",
-      "is_teacher": true,
+      "circular_self_vote_pct": 97.17,
+      "circular_stratum_n": 1025,
+      "circularity_inflation_pp": 0.12,
       "eval_mode": "leave_one_teacher_out",
-      "self_vote_weight": 0.0,
-      "model_vendor": "google",
+      "is_teacher": true,
       "key_pool_vendors": [
         "meta",
         "openai"
       ],
-      "non_circular_support_n": 982,
-      "circular_stratum_n": 1025,
-      "non_circular_support_pct": 97.05,
-      "non_circular_pct": 97.05,
-      "circular_self_vote_pct": 97.17,
-      "circularity_inflation_pp": 0.12,
       "manski_lower_bound_n1025_pct": 92.98,
-      "manski_unanimity_drop_pp": 4.07
+      "manski_unanimity_drop_pp": 4.07,
+      "model_name": "Google Gemini Flash",
+      "model_vendor": "google",
+      "non_circular_pct": 97.05,
+      "non_circular_support_n": 982,
+      "non_circular_support_pct": 97.05,
+      "self_vote_weight": 0.0
     },
     {
-      "model_name": "Armiger Ultra (Fair Hybrid)",
-      "is_teacher": false,
       "eval_mode": "independent_ground_truth",
-      "self_vote_weight": 0.0,
-      "model_vendor": "armiger",
+      "is_teacher": false,
       "key_pool_vendors": [
         "google",
         "meta",
         "openai"
-      ]
+      ],
+      "model_name": "Armiger Ultra (Fair Hybrid)",
+      "model_vendor": "armiger",
+      "self_vote_weight": 0.0
     }
   ],
+  "bootstrap_resamples": 10000,
+  "bootstrap_seed": 20261018,
+  "charts": {
+    "armiger_categorical_breakdown.png": {
+      "left_oct15_confirmation_n2835": {
+        "Adult / XXX": {
+          "armiger_int8_parity_pct": 95.79,
+          "armiger_ultra_pct": 95.79,
+          "bitmagnet_pct": 39.37,
+          "mimmo_bert_pct": 95.5,
+          "n": 1044
+        },
+        "Audiobook": {
+          "armiger_int8_parity_pct": 96.84,
+          "armiger_ultra_pct": 96.84,
+          "bitmagnet_pct": 9.47,
+          "mimmo_bert_pct": 0.0,
+          "n": 95
+        },
+        "Comic": {
+          "armiger_int8_parity_pct": 88.89,
+          "armiger_ultra_pct": 88.89,
+          "bitmagnet_pct": 0.0,
+          "mimmo_bert_pct": 0.0,
+          "n": 99
+        },
+        "Course": {
+          "armiger_int8_parity_pct": 90.91,
+          "armiger_ultra_pct": 90.91,
+          "bitmagnet_pct": 0.0,
+          "mimmo_bert_pct": 0.0,
+          "n": 33
+        },
+        "Ebook": {
+          "armiger_int8_parity_pct": 88.0,
+          "armiger_ultra_pct": 88.0,
+          "bitmagnet_pct": 4.0,
+          "mimmo_bert_pct": 80.0,
+          "n": 25
+        },
+        "Game": {
+          "armiger_int8_parity_pct": 90.16,
+          "armiger_ultra_pct": 90.16,
+          "bitmagnet_pct": 0.0,
+          "mimmo_bert_pct": 0.0,
+          "n": 61
+        },
+        "Movie": {
+          "armiger_int8_parity_pct": 94.24,
+          "armiger_ultra_pct": 94.24,
+          "bitmagnet_pct": 55.83,
+          "mimmo_bert_pct": 78.85,
+          "n": 695
+        },
+        "Music": {
+          "armiger_int8_parity_pct": 92.14,
+          "armiger_ultra_pct": 92.14,
+          "bitmagnet_pct": 7.86,
+          "mimmo_bert_pct": 77.86,
+          "n": 140
+        },
+        "Software": {
+          "armiger_int8_parity_pct": 81.25,
+          "armiger_ultra_pct": 84.38,
+          "bitmagnet_pct": 15.62,
+          "mimmo_bert_pct": 59.38,
+          "n": 32
+        },
+        "TV Show": {
+          "armiger_int8_parity_pct": 97.67,
+          "armiger_ultra_pct": 97.67,
+          "bitmagnet_pct": 28.62,
+          "mimmo_bert_pct": 58.4,
+          "n": 601
+        }
+      },
+      "right_beyond_confirmation_n1025_loto": {
+        "Adult / XXX": {
+          "armiger_ultra_pct": 83.91,
+          "gemini_loto_support_pct": 98.77,
+          "gpt_loto_support_pct": 97.56,
+          "n_all3": 174,
+          "n_loto_no_gemini": 162,
+          "n_loto_no_gpt": 164
+        },
+        "Audiobook": {
+          "armiger_ultra_pct": 98.67,
+          "gemini_loto_support_pct": 98.65,
+          "gpt_loto_support_pct": 100.0,
+          "n_all3": 75,
+          "n_loto_no_gemini": 74,
+          "n_loto_no_gpt": 73
+        },
+        "Comic": {
+          "armiger_ultra_pct": 100.0,
+          "gemini_loto_support_pct": 95.76,
+          "gpt_loto_support_pct": 99.12,
+          "n_all3": 120,
+          "n_loto_no_gemini": 118,
+          "n_loto_no_gpt": 114
+        },
+        "Course": {
+          "armiger_ultra_pct": 94.0,
+          "gemini_loto_support_pct": 98.96,
+          "gpt_loto_support_pct": 95.96,
+          "n_all3": 100,
+          "n_loto_no_gemini": 96,
+          "n_loto_no_gpt": 99
+        },
+        "Ebook": {
+          "armiger_ultra_pct": 93.6,
+          "gemini_loto_support_pct": 99.16,
+          "gpt_loto_support_pct": 96.72,
+          "n_all3": 125,
+          "n_loto_no_gemini": 119,
+          "n_loto_no_gpt": 122
+        },
+        "Game": {
+          "armiger_ultra_pct": 96.3,
+          "gemini_loto_support_pct": 99.25,
+          "gpt_loto_support_pct": 99.25,
+          "n_all3": 135,
+          "n_loto_no_gemini": 133,
+          "n_loto_no_gpt": 133
+        },
+        "Movie": {
+          "armiger_ultra_pct": 95.79,
+          "gemini_loto_support_pct": 95.45,
+          "gpt_loto_support_pct": 95.45,
+          "n_all3": 95,
+          "n_loto_no_gemini": 88,
+          "n_loto_no_gpt": 88
+        },
+        "Music": {
+          "armiger_ultra_pct": 75.0,
+          "gemini_loto_support_pct": 100.0,
+          "gpt_loto_support_pct": 100.0,
+          "n_all3": 12,
+          "n_loto_no_gemini": 12,
+          "n_loto_no_gpt": 12
+        },
+        "Software": {
+          "armiger_ultra_pct": 89.19,
+          "gemini_loto_support_pct": 77.78,
+          "gpt_loto_support_pct": 96.55,
+          "n_all3": 37,
+          "n_loto_no_gemini": 36,
+          "n_loto_no_gpt": 29
+        },
+        "TV Show": {
+          "armiger_ultra_pct": 97.06,
+          "gemini_loto_support_pct": 95.42,
+          "gpt_loto_support_pct": 99.21,
+          "n_all3": 136,
+          "n_loto_no_gemini": 131,
+          "n_loto_no_gpt": 126
+        }
+      },
+      "sha256": "9246ce3c6eea024383ee21a44608f632c08e12cbb2027fac4b2f19352163e0df"
+    },
+    "armiger_vs_llms_cost_comparison.png": {
+      "batched_usd_per_1m": [
+        0.0019,
+        0.0024,
+        183.01,
+        305.02,
+        646.32
+      ],
+      "deployment_targets": [
+        "Armiger (15.7 MB M4 Pro CPU INT8)",
+        "Armiger Ultra (M4 Pro CPU FP32)",
+        "Google Gemini Flash",
+        "OpenAI GPT (Fast Tier)",
+        "Meta Muse Spark 1.3"
+      ],
+      "logged_provider_usage": {
+        "gpt": {
+          "calls": 540,
+          "records": 15909,
+          "records_per_sec": 2.57,
+          "reported_tokens": 11692736,
+          "tokens_per_record": 734.98
+        },
+        "muse": {
+          "calls": 472,
+          "records": 14821,
+          "records_per_sec": 0.66,
+          "reported_tokens": 14426307,
+          "tokens_per_record": 973.37
+        }
+      },
+      "measured_local_onnx_cpu": {
+        "fp32_batch64_items_per_sec": 376.0,
+        "fp32_onnx_sha256": "6459a20d7bf45d46d59efbcb50ffb8a519bacda14ae36403dcc510eceaa38f44",
+        "fp32_single_item_ms": 2.637,
+        "host": "Apple M4 Pro CPU (8 intra-op threads)",
+        "int8_batch64_items_per_sec": 396.9,
+        "int8_onnx_sha256": "a0dab886be6252739d4c89ce01d65d8d2135204beaec6b00159d038cf420f329",
+        "int8_single_item_ms": 2.512,
+        "method": "ONNX Runtime CPU, all 9 outputs, packed calibration tensors; 300 single-item runs after warmup; batch-64 throughput over 10,240 items"
+      },
+      "realtime_usd_per_1m": [
+        0.003,
+        0.004,
+        243.2,
+        405.34,
+        858.9
+      ],
+      "sha256": "447f0e9767b36fe1f5bc16623e249e0b897f65b147a7b8abbaebce4865c934e3"
+    },
+    "armiger_vs_llms_overall_and_6dims.png": {
+      "composite_6dim_mean": {
+        "Armiger Ultra (Fair Hybrid)": {
+          "ci95_hi": 96.9,
+          "ci95_lo": 94.42,
+          "point_pct": 95.66,
+          "point_with_corpus_swarm_pct": 96.39
+        },
+        "loto_common_support_4dim_2a_to_2d": {
+          "vs_google_gemini": {
+            "Armiger Ultra (Fair Hybrid)": 95.83,
+            "Google Gemini Flash": 97.32
+          },
+          "vs_openai_gpt": {
+            "Armiger Ultra (Fair Hybrid)": 95.74,
+            "OpenAI GPT (Fast Tier)": 95.17
+          }
+        },
+        "loto_common_support_5dim_2a_to_2e_vs_gpt": {
+          "Armiger Ultra (Fair Hybrid)": 96.59,
+          "OpenAI GPT (Fast Tier)": 86.14
+        }
+      },
+      "panel_2a_category_11class": {
+        "bootstrap_mode": "family_clustered",
+        "key_sha256": "4f23554280454bf5e76c297b4d292fb2e60508ac969fe6359eaa6d151e4903d8",
+        "loto_common_support_panels": {
+          "vs_google_gemini": {
+            "bootstrap_mode": "family_clustered",
+            "key_sha256": "b09076f711edcc88023c6091ab3561a1a735ecc3796706b419b971408fe4b13a",
+            "metric_type": "mean",
+            "models": {
+              "Armiger Ultra (Fair Hybrid)": {
+                "ci95_hi": 96.05,
+                "ci95_lo": 93.31,
+                "delta_ci95_hi": 0.0,
+                "delta_ci95_lo": 0.0,
+                "delta_vs_ref_pct": 0.0,
+                "n": 982,
+                "p_value_vs_ref": 1.0,
+                "point_pct": 94.7
+              },
+              "Google Gemini Flash": {
+                "ci95_hi": 98.06,
+                "ci95_lo": 95.92,
+                "delta_ci95_hi": -0.71,
+                "delta_ci95_lo": -3.99,
+                "delta_vs_ref_pct": -2.34,
+                "n": 982,
+                "p_value_vs_ref": 0.007620522,
+                "point_pct": 97.05
+              }
+            },
+            "n": 982,
+            "n_families": 968,
+            "panel_name": "chart1_2a_loto_vs_gemini_common_support",
+            "partial_identification_bounds_n1025": {
+              "Armiger Ultra (Fair Hybrid)": {
+                "acc_support": 0.9470468431771895,
+                "lower": 0.9073170731707317,
+                "n_support": 982,
+                "upper": 0.9492682926829268
+              },
+              "Google Gemini Flash": {
+                "acc_support": 0.9704684317718941,
+                "lower": 0.9297560975609757,
+                "n_support": 982,
+                "upper": 0.9717073170731707
+              }
+            },
+            "reference_model": "Armiger Ultra (Fair Hybrid)"
+          },
+          "vs_openai_gpt": {
+            "bootstrap_mode": "family_clustered",
+            "key_sha256": "2b159e2e2d589fbbe8dd1d7e4e033d576abf6b0c35a491c3c8993e7749b4208e",
+            "metric_type": "mean",
+            "models": {
+              "Armiger Ultra (Fair Hybrid)": {
+                "ci95_hi": 95.9,
+                "ci95_lo": 93.05,
+                "delta_ci95_hi": 0.0,
+                "delta_ci95_lo": 0.0,
+                "delta_vs_ref_pct": 0.0,
+                "n": 974,
+                "p_value_vs_ref": 1.0,
+                "point_pct": 94.56
+              },
+              "OpenAI GPT (Fast Tier)": {
+                "ci95_hi": 98.69,
+                "ci95_lo": 96.89,
+                "delta_ci95_hi": -1.76,
+                "delta_ci95_lo": -4.86,
+                "delta_vs_ref_pct": -3.29,
+                "n": 974,
+                "p_value_vs_ref": 4.223705e-05,
+                "point_pct": 97.84
+              }
+            },
+            "n": 974,
+            "n_families": 959,
+            "panel_name": "chart1_2a_loto_vs_gpt_common_support",
+            "partial_identification_bounds_n1025": {
+              "Armiger Ultra (Fair Hybrid)": {
+                "acc_support": 0.9455852156057495,
+                "lower": 0.8985365853658537,
+                "n_support": 974,
+                "upper": 0.9482926829268292
+              },
+              "OpenAI GPT (Fast Tier)": {
+                "acc_support": 0.9784394250513347,
+                "lower": 0.9297560975609757,
+                "n_support": 974,
+                "upper": 0.9795121951219512
+              }
+            },
+            "reference_model": "Armiger Ultra (Fair Hybrid)"
+          }
+        },
+        "metric_type": "mean",
+        "models": {
+          "Armiger Ultra (Fair Hybrid)": {
+            "ci95_hi": 94.57,
+            "ci95_lo": 91.47,
+            "delta_ci95_hi": 0.0,
+            "delta_ci95_lo": 0.0,
+            "delta_vs_ref_pct": 0.0,
+            "n": 1025,
+            "p_value_vs_ref": 1.0,
+            "point_pct": 93.07,
+            "readme_cited": true
+          }
+        },
+        "n": 1025,
+        "n_families": 1010,
+        "panel_name": "chart1_2a_beyond_cat11",
+        "quantization_parity_int8": {
+          "delta_vs_ultra_pp": -0.1,
+          "int8_hyb_pct": 92.98,
+          "int8_raw_pct": 91.61
+        },
+        "reference_model": "Armiger Ultra (Fair Hybrid)"
+      },
+      "panel_2b_catalog_matching": {
+        "bootstrap_mode": "family_clustered",
+        "key_sha256": "4f23554280454bf5e76c297b4d292fb2e60508ac969fe6359eaa6d151e4903d8",
+        "loto_common_support_panels": {
+          "vs_google_gemini": {
+            "bootstrap_mode": "family_clustered",
+            "key_sha256": "b09076f711edcc88023c6091ab3561a1a735ecc3796706b419b971408fe4b13a",
+            "metric_type": "mean",
+            "models": {
+              "Armiger Ultra (Fair Hybrid)": {
+                "ci95_hi": 96.05,
+                "ci95_lo": 93.31,
+                "delta_ci95_hi": 0.0,
+                "delta_ci95_lo": 0.0,
+                "delta_vs_ref_pct": 0.0,
+                "n": 982,
+                "p_value_vs_ref": 1.0,
+                "point_pct": 94.7
+              },
+              "Google Gemini Flash": {
+                "ci95_hi": 95.52,
+                "ci95_lo": 92.6,
+                "delta_ci95_hi": 2.52,
+                "delta_ci95_lo": -1.22,
+                "delta_vs_ref_pct": 0.61,
+                "n": 982,
+                "p_value_vs_ref": 0.5942883,
+                "point_pct": 94.09
+              }
+            },
+            "n": 982,
+            "n_families": 968,
+            "panel_name": "chart1_2b_loto_vs_gemini_common_support",
+            "reference_model": "Armiger Ultra (Fair Hybrid)"
+          },
+          "vs_openai_gpt": {
+            "bootstrap_mode": "family_clustered",
+            "key_sha256": "2b159e2e2d589fbbe8dd1d7e4e033d576abf6b0c35a491c3c8993e7749b4208e",
+            "metric_type": "mean",
+            "models": {
+              "Armiger Ultra (Fair Hybrid)": {
+                "ci95_hi": 95.8,
+                "ci95_lo": 92.96,
+                "delta_ci95_hi": 0.0,
+                "delta_ci95_lo": 0.0,
+                "delta_vs_ref_pct": 0.0,
+                "n": 974,
+                "p_value_vs_ref": 1.0,
+                "point_pct": 94.46
+              },
+              "OpenAI GPT (Fast Tier)": {
+                "ci95_hi": 93.51,
+                "ci95_lo": 90.0,
+                "delta_ci95_hi": 4.79,
+                "delta_ci95_lo": 0.51,
+                "delta_vs_ref_pct": 2.67,
+                "n": 974,
+                "p_value_vs_ref": 0.01674502,
+                "point_pct": 91.79
+              }
+            },
+            "n": 974,
+            "n_families": 959,
+            "panel_name": "chart1_2b_loto_vs_gpt_common_support",
+            "reference_model": "Armiger Ultra (Fair Hybrid)"
+          }
+        },
+        "metric_type": "mean",
+        "models": {
+          "Armiger Ultra (Fair Hybrid)": {
+            "ci95_hi": 94.49,
+            "ci95_lo": 91.37,
+            "delta_ci95_hi": 0.0,
+            "delta_ci95_lo": 0.0,
+            "delta_vs_ref_pct": 0.0,
+            "n": 1025,
+            "p_value_vs_ref": 1.0,
+            "point_pct": 92.98,
+            "readme_cited": false
+          }
+        },
+        "n": 1025,
+        "n_families": 1010,
+        "panel_name": "chart1_2b_beyond_matching",
+        "quantization_parity_int8": {
+          "int8_hyb_pct": 92.88,
+          "int8_raw_pct": 91.51
+        },
+        "reference_model": "Armiger Ultra (Fair Hybrid)"
+      },
+      "panel_2c_audio_strict_229": {
+        "bootstrap_mode": "family_clustered",
+        "key_sha256": "26242160a1d69ea19d1001471feca84639539cb16a27a22238432584aef7cb37",
+        "loto_common_support_panels": {
+          "vs_google_gemini": {
+            "bootstrap_mode": "family_clustered",
+            "key_sha256": "df0886609a7027e6d1e2f449eac5e6f4af286d961d264e71f1041836c9aaba27",
+            "metric_type": "mean",
+            "models": {
+              "Armiger Ultra (Fair Hybrid)": {
+                "ci95_hi": 99.48,
+                "ci95_lo": 94.9,
+                "delta_ci95_hi": 0.0,
+                "delta_ci95_lo": 0.0,
+                "delta_vs_ref_pct": 0.0,
+                "n": 194,
+                "p_value_vs_ref": 1.0,
+                "point_pct": 97.42
+              },
+              "Google Gemini Flash": {
+                "ci95_hi": 100.0,
+                "ci95_lo": 96.41,
+                "delta_ci95_hi": 1.6,
+                "delta_ci95_lo": -4.08,
+                "delta_vs_ref_pct": -1.03,
+                "n": 194,
+                "p_value_vs_ref": 0.7265625,
+                "point_pct": 98.45
+              }
+            },
+            "n": 194,
+            "n_families": 187,
+            "panel_name": "chart1_2c_loto_vs_gemini_common_support",
+            "reference_model": "Armiger Ultra (Fair Hybrid)"
+          },
+          "vs_openai_gpt": {
+            "bootstrap_mode": "family_clustered",
+            "key_sha256": "21361772fa0483e08c38bb7aea84b9c0f29db0d6ced69239cab78bfeb77761c6",
+            "metric_type": "mean",
+            "models": {
+              "Armiger Ultra (Fair Hybrid)": {
+                "ci95_hi": 99.51,
+                "ci95_lo": 95.24,
+                "delta_ci95_hi": 0.0,
+                "delta_ci95_lo": 0.0,
+                "delta_vs_ref_pct": 0.0,
+                "n": 209,
+                "p_value_vs_ref": 1.0,
+                "point_pct": 97.61
+              },
+              "OpenAI GPT (Fast Tier)": {
+                "ci95_hi": 95.0,
+                "ci95_lo": 87.56,
+                "delta_ci95_hi": 10.63,
+                "delta_ci95_lo": 1.94,
+                "delta_vs_ref_pct": 6.22,
+                "n": 209,
+                "p_value_vs_ref": 0.01062202,
+                "point_pct": 91.39
+              }
+            },
+            "n": 209,
+            "n_families": 199,
+            "panel_name": "chart1_2c_loto_vs_gpt_common_support",
+            "reference_model": "Armiger Ultra (Fair Hybrid)"
+          }
+        },
+        "metric_type": "mean",
+        "models": {
+          "Armiger Ultra (Fair Hybrid)": {
+            "ci95_hi": 99.56,
+            "ci95_lo": 95.71,
+            "delta_ci95_hi": 0.0,
+            "delta_ci95_lo": 0.0,
+            "delta_vs_ref_pct": 0.0,
+            "n": 229,
+            "p_value_vs_ref": 1.0,
+            "point_pct": 97.82,
+            "readme_cited": false
+          }
+        },
+        "n": 229,
+        "n_families": 218,
+        "panel_name": "chart1_2c_beyond_audio_strict",
+        "quantization_parity_int8": {
+          "int8_hyb_pct": 97.82,
+          "int8_raw_pct": 97.82
+        },
+        "reference_model": "Armiger Ultra (Fair Hybrid)"
+      },
+      "panel_2d_anime_valid_636": {
+        "bootstrap_mode": "family_clustered",
+        "key_sha256": "794c76f1adac7e45ccbd1a75c7dfe5abb8777b071dc67c49ee4485f64805341d",
+        "loto_common_support_panels": {
+          "vs_google_gemini": {
+            "bootstrap_mode": "family_clustered",
+            "key_sha256": "330f172d7271556cd0f0417f11a2564a8bcba72ac4bfc9eb0bd775c9e730a344",
+            "metric_type": "mean",
+            "models": {
+              "Armiger Ultra (Fair Hybrid)": {
+                "ci95_hi": 97.82,
+                "ci95_lo": 95.02,
+                "delta_ci95_hi": 0.0,
+                "delta_ci95_lo": 0.0,
+                "delta_vs_ref_pct": 0.0,
+                "n": 629,
+                "p_value_vs_ref": 1.0,
+                "point_pct": 96.5
+              },
+              "Google Gemini Flash": {
+                "ci95_hi": 100.0,
+                "ci95_lo": 99.2,
+                "delta_ci95_hi": -1.77,
+                "delta_ci95_lo": -4.66,
+                "delta_vs_ref_pct": -3.18,
+                "n": 629,
+                "p_value_vs_ref": 1.096725e-05,
+                "point_pct": 99.68
+              }
+            },
+            "n": 629,
+            "n_families": 618,
+            "panel_name": "chart1_2d_loto_vs_gemini_common_support",
+            "reference_model": "Armiger Ultra (Fair Hybrid)"
+          },
+          "vs_openai_gpt": {
+            "bootstrap_mode": "family_clustered",
+            "key_sha256": "f8fdb5f6b96b4871c803eead8b7456be3c0e0d3b1d8d5093b50c37c5ddc37d1f",
+            "metric_type": "mean",
+            "models": {
+              "Armiger Ultra (Fair Hybrid)": {
+                "ci95_hi": 97.76,
+                "ci95_lo": 94.79,
+                "delta_ci95_hi": 0.0,
+                "delta_ci95_lo": 0.0,
+                "delta_vs_ref_pct": 0.0,
+                "n": 629,
+                "p_value_vs_ref": 1.0,
+                "point_pct": 96.34
+              },
+              "OpenAI GPT (Fast Tier)": {
+                "ci95_hi": 100.0,
+                "ci95_lo": 99.2,
+                "delta_ci95_hi": -2.04,
+                "delta_ci95_lo": -4.83,
+                "delta_vs_ref_pct": -3.34,
+                "n": 629,
+                "p_value_vs_ref": 9.536743e-07,
+                "point_pct": 99.68
+              }
+            },
+            "n": 629,
+            "n_families": 618,
+            "panel_name": "chart1_2d_loto_vs_gpt_common_support",
+            "reference_model": "Armiger Ultra (Fair Hybrid)"
+          }
+        },
+        "metric_type": "mean",
+        "models": {
+          "Armiger Ultra (Fair Hybrid)": {
+            "ci95_hi": 99.36,
+            "ci95_lo": 97.45,
+            "delta_ci95_hi": 0.0,
+            "delta_ci95_lo": 0.0,
+            "delta_vs_ref_pct": 0.0,
+            "n": 636,
+            "p_value_vs_ref": 1.0,
+            "point_pct": 98.43,
+            "readme_cited": false
+          }
+        },
+        "n": 636,
+        "n_families": 625,
+        "panel_name": "chart1_2d_beyond_anime_valid636",
+        "quantization_parity_int8": {
+          "int8_pct": 98.43
+        },
+        "reference_model": "Armiger Ultra (Fair Hybrid)"
+      },
+      "panel_2e_junk_balanced_977": {
+        "bootstrap_mode": "family_clustered",
+        "key_sha256": "f7a057233a11c546c5943a643985938f0d954b00e3fd0d905f05df01aba6793d",
+        "loto_common_support_panels": {
+          "vs_google_gemini": {
+            "note": "Excluding Google leaves {openai, meta}; because OpenAI GPT predicted 0 junk positives across all 977 items, unanimous {openai, meta} support has n_pos = 0.",
+            "status": "not_estimable_loto_n_pos_0"
+          },
+          "vs_openai_gpt": {
+            "bootstrap_mode": "family_clustered",
+            "key_sha256": "89e91bc4996c6c8d36933e7dad7f365c65595a195dfd3163a41de7acab66fcbb",
+            "metric_type": "balanced",
+            "models": {
+              "Armiger Ultra (Fair Hybrid)": {
+                "ci95_hi": 100.0,
+                "ci95_lo": 100.0,
+                "delta_ci95_hi": 0.0,
+                "delta_ci95_lo": 0.0,
+                "delta_vs_ref_pct": 0.0,
+                "n": 975,
+                "p_value_vs_ref": 1.0,
+                "point_pct": 100.0
+              },
+              "OpenAI GPT (Fast Tier)": {
+                "ci95_hi": 50.0,
+                "ci95_lo": 50.0,
+                "delta_ci95_hi": 50.0,
+                "delta_ci95_lo": 50.0,
+                "delta_vs_ref_pct": 50.0,
+                "n": 975,
+                "p_value_vs_ref": 1.084202e-19,
+                "point_pct": 50.0
+              }
+            },
+            "n": 975,
+            "n_families": 960,
+            "panel_name": "chart1_2e_loto_vs_gpt_common_support",
+            "reference_model": "Armiger Ultra (Fair Hybrid)"
+          }
+        },
+        "metric_type": "balanced",
+        "models": {
+          "Armiger Ultra (Fair Hybrid)": {
+            "ci95_hi": 100.0,
+            "ci95_lo": 97.69,
+            "delta_ci95_hi": 0.0,
+            "delta_ci95_lo": 0.0,
+            "delta_vs_ref_pct": 0.0,
+            "n": 977,
+            "p_value_vs_ref": 1.0,
+            "point_pct": 99.23,
+            "readme_cited": false
+          }
+        },
+        "n": 977,
+        "n_families": 962,
+        "panel_name": "chart1_2e_beyond_junk977_balanced",
+        "quantization_parity_int8": {
+          "int8_balanced_pct": 99.23
+        },
+        "reference_model": "Armiger Ultra (Fair Hybrid)"
+      },
+      "panel_2f_swarm_public_757": {
+        "bootstrap_mode": "family_clustered",
+        "key_sha256": "bdba0212787462f80484046e20fbf22246a8aaf41a946cf6f95993f8a046d7ad",
+        "metric_type": "auroc",
+        "models": {
+          "Armiger Ultra (Fair Hybrid)": {
+            "ci95_hi": 94.39,
+            "ci95_lo": 90.26,
+            "delta_ci95_hi": 0.0,
+            "delta_ci95_lo": 0.0,
+            "delta_vs_ref_pct": 0.0,
+            "n": 757,
+            "p_value_vs_ref": 1.0,
+            "point_pct": 92.42,
+            "readme_cited": true
+          },
+          "DHT Seeder Baseline": {
+            "ci95_hi": 57.53,
+            "ci95_lo": 50.25,
+            "delta_ci95_hi": 42.64,
+            "delta_ci95_lo": 34.44,
+            "delta_vs_ref_pct": 38.56,
+            "n": 757,
+            "p_value_vs_ref": 4.556344e-124,
+            "point_pct": 53.86,
+            "readme_cited": false
+          },
+          "Way-4 Combined Priors": {
+            "ci95_hi": 89.24,
+            "ci95_lo": 84.0,
+            "delta_ci95_hi": 8.47,
+            "delta_ci95_lo": 3.08,
+            "delta_vs_ref_pct": 5.78,
+            "n": 757,
+            "p_value_vs_ref": 7.338249e-29,
+            "point_pct": 86.64,
+            "readme_cited": false
+          }
+        },
+        "n": 757,
+        "n_families": 500,
+        "panel_name": "chart1_2f_swarm_public_757",
+        "reference_model": "Armiger Ultra (Fair Hybrid)"
+      },
+      "panel_2f_swarm_warehouse_10278": {
+        "bootstrap_mode": "family_clustered",
+        "key_sha256": "13c3d7f3ee022ea84bcb3685422e968f2a23d4667ed245be5490cd41b40a9724",
+        "metric_type": "auroc",
+        "models": {
+          "Armiger Ultra (Fair Hybrid)": {
+            "ci95_hi": 97.16,
+            "ci95_lo": 96.49,
+            "delta_ci95_hi": 0.0,
+            "delta_ci95_lo": 0.0,
+            "delta_vs_ref_pct": 0.0,
+            "n": 10278,
+            "p_value_vs_ref": 1.0,
+            "point_pct": 96.83,
+            "readme_cited": true
+          },
+          "DHT Seeder Baseline": {
+            "ci95_hi": 87.55,
+            "ci95_lo": 86.05,
+            "delta_ci95_hi": 10.7,
+            "delta_ci95_lo": 9.34,
+            "delta_vs_ref_pct": 10.02,
+            "n": 10278,
+            "p_value_vs_ref": 0.0,
+            "point_pct": 86.81,
+            "readme_cited": false
+          },
+          "Raw Seeder Count": {
+            "ci95_hi": 85.93,
+            "ci95_lo": 84.4,
+            "delta_ci95_hi": 12.38,
+            "delta_ci95_lo": 10.95,
+            "delta_vs_ref_pct": 11.66,
+            "n": 10278,
+            "p_value_vs_ref": 0.0,
+            "point_pct": 85.17,
+            "readme_cited": false
+          }
+        },
+        "n": 10278,
+        "n_families": 5813,
+        "panel_name": "chart1_2f_swarm_warehouse_10278",
+        "reference_model": "Armiger Ultra (Fair Hybrid)"
+      },
+      "sha256": "8f8b952ff9f0eb68911aac1b1d50b2cda5394a5312f0051b9335703dc89b8312"
+    },
+    "armiger_vs_torrent_classifiers_6dims.png": {
+      "panel_1_category_11class_oct15": {
+        "bootstrap_mode": "family_clustered",
+        "key_sha256": "9f84b326ad0ff28d418cbea9fdbcab03af98c56e500405f3fb9ea2c055dc2a30",
+        "metric_type": "mean",
+        "models": {
+          "Anitomy": {
+            "ci95_hi": 35.33,
+            "ci95_lo": 31.46,
+            "delta_ci95_hi": 63.33,
+            "delta_ci95_lo": 59.52,
+            "delta_vs_ref_pct": 61.45,
+            "n": 2835,
+            "p_value_vs_ref": 0.0,
+            "point_pct": 33.4,
+            "readme_cited": false
+          },
+          "Armiger Ultra (Fair Hybrid)": {
+            "ci95_hi": 95.79,
+            "ci95_lo": 93.84,
+            "delta_ci95_hi": 0.0,
+            "delta_ci95_lo": 0.0,
+            "delta_vs_ref_pct": 0.0,
+            "n": 2835,
+            "p_value_vs_ref": 1.0,
+            "point_pct": 94.85,
+            "readme_cited": true
+          },
+          "Bitmagnet Built-In": {
+            "ci95_hi": 37.16,
+            "ci95_lo": 33.17,
+            "delta_ci95_hi": 61.58,
+            "delta_ci95_lo": 57.79,
+            "delta_vs_ref_pct": 59.68,
+            "n": 2835,
+            "p_value_vs_ref": 0.0,
+            "point_pct": 35.17,
+            "readme_cited": false
+          },
+          "GuessIt": {
+            "ci95_hi": 40.73,
+            "ci95_lo": 36.63,
+            "delta_ci95_hi": 58.07,
+            "delta_ci95_lo": 54.16,
+            "delta_vs_ref_pct": 56.16,
+            "n": 2835,
+            "p_value_vs_ref": 0.0,
+            "point_pct": 38.69,
+            "readme_cited": false
+          },
+          "MIMMO BERT (360M)": {
+            "ci95_hi": 74.11,
+            "ci95_lo": 70.28,
+            "delta_ci95_hi": 24.4,
+            "delta_ci95_lo": 20.86,
+            "delta_vs_ref_pct": 22.61,
+            "n": 2835,
+            "p_value_vs_ref": 5.160424e-139,
+            "point_pct": 72.24,
+            "readme_cited": false
+          },
+          "MIMMO Cascade": {
+            "ci95_hi": 73.2,
+            "ci95_lo": 69.37,
+            "delta_ci95_hi": 25.33,
+            "delta_ci95_lo": 21.79,
+            "delta_vs_ref_pct": 23.53,
+            "n": 2835,
+            "p_value_vs_ref": 6.432248e-146,
+            "point_pct": 71.32,
+            "readme_cited": false
+          },
+          "PTN (parse-torrent-title)": {
+            "ci95_hi": 37.61,
+            "ci95_lo": 33.58,
+            "delta_ci95_hi": 61.17,
+            "delta_ci95_lo": 57.29,
+            "delta_vs_ref_pct": 59.26,
+            "n": 2835,
+            "p_value_vs_ref": 0.0,
+            "point_pct": 35.59,
+            "readme_cited": false
+          },
+          "PTT / Parsett": {
+            "ci95_hi": 55.8,
+            "ci95_lo": 51.24,
+            "delta_ci95_hi": 43.31,
+            "delta_ci95_lo": 39.22,
+            "delta_vs_ref_pct": 41.27,
+            "n": 2835,
+            "p_value_vs_ref": 5.23558e-301,
+            "point_pct": 53.58,
+            "readme_cited": false
+          },
+          "RTN (rank-torrent-name)": {
+            "ci95_hi": 55.8,
+            "ci95_lo": 51.24,
+            "delta_ci95_hi": 43.31,
+            "delta_ci95_lo": 39.22,
+            "delta_vs_ref_pct": 41.27,
+            "n": 2835,
+            "p_value_vs_ref": 5.23558e-301,
+            "point_pct": 53.58,
+            "readme_cited": false
+          }
+        },
+        "n": 2835,
+        "n_families": 2746,
+        "panel_name": "chart3_1_oct15_cat11",
+        "quantization_parity_int8": {
+          "int8_hyb_pct": 94.81,
+          "int8_raw_pct": 94.43
+        },
+        "reference_model": "Armiger Ultra (Fair Hybrid)"
+      },
+      "panel_1_video_mvtv_oct15": {
+        "bootstrap_mode": "family_clustered",
+        "key_sha256": "9db94faedb271b65849b051228f2ba2251b0e17673f39f4fb1b28758e1b45b1d",
+        "metric_type": "mean",
+        "models": {
+          "Anitomy": {
+            "ci95_hi": 75.51,
+            "ci95_lo": 70.59,
+            "delta_ci95_hi": 25.42,
+            "delta_ci95_lo": 20.08,
+            "delta_vs_ref_pct": 22.76,
+            "n": 1296,
+            "p_value_vs_ref": 2.558958e-61,
+            "point_pct": 73.07,
+            "readme_cited": false
+          },
+          "Armiger Ultra (Fair Hybrid)": {
+            "ci95_hi": 96.89,
+            "ci95_lo": 94.67,
+            "delta_ci95_hi": 0.0,
+            "delta_ci95_lo": 0.0,
+            "delta_vs_ref_pct": 0.0,
+            "n": 1296,
+            "p_value_vs_ref": 1.0,
+            "point_pct": 95.83,
+            "readme_cited": false
+          },
+          "Bitmagnet Built-In": {
+            "ci95_hi": 46.03,
+            "ci95_lo": 40.42,
+            "delta_ci95_hi": 55.53,
+            "delta_ci95_lo": 49.65,
+            "delta_vs_ref_pct": 52.62,
+            "n": 1296,
+            "p_value_vs_ref": 1.177296e-188,
+            "point_pct": 43.21,
+            "readme_cited": false
+          },
+          "GuessIt": {
+            "ci95_hi": 86.56,
+            "ci95_lo": 82.64,
+            "delta_ci95_hi": 13.34,
+            "delta_ci95_lo": 9.06,
+            "delta_vs_ref_pct": 11.19,
+            "n": 1296,
+            "p_value_vs_ref": 5.721066e-25,
+            "point_pct": 84.65,
+            "readme_cited": false
+          },
+          "MIMMO BERT (360M)": {
+            "ci95_hi": 78.36,
+            "ci95_lo": 73.62,
+            "delta_ci95_hi": 22.38,
+            "delta_ci95_lo": 17.29,
+            "delta_vs_ref_pct": 19.83,
+            "n": 1296,
+            "p_value_vs_ref": 2.34286e-53,
+            "point_pct": 76.0,
+            "readme_cited": false
+          },
+          "MIMMO Cascade": {
+            "ci95_hi": 78.43,
+            "ci95_lo": 73.69,
+            "delta_ci95_hi": 22.29,
+            "delta_ci95_lo": 17.22,
+            "delta_vs_ref_pct": 19.75,
+            "n": 1296,
+            "p_value_vs_ref": 4.232115e-53,
+            "point_pct": 76.08,
+            "readme_cited": false
+          },
+          "PTN (parse-torrent-title)": {
+            "ci95_hi": 80.12,
+            "ci95_lo": 75.5,
+            "delta_ci95_hi": 20.51,
+            "delta_ci95_lo": 15.44,
+            "delta_vs_ref_pct": 17.98,
+            "n": 1296,
+            "p_value_vs_ref": 3.758795e-44,
+            "point_pct": 77.85,
+            "readme_cited": false
+          },
+          "PTT / Parsett": {
+            "ci95_hi": 83.76,
+            "ci95_lo": 79.4,
+            "delta_ci95_hi": 16.61,
+            "delta_ci95_lo": 11.91,
+            "delta_vs_ref_pct": 14.2,
+            "n": 1296,
+            "p_value_vs_ref": 2.080856e-33,
+            "point_pct": 81.64,
+            "readme_cited": false
+          },
+          "RTN (rank-torrent-name)": {
+            "ci95_hi": 83.76,
+            "ci95_lo": 79.4,
+            "delta_ci95_hi": 16.61,
+            "delta_ci95_lo": 11.91,
+            "delta_vs_ref_pct": 14.2,
+            "n": 1296,
+            "p_value_vs_ref": 2.080856e-33,
+            "point_pct": 81.64,
+            "readme_cited": false
+          }
+        },
+        "n": 1296,
+        "n_families": 1272,
+        "panel_name": "chart3_1_oct15_video_mvtv",
+        "reference_model": "Armiger Ultra (Fair Hybrid)"
+      },
+      "panel_2_catalog_matching_oct15": {
+        "bootstrap_mode": "family_clustered",
+        "key_sha256": "9db94faedb271b65849b051228f2ba2251b0e17673f39f4fb1b28758e1b45b1d",
+        "metric_type": "mean",
+        "models": {
+          "Anitomy": {
+            "ci95_hi": 75.21,
+            "ci95_lo": 70.24,
+            "delta_ci95_hi": 25.02,
+            "delta_ci95_lo": 19.53,
+            "delta_vs_ref_pct": 22.3,
+            "n": 1296,
+            "p_value_vs_ref": 7.898606e-57,
+            "point_pct": 72.76,
+            "readme_cited": false
+          },
+          "Armiger Ultra (Fair Hybrid)": {
+            "ci95_hi": 96.21,
+            "ci95_lo": 93.8,
+            "delta_ci95_hi": 0.0,
+            "delta_ci95_lo": 0.0,
+            "delta_vs_ref_pct": 0.0,
+            "n": 1296,
+            "p_value_vs_ref": 1.0,
+            "point_pct": 95.06,
+            "readme_cited": true
+          },
+          "Bitmagnet Built-In": {
+            "ci95_hi": 46.03,
+            "ci95_lo": 40.42,
+            "delta_ci95_hi": 54.71,
+            "delta_ci95_lo": 48.92,
+            "delta_vs_ref_pct": 51.85,
+            "n": 1296,
+            "p_value_vs_ref": 1.029079e-185,
+            "point_pct": 43.21,
+            "readme_cited": false
+          },
+          "GuessIt": {
+            "ci95_hi": 86.02,
+            "ci95_lo": 81.99,
+            "delta_ci95_hi": 13.26,
+            "delta_ci95_lo": 8.82,
+            "delta_vs_ref_pct": 11.03,
+            "n": 1296,
+            "p_value_vs_ref": 8.031629e-23,
+            "point_pct": 84.03,
+            "readme_cited": false
+          },
+          "MIMMO BERT (360M)": {
+            "ci95_hi": 63.01,
+            "ci95_lo": 57.43,
+            "delta_ci95_hi": 37.75,
+            "delta_ci95_lo": 31.85,
+            "delta_vs_ref_pct": 34.8,
+            "n": 1296,
+            "p_value_vs_ref": 1.806545e-108,
+            "point_pct": 60.26,
+            "readme_cited": false
+          },
+          "MIMMO Cascade": {
+            "ci95_hi": 63.09,
+            "ci95_lo": 57.5,
+            "delta_ci95_hi": 37.69,
+            "delta_ci95_lo": 31.77,
+            "delta_vs_ref_pct": 34.72,
+            "n": 1296,
+            "p_value_vs_ref": 3.426741e-108,
+            "point_pct": 60.34,
+            "readme_cited": false
+          },
+          "PTN (parse-torrent-title)": {
+            "ci95_hi": 79.91,
+            "ci95_lo": 75.25,
+            "delta_ci95_hi": 20.06,
+            "delta_ci95_lo": 14.84,
+            "delta_vs_ref_pct": 17.44,
+            "n": 1296,
+            "p_value_vs_ref": 1.358742e-39,
+            "point_pct": 77.62,
+            "readme_cited": false
+          },
+          "PTT / Parsett": {
+            "ci95_hi": 82.68,
+            "ci95_lo": 78.2,
+            "delta_ci95_hi": 17.09,
+            "delta_ci95_lo": 12.22,
+            "delta_vs_ref_pct": 14.58,
+            "n": 1296,
+            "p_value_vs_ref": 5.766383e-34,
+            "point_pct": 80.48,
+            "readme_cited": false
+          },
+          "RTN (rank-torrent-name)": {
+            "ci95_hi": 82.68,
+            "ci95_lo": 78.2,
+            "delta_ci95_hi": 17.09,
+            "delta_ci95_lo": 12.22,
+            "delta_vs_ref_pct": 14.58,
+            "n": 1296,
+            "p_value_vs_ref": 5.766383e-34,
+            "point_pct": 80.48,
+            "readme_cited": false
+          }
+        },
+        "n": 1296,
+        "n_families": 1272,
+        "panel_name": "chart3_2_oct15_catalog_matching",
+        "quantization_parity_int8": {
+          "int8_hyb_pct": 95.06,
+          "int8_raw_pct": 94.29
+        },
+        "reference_model": "Armiger Ultra (Fair Hybrid)"
+      },
+      "panel_3_audio_strict_oct15": {
+        "bootstrap_mode": "family_clustered",
+        "key_sha256": "e9642600eb6a7f256e38e138ca867506ebbab497735f5995078535dc46e0b4b4",
+        "metric_type": "mean",
+        "models": {
+          "Anitomy": {
+            "ci95_hi": 92.94,
+            "ci95_lo": 87.8,
+            "delta_ci95_hi": 9.13,
+            "delta_ci95_lo": 3.47,
+            "delta_vs_ref_pct": 6.24,
+            "n": 545,
+            "p_value_vs_ref": 1.742852e-05,
+            "point_pct": 90.46,
+            "readme_cited": false
+          },
+          "Armiger Ultra (Fair Hybrid)": {
+            "ci95_hi": 98.1,
+            "ci95_lo": 95.04,
+            "delta_ci95_hi": 0.0,
+            "delta_ci95_lo": 0.0,
+            "delta_vs_ref_pct": 0.0,
+            "n": 545,
+            "p_value_vs_ref": 1.0,
+            "point_pct": 96.7,
+            "readme_cited": true
+          },
+          "Bitmagnet Built-In": {
+            "ci95_hi": 90.99,
+            "ci95_lo": 85.31,
+            "delta_ci95_hi": 11.55,
+            "delta_ci95_lo": 5.48,
+            "delta_vs_ref_pct": 8.44,
+            "n": 545,
+            "p_value_vs_ref": 3.808598e-08,
+            "point_pct": 88.26,
+            "readme_cited": false
+          },
+          "GuessIt": {
+            "ci95_hi": 96.64,
+            "ci95_lo": 92.88,
+            "delta_ci95_hi": 4.15,
+            "delta_ci95_lo": -0.38,
+            "delta_vs_ref_pct": 1.83,
+            "n": 545,
+            "p_value_vs_ref": 0.1538599,
+            "point_pct": 94.86,
+            "readme_cited": false
+          },
+          "OpenAI GPT (Fast Tier)": {
+            "ci95_hi": 97.1,
+            "ci95_lo": 91.85,
+            "delta_ci95_hi": 5.26,
+            "delta_ci95_lo": -0.96,
+            "delta_vs_ref_pct": 2.02,
+            "n": 545,
+            "p_value_vs_ref": 0.1262895,
+            "point_pct": 94.68,
+            "readme_cited": false
+          },
+          "PTN (parse-torrent-title)": {
+            "ci95_hi": 95.28,
+            "ci95_lo": 90.94,
+            "delta_ci95_hi": 6.04,
+            "delta_ci95_lo": 0.96,
+            "delta_vs_ref_pct": 3.49,
+            "n": 545,
+            "p_value_vs_ref": 0.009399242,
+            "point_pct": 93.21,
+            "readme_cited": false
+          },
+          "PTT / Parsett": {
+            "ci95_hi": 95.73,
+            "ci95_lo": 91.55,
+            "delta_ci95_hi": 5.36,
+            "delta_ci95_lo": 0.56,
+            "delta_vs_ref_pct": 2.94,
+            "n": 545,
+            "p_value_vs_ref": 0.02262884,
+            "point_pct": 93.76,
+            "readme_cited": false
+          },
+          "RTN (rank-torrent-name)": {
+            "ci95_hi": 95.73,
+            "ci95_lo": 91.55,
+            "delta_ci95_hi": 5.36,
+            "delta_ci95_lo": 0.56,
+            "delta_vs_ref_pct": 2.94,
+            "n": 545,
+            "p_value_vs_ref": 0.02262884,
+            "point_pct": 93.76,
+            "readme_cited": false
+          }
+        },
+        "n": 545,
+        "n_families": 507,
+        "panel_name": "chart3_3_oct15_audio_strict545",
+        "quantization_parity_int8": {
+          "int8_hyb_pct": 96.7,
+          "int8_raw_pct": 96.33
+        },
+        "reference_model": "Armiger Ultra (Fair Hybrid)"
+      },
+      "panel_4_anime_dub_zero_cue_2000": {
+        "bootstrap_mode": "family_clustered",
+        "key_sha256": "15cb8e5e4f00cbcf0c2b51e8a1db36ee2d224874e6457595d2a41e99949ba725",
+        "metric_type": "mean",
+        "models": {
+          "Anitomy": {
+            "ci95_hi": 50.45,
+            "ci95_lo": 45.35,
+            "delta_ci95_hi": 32.43,
+            "delta_ci95_lo": 27.05,
+            "delta_vs_ref_pct": 29.75,
+            "n": 2000,
+            "p_value_vs_ref": 3.748922e-118,
+            "point_pct": 47.9,
+            "readme_cited": false
+          },
+          "GuessIt": {
+            "ci95_hi": 53.09,
+            "ci95_lo": 47.98,
+            "delta_ci95_hi": 29.87,
+            "delta_ci95_lo": 24.32,
+            "delta_vs_ref_pct": 27.1,
+            "n": 2000,
+            "p_value_vs_ref": 1.016381e-92,
+            "point_pct": 50.55,
+            "readme_cited": false
+          },
+          "PTN (parse-torrent-title)": {
+            "ci95_hi": 71.04,
+            "ci95_lo": 66.19,
+            "delta_ci95_hi": 11.38,
+            "delta_ci95_lo": 6.73,
+            "delta_vs_ref_pct": 9.0,
+            "n": 2000,
+            "p_value_vs_ref": 7.57291e-21,
+            "point_pct": 68.65,
+            "readme_cited": false
+          },
+          "PTT / Parsett": {
+            "ci95_hi": 79.67,
+            "ci95_lo": 75.56,
+            "delta_ci95_hi": 0.0,
+            "delta_ci95_lo": 0.0,
+            "delta_vs_ref_pct": 0.0,
+            "n": 2000,
+            "p_value_vs_ref": 1.0,
+            "point_pct": 77.65,
+            "readme_cited": false
+          },
+          "RTN (rank-torrent-name)": {
+            "ci95_hi": 79.67,
+            "ci95_lo": 75.56,
+            "delta_ci95_hi": 0.0,
+            "delta_ci95_lo": 0.0,
+            "delta_vs_ref_pct": 0.0,
+            "n": 2000,
+            "p_value_vs_ref": 1.0,
+            "point_pct": 77.65,
+            "readme_cited": false
+          }
+        },
+        "n": 2000,
+        "n_families": 1748,
+        "panel_name": "chart3_4_zero_cue_2000_anime_dub",
+        "reference_model": "RTN (rank-torrent-name)"
+      },
+      "panel_4_anime_oct15": {
+        "bootstrap_mode": "family_clustered",
+        "key_sha256": "8c12ff8d3922d0039049184ba006da841a5abf20e3b916f1b12d7dc10d24489b",
+        "metric_type": "mean",
+        "models": {
+          "Armiger Ultra (Fair Hybrid)": {
+            "ci95_hi": 100.0,
+            "ci95_lo": 99.01,
+            "delta_ci95_hi": 0.0,
+            "delta_ci95_lo": 0.0,
+            "delta_vs_ref_pct": 0.0,
+            "n": 507,
+            "p_value_vs_ref": 1.0,
+            "point_pct": 99.61,
+            "readme_cited": false
+          }
+        },
+        "n": 507,
+        "n_families": 501,
+        "panel_name": "chart3_4_oct15_anime507",
+        "quantization_parity_int8": {
+          "int8_pct": 99.61
+        },
+        "reference_model": "Armiger Ultra (Fair Hybrid)"
+      },
+      "panel_5_adult_oct15": {
+        "bootstrap_mode": "family_clustered",
+        "key_sha256": "1b7d20bd91612fc3bb53c9a229245556e3f312d18d4896fed05122da10a70866",
+        "metric_type": "mean",
+        "models": {
+          "Armiger Ultra (Fair Hybrid)": {
+            "ci95_hi": 98.92,
+            "ci95_lo": 98.01,
+            "delta_ci95_hi": 0.0,
+            "delta_ci95_lo": 0.0,
+            "delta_vs_ref_pct": 0.0,
+            "n": 2781,
+            "p_value_vs_ref": 1.0,
+            "point_pct": 98.49,
+            "readme_cited": true
+          },
+          "Bitmagnet Built-In": {
+            "ci95_hi": 78.47,
+            "ci95_lo": 74.96,
+            "delta_ci95_hi": 23.54,
+            "delta_ci95_lo": 19.99,
+            "delta_vs_ref_pct": 21.75,
+            "n": 2781,
+            "p_value_vs_ref": 1.28717e-148,
+            "point_pct": 76.73,
+            "readme_cited": false
+          },
+          "MIMMO BERT (360M)": {
+            "ci95_hi": 92.09,
+            "ci95_lo": 89.94,
+            "delta_ci95_hi": 8.57,
+            "delta_ci95_lo": 6.33,
+            "delta_vs_ref_pct": 7.44,
+            "n": 2781,
+            "p_value_vs_ref": 4.180133e-45,
+            "point_pct": 91.05,
+            "readme_cited": false
+          },
+          "MIMMO Cascade": {
+            "ci95_hi": 90.8,
+            "ci95_lo": 88.5,
+            "delta_ci95_hi": 10.0,
+            "delta_ci95_lo": 7.63,
+            "delta_vs_ref_pct": 8.81,
+            "n": 2781,
+            "p_value_vs_ref": 3.329571e-55,
+            "point_pct": 89.68,
+            "readme_cited": false
+          },
+          "PTT / Parsett": {
+            "ci95_hi": 80.71,
+            "ci95_lo": 77.31,
+            "delta_ci95_hi": 21.23,
+            "delta_ci95_lo": 17.74,
+            "delta_vs_ref_pct": 19.49,
+            "n": 2781,
+            "p_value_vs_ref": 1.063634e-131,
+            "point_pct": 79.0,
+            "readme_cited": false
+          },
+          "RTN (rank-torrent-name)": {
+            "ci95_hi": 80.71,
+            "ci95_lo": 77.31,
+            "delta_ci95_hi": 21.23,
+            "delta_ci95_lo": 17.74,
+            "delta_vs_ref_pct": 19.49,
+            "n": 2781,
+            "p_value_vs_ref": 1.063634e-131,
+            "point_pct": 79.0,
+            "readme_cited": false
+          }
+        },
+        "n": 2781,
+        "n_families": 2715,
+        "panel_name": "chart3_5_oct15_adult2781",
+        "quantization_parity_int8": {
+          "int8_pct": 98.49
+        },
+        "reference_model": "Armiger Ultra (Fair Hybrid)"
+      },
+      "panel_6a_junk_oct15": {
+        "beyond_junk_loto_no_gpt_n975": {
+          "bootstrap_mode": "family_clustered",
+          "key_sha256": "89e91bc4996c6c8d36933e7dad7f365c65595a195dfd3163a41de7acab66fcbb",
+          "metric_type": "balanced",
+          "models": {
+            "Armiger Ultra (Fair Hybrid)": {
+              "ci95_hi": 100.0,
+              "ci95_lo": 100.0,
+              "delta_ci95_hi": 0.0,
+              "delta_ci95_lo": 0.0,
+              "delta_vs_ref_pct": 0.0,
+              "n": 975,
+              "p_value_vs_ref": 1.0,
+              "point_pct": 100.0
+            },
+            "OpenAI GPT (Fast Tier)": {
+              "ci95_hi": 50.0,
+              "ci95_lo": 50.0,
+              "delta_ci95_hi": 50.0,
+              "delta_ci95_lo": 50.0,
+              "delta_vs_ref_pct": 50.0,
+              "n": 975,
+              "p_value_vs_ref": 1.084202e-19,
+              "point_pct": 50.0
+            }
+          },
+          "n": 975,
+          "n_families": 960,
+          "panel_name": "chart1_2e_loto_vs_gpt_common_support",
+          "reference_model": "Armiger Ultra (Fair Hybrid)"
+        },
+        "oct15_junk_status": "n_pos = 1, not estimable",
+        "oct15_n_neg": 2169,
+        "oct15_n_pos": 1,
+        "oct15_n_total": 2170,
+        "oct15_specificity_only": {
+          "Armiger Ultra (Fair Hybrid)": {
+            "n_neg": 2169,
+            "specificity_pct": 99.95,
+            "tn": 2168
+          },
+          "Bitmagnet Built-In": {
+            "n_neg": 2169,
+            "tn": 2168,
+            "tp_on_n_pos_1": 0
+          },
+          "RTN (rank-torrent-name)": {
+            "n_neg": 2169,
+            "tn": 2147,
+            "tp_on_n_pos_1": 0
+          }
+        },
+        "panel_name": "chart3_6a_junk_audit"
+      },
+      "sha256": "7e9704d0c0fdb77029d826fe450e19ec277e0723e76bd27281deec8b5acedc55"
+    }
+  },
+  "five_split_category_summary": {
+    "beyond_confirmation": {
+      "bootstrap_mode": "family_clustered",
+      "key_sha256": "7bbb599846b3a4d84da3fc9c9269535b0f682d18c6ae84770cb0789b7ab63f40",
+      "metric_type": "mean",
+      "n": 1025,
+      "n_families": 1010,
+      "panel_name": "five_split_beyond_confirmation",
+      "quantization_variants": {
+        "armiger_int8_hyb": {
+          "ci95_hi": 94.5,
+          "ci95_lo": 91.37,
+          "delta_ci95_hi": 0.48,
+          "delta_ci95_lo": -0.2,
+          "delta_vs_ref_pct": 0.1,
+          "n": 1025,
+          "p_value_vs_ref": 1.0,
+          "point_pct": 92.98
+        },
+        "armiger_int8_raw": {
+          "ci95_hi": 93.27,
+          "ci95_lo": 89.85,
+          "delta_ci95_hi": 2.36,
+          "delta_ci95_lo": 0.68,
+          "delta_vs_ref_pct": 1.46,
+          "n": 1025,
+          "p_value_vs_ref": 0.001489639,
+          "point_pct": 91.61
+        },
+        "armiger_ultra_hyb": {
+          "ci95_hi": 94.57,
+          "ci95_lo": 91.47,
+          "delta_ci95_hi": 0.0,
+          "delta_ci95_lo": 0.0,
+          "delta_vs_ref_pct": 0.0,
+          "n": 1025,
+          "p_value_vs_ref": 1.0,
+          "point_pct": 93.07
+        },
+        "armiger_ultra_raw": {
+          "ci95_hi": 93.26,
+          "ci95_lo": 89.86,
+          "delta_ci95_hi": 2.34,
+          "delta_ci95_lo": 0.68,
+          "delta_vs_ref_pct": 1.46,
+          "n": 1025,
+          "p_value_vs_ref": 0.0007286072,
+          "point_pct": 91.61
+        }
+      },
+      "reference_model": "armiger_ultra_hyb"
+    },
+    "fresh_confirmation": {
+      "bootstrap_mode": "family_clustered",
+      "key_sha256": "10a76a9cd0b83a2451b08645d3e3c37953d9014b188c9502e8065c6f8aa6f75e",
+      "metric_type": "mean",
+      "n": 1402,
+      "n_families": 1352,
+      "panel_name": "five_split_fresh_confirmation",
+      "quantization_variants": {
+        "armiger_int8_hyb": {
+          "ci95_hi": 94.01,
+          "ci95_lo": 90.75,
+          "delta_ci95_hi": 0.36,
+          "delta_ci95_lo": 0.0,
+          "delta_vs_ref_pct": 0.14,
+          "n": 1402,
+          "p_value_vs_ref": 0.5,
+          "point_pct": 92.44
+        },
+        "armiger_int8_raw": {
+          "ci95_hi": 93.75,
+          "ci95_lo": 90.46,
+          "delta_ci95_hi": 0.97,
+          "delta_ci95_lo": -0.07,
+          "delta_vs_ref_pct": 0.43,
+          "n": 1402,
+          "p_value_vs_ref": 0.1795654,
+          "point_pct": 92.15
+        },
+        "armiger_ultra_hyb": {
+          "ci95_hi": 94.15,
+          "ci95_lo": 90.9,
+          "delta_ci95_hi": 0.0,
+          "delta_ci95_lo": 0.0,
+          "delta_vs_ref_pct": 0.0,
+          "n": 1402,
+          "p_value_vs_ref": 1.0,
+          "point_pct": 92.58
+        },
+        "armiger_ultra_raw": {
+          "ci95_hi": 93.89,
+          "ci95_lo": 90.62,
+          "delta_ci95_hi": 0.79,
+          "delta_ci95_lo": -0.21,
+          "delta_vs_ref_pct": 0.29,
+          "n": 1402,
+          "p_value_vs_ref": 0.3876953,
+          "point_pct": 92.3
+        }
+      },
+      "reference_model": "armiger_ultra_hyb"
+    },
+    "multilang_3000": {
+      "bootstrap_mode": "family_clustered",
+      "key_sha256": "75e98c942a4649f116e36bd91c22bf247d6386ab39a83d3cd287fa580dc235fc",
+      "metric_type": "mean",
+      "n": 3000,
+      "n_families": 2560,
+      "panel_name": "five_split_multilang_3000",
+      "quantization_variants": {
+        "armiger_int8_hyb": {
+          "ci95_hi": 98.75,
+          "ci95_lo": 97.75,
+          "delta_ci95_hi": 0.17,
+          "delta_ci95_lo": 0.0,
+          "delta_vs_ref_pct": 0.07,
+          "n": 3000,
+          "p_value_vs_ref": 0.5,
+          "point_pct": 98.27
+        },
+        "armiger_int8_raw": {
+          "ci95_hi": 97.85,
+          "ci95_lo": 96.64,
+          "delta_ci95_hi": 1.54,
+          "delta_ci95_lo": 0.61,
+          "delta_vs_ref_pct": 1.07,
+          "n": 3000,
+          "p_value_vs_ref": 5.6141e-06,
+          "point_pct": 97.27
+        },
+        "armiger_ultra_hyb": {
+          "ci95_hi": 98.81,
+          "ci95_lo": 97.83,
+          "delta_ci95_hi": 0.0,
+          "delta_ci95_lo": 0.0,
+          "delta_vs_ref_pct": 0.0,
+          "n": 3000,
+          "p_value_vs_ref": 1.0,
+          "point_pct": 98.33
+        },
+        "armiger_ultra_raw": {
+          "ci95_hi": 97.98,
+          "ci95_lo": 96.79,
+          "delta_ci95_hi": 1.39,
+          "delta_ci95_lo": 0.49,
+          "delta_vs_ref_pct": 0.93,
+          "n": 3000,
+          "p_value_vs_ref": 4.056036e-05,
+          "point_pct": 97.4
+        }
+      },
+      "reference_model": "armiger_ultra_hyb"
+    },
+    "oct15_confirmation": {
+      "bootstrap_mode": "family_clustered",
+      "key_sha256": "fd35c11c45d5fe78e3b39a49fd5fbd574e2f7b0b4df47ce0108fd4efb8cd1d21",
+      "metric_type": "mean",
+      "n": 2835,
+      "n_families": 2746,
+      "panel_name": "five_split_oct15_confirmation",
+      "quantization_variants": {
+        "armiger_int8_hyb": {
+          "ci95_hi": 95.77,
+          "ci95_lo": 93.8,
+          "delta_ci95_hi": 0.11,
+          "delta_ci95_lo": 0.0,
+          "delta_vs_ref_pct": 0.04,
+          "n": 2835,
+          "p_value_vs_ref": 1.0,
+          "point_pct": 94.81
+        },
+        "armiger_int8_raw": {
+          "ci95_hi": 95.4,
+          "ci95_lo": 93.38,
+          "delta_ci95_hi": 0.79,
+          "delta_ci95_lo": 0.07,
+          "delta_vs_ref_pct": 0.42,
+          "n": 2835,
+          "p_value_vs_ref": 0.02895927,
+          "point_pct": 94.43
+        },
+        "armiger_ultra_hyb": {
+          "ci95_hi": 95.79,
+          "ci95_lo": 93.84,
+          "delta_ci95_hi": 0.0,
+          "delta_ci95_lo": 0.0,
+          "delta_vs_ref_pct": 0.0,
+          "n": 2835,
+          "p_value_vs_ref": 1.0,
+          "point_pct": 94.85
+        },
+        "armiger_ultra_raw": {
+          "ci95_hi": 95.43,
+          "ci95_lo": 93.42,
+          "delta_ci95_hi": 0.74,
+          "delta_ci95_lo": 0.07,
+          "delta_vs_ref_pct": 0.39,
+          "n": 2835,
+          "p_value_vs_ref": 0.04328525,
+          "point_pct": 94.46
+        }
+      },
+      "reference_model": "armiger_ultra_hyb"
+    },
+    "zero_cue_2000": {
+      "bootstrap_mode": "family_clustered",
+      "key_sha256": "7cd04be8e26bcb732febf2383cb01aafe3996f7e91413bec484b41b3b1884031",
+      "metric_type": "mean",
+      "n": 2000,
+      "n_families": 1748,
+      "panel_name": "five_split_zero_cue_2000",
+      "quantization_variants": {
+        "armiger_int8_hyb": {
+          "ci95_hi": 92.25,
+          "ci95_lo": 89.6,
+          "delta_ci95_hi": 0.25,
+          "delta_ci95_lo": -0.15,
+          "delta_vs_ref_pct": 0.05,
+          "n": 2000,
+          "p_value_vs_ref": 1.0,
+          "point_pct": 90.95
+        },
+        "armiger_int8_raw": {
+          "ci95_hi": 87.15,
+          "ci95_lo": 83.93,
+          "delta_ci95_hi": 6.81,
+          "delta_ci95_lo": 4.12,
+          "delta_vs_ref_pct": 5.45,
+          "n": 2000,
+          "p_value_vs_ref": 1.239034e-15,
+          "point_pct": 85.55
+        },
+        "armiger_ultra_hyb": {
+          "ci95_hi": 92.29,
+          "ci95_lo": 89.67,
+          "delta_ci95_hi": 0.0,
+          "delta_ci95_lo": 0.0,
+          "delta_vs_ref_pct": 0.0,
+          "n": 2000,
+          "p_value_vs_ref": 1.0,
+          "point_pct": 91.0
+        },
+        "armiger_ultra_raw": {
+          "ci95_hi": 87.14,
+          "ci95_lo": 83.91,
+          "delta_ci95_hi": 6.81,
+          "delta_ci95_lo": 4.11,
+          "delta_vs_ref_pct": 5.45,
+          "n": 2000,
+          "p_value_vs_ref": 8.427409e-16,
+          "point_pct": 85.55
+        }
+      },
+      "reference_model": "armiger_ultra_hyb"
+    }
+  },
+  "invariants_verified": {
+    "anti_circularity_lock": true,
+    "family_clustered_bootstrap": true,
+    "identical_denominator_lock": true,
+    "identical_reference_key_lock": true,
+    "png_metadata_stripped_ihdr_idat_iend_only": true,
+    "receipt_backed_provenance_lock": true,
+    "single_armiger_bar_per_comparator_panel_h1": true
+  },
   "provenance_sha256": {
-    "canonical_eval_vectors.json": "62992cc441d321938446c54d52732a65b36da2d83c41d837d34b5c7674156aa9",
-    "build_canonical_eval_vectors.py": "8165b1551e37b31f08c87757078cf991ac2c605a9dbc79328c6075a8dd7e7987",
-    "generate_canonical_charts.py": "4ffca978472527d879c0d547dfadbbcd9b2ee60467945eff1976dac429f119a8",
-    "assets/armiger_vs_llms_overall_and_6dims.png": "8f8b952ff9f0eb68911aac1b1d50b2cda5394a5312f0051b9335703dc89b8312",
-    "assets/armiger_vs_llms_cost_comparison.png": "447f0e9767b36fe1f5bc16623e249e0b897f65b147a7b8abbaebce4865c934e3",
-    "assets/armiger_vs_torrent_classifiers_6dims.png": "7e9704d0c0fdb77029d826fe450e19ec277e0723e76bd27281deec8b5acedc55",
-    "assets/armiger_categorical_breakdown.png": "9246ce3c6eea024383ee21a44608f632c08e12cbb2027fac4b2f19352163e0df",
     "benchmarks/receipts/armiger_v23_eval_receipt.json": "11ad802fe2c176fe3313326e5ea157e707fee089ed1af6d029ae05254b6ca4be",
     "benchmarks/receipts/beyond_confirmation_teachers_receipt.json": "1d71c5b6ce536f421ef6c775310a013660d396a4fb5e15b5a57cf37767035d37",
     "benchmarks/receipts/curriculum_overlap_audit.json": "ffd3f58f13ef93f2950bfa141fbfd832429cb8929896fd2b56b8a83ef1f85a35",
@@ -80,1707 +1771,14 @@
     "benchmarks/receipts/suite_a_parsers_receipt.json": "ea2ebe045156b992f5912e5a840654dbc7fc75a5f66eecf19b74808967a7190e",
     "benchmarks/receipts/swarm_oof_receipt.json": "541a1ea9171f968f0fc27db45774de0a13b7c459040b4638628171e5ad97cc39",
     "benchmarks/receipts/v23_curriculum_overlap_audit.json": "ffd3f58f13ef93f2950bfa141fbfd832429cb8929896fd2b56b8a83ef1f85a35",
-    "validated_zero_cue_catalog.json": "8a8b7a4ba97cb22c3aa1f75ab33762052deb09580df464b1eabfe622a2837d26",
-    "armiger_ultra.fp32.onnx": "6459a20d7bf45d46d59efbcb50ffb8a519bacda14ae36403dcc510eceaa38f44",
-    "armiger.int8.onnx": "a0dab886be6252739d4c89ce01d65d8d2135204beaec6b00159d038cf420f329"
+    "build_canonical_eval_vectors.py": "8165b1551e37b31f08c87757078cf991ac2c605a9dbc79328c6075a8dd7e7987",
+    "canonical_eval_vectors.json": "62992cc441d321938446c54d52732a65b36da2d83c41d837d34b5c7674156aa9",
+    "docs/assets/armiger_categorical_breakdown.png": "9246ce3c6eea024383ee21a44608f632c08e12cbb2027fac4b2f19352163e0df",
+    "docs/assets/armiger_vs_llms_cost_comparison.png": "447f0e9767b36fe1f5bc16623e249e0b897f65b147a7b8abbaebce4865c934e3",
+    "docs/assets/armiger_vs_llms_overall_and_6dims.png": "8f8b952ff9f0eb68911aac1b1d50b2cda5394a5312f0051b9335703dc89b8312",
+    "docs/assets/armiger_vs_torrent_classifiers_6dims.png": "7e9704d0c0fdb77029d826fe450e19ec277e0723e76bd27281deec8b5acedc55",
+    "generate_canonical_charts.py": "b0d922803795d59c88ea300726f7d8d1f6f4368cde240acb3061aac291b9f639",
+    "src/armiger/model_manifest.json": "615aebffa20249d3e1f34b4705eb14ba60f6a3991dbd1f597ba6a5356a86a7b1"
   },
-  "charts": {
-    "armiger_vs_llms_overall_and_6dims.png": {
-      "sha256": "8f8b952ff9f0eb68911aac1b1d50b2cda5394a5312f0051b9335703dc89b8312",
-      "composite_6dim_mean": {
-        "Armiger Ultra (Fair Hybrid)": {
-          "point_pct": 95.66,
-          "ci95_lo": 94.42,
-          "ci95_hi": 96.9,
-          "point_with_corpus_swarm_pct": 96.39
-        },
-        "loto_common_support_4dim_2a_to_2d": {
-          "vs_openai_gpt": {
-            "Armiger Ultra (Fair Hybrid)": 95.74,
-            "OpenAI GPT (Fast Tier)": 95.17
-          },
-          "vs_google_gemini": {
-            "Armiger Ultra (Fair Hybrid)": 95.83,
-            "Google Gemini Flash": 97.32
-          }
-        },
-        "loto_common_support_5dim_2a_to_2e_vs_gpt": {
-          "Armiger Ultra (Fair Hybrid)": 96.59,
-          "OpenAI GPT (Fast Tier)": 86.14
-        }
-      },
-      "panel_2a_category_11class": {
-        "panel_name": "chart1_2a_beyond_cat11",
-        "n": 1025,
-        "metric_type": "mean",
-        "bootstrap_mode": "family_clustered",
-        "reference_model": "Armiger Ultra (Fair Hybrid)",
-        "models": {
-          "Armiger Ultra (Fair Hybrid)": {
-            "n": 1025,
-            "point_pct": 93.07,
-            "ci95_lo": 91.47,
-            "ci95_hi": 94.57,
-            "delta_vs_ref_pct": 0.0,
-            "delta_ci95_lo": 0.0,
-            "delta_ci95_hi": 0.0,
-            "p_value_vs_ref": 1.0,
-            "readme_cited": true
-          }
-        },
-        "key_sha256": "4f23554280454bf5e76c297b4d292fb2e60508ac969fe6359eaa6d151e4903d8",
-        "n_families": 1010,
-        "quantization_parity_int8": {
-          "int8_hyb_pct": 92.98,
-          "int8_raw_pct": 91.61,
-          "delta_vs_ultra_pp": -0.1
-        },
-        "loto_common_support_panels": {
-          "vs_openai_gpt": {
-            "panel_name": "chart1_2a_loto_vs_gpt_common_support",
-            "n": 974,
-            "metric_type": "mean",
-            "bootstrap_mode": "family_clustered",
-            "reference_model": "Armiger Ultra (Fair Hybrid)",
-            "models": {
-              "Armiger Ultra (Fair Hybrid)": {
-                "n": 974,
-                "point_pct": 94.56,
-                "ci95_lo": 93.05,
-                "ci95_hi": 95.9,
-                "delta_vs_ref_pct": 0.0,
-                "delta_ci95_lo": 0.0,
-                "delta_ci95_hi": 0.0,
-                "p_value_vs_ref": 1.0
-              },
-              "OpenAI GPT (Fast Tier)": {
-                "n": 974,
-                "point_pct": 97.84,
-                "ci95_lo": 96.89,
-                "ci95_hi": 98.69,
-                "delta_vs_ref_pct": -3.29,
-                "delta_ci95_lo": -4.86,
-                "delta_ci95_hi": -1.76,
-                "p_value_vs_ref": 4.223705e-05
-              }
-            },
-            "key_sha256": "2b159e2e2d589fbbe8dd1d7e4e033d576abf6b0c35a491c3c8993e7749b4208e",
-            "n_families": 959,
-            "partial_identification_bounds_n1025": {
-              "Armiger Ultra (Fair Hybrid)": {
-                "n_support": 974,
-                "acc_support": 0.9455852156057495,
-                "lower": 0.8985365853658537,
-                "upper": 0.9482926829268292
-              },
-              "OpenAI GPT (Fast Tier)": {
-                "n_support": 974,
-                "acc_support": 0.9784394250513347,
-                "lower": 0.9297560975609757,
-                "upper": 0.9795121951219512
-              }
-            }
-          },
-          "vs_google_gemini": {
-            "panel_name": "chart1_2a_loto_vs_gemini_common_support",
-            "n": 982,
-            "metric_type": "mean",
-            "bootstrap_mode": "family_clustered",
-            "reference_model": "Armiger Ultra (Fair Hybrid)",
-            "models": {
-              "Armiger Ultra (Fair Hybrid)": {
-                "n": 982,
-                "point_pct": 94.7,
-                "ci95_lo": 93.31,
-                "ci95_hi": 96.05,
-                "delta_vs_ref_pct": 0.0,
-                "delta_ci95_lo": 0.0,
-                "delta_ci95_hi": 0.0,
-                "p_value_vs_ref": 1.0
-              },
-              "Google Gemini Flash": {
-                "n": 982,
-                "point_pct": 97.05,
-                "ci95_lo": 95.92,
-                "ci95_hi": 98.06,
-                "delta_vs_ref_pct": -2.34,
-                "delta_ci95_lo": -3.99,
-                "delta_ci95_hi": -0.71,
-                "p_value_vs_ref": 0.007620522
-              }
-            },
-            "key_sha256": "b09076f711edcc88023c6091ab3561a1a735ecc3796706b419b971408fe4b13a",
-            "n_families": 968,
-            "partial_identification_bounds_n1025": {
-              "Armiger Ultra (Fair Hybrid)": {
-                "n_support": 982,
-                "acc_support": 0.9470468431771895,
-                "lower": 0.9073170731707317,
-                "upper": 0.9492682926829268
-              },
-              "Google Gemini Flash": {
-                "n_support": 982,
-                "acc_support": 0.9704684317718941,
-                "lower": 0.9297560975609757,
-                "upper": 0.9717073170731707
-              }
-            }
-          }
-        }
-      },
-      "panel_2b_catalog_matching": {
-        "panel_name": "chart1_2b_beyond_matching",
-        "n": 1025,
-        "metric_type": "mean",
-        "bootstrap_mode": "family_clustered",
-        "reference_model": "Armiger Ultra (Fair Hybrid)",
-        "models": {
-          "Armiger Ultra (Fair Hybrid)": {
-            "n": 1025,
-            "point_pct": 92.98,
-            "ci95_lo": 91.37,
-            "ci95_hi": 94.49,
-            "delta_vs_ref_pct": 0.0,
-            "delta_ci95_lo": 0.0,
-            "delta_ci95_hi": 0.0,
-            "p_value_vs_ref": 1.0,
-            "readme_cited": false
-          }
-        },
-        "key_sha256": "4f23554280454bf5e76c297b4d292fb2e60508ac969fe6359eaa6d151e4903d8",
-        "n_families": 1010,
-        "quantization_parity_int8": {
-          "int8_hyb_pct": 92.88,
-          "int8_raw_pct": 91.51
-        },
-        "loto_common_support_panels": {
-          "vs_openai_gpt": {
-            "panel_name": "chart1_2b_loto_vs_gpt_common_support",
-            "n": 974,
-            "metric_type": "mean",
-            "bootstrap_mode": "family_clustered",
-            "reference_model": "Armiger Ultra (Fair Hybrid)",
-            "models": {
-              "Armiger Ultra (Fair Hybrid)": {
-                "n": 974,
-                "point_pct": 94.46,
-                "ci95_lo": 92.96,
-                "ci95_hi": 95.8,
-                "delta_vs_ref_pct": 0.0,
-                "delta_ci95_lo": 0.0,
-                "delta_ci95_hi": 0.0,
-                "p_value_vs_ref": 1.0
-              },
-              "OpenAI GPT (Fast Tier)": {
-                "n": 974,
-                "point_pct": 91.79,
-                "ci95_lo": 90.0,
-                "ci95_hi": 93.51,
-                "delta_vs_ref_pct": 2.67,
-                "delta_ci95_lo": 0.51,
-                "delta_ci95_hi": 4.79,
-                "p_value_vs_ref": 0.01674502
-              }
-            },
-            "key_sha256": "2b159e2e2d589fbbe8dd1d7e4e033d576abf6b0c35a491c3c8993e7749b4208e",
-            "n_families": 959
-          },
-          "vs_google_gemini": {
-            "panel_name": "chart1_2b_loto_vs_gemini_common_support",
-            "n": 982,
-            "metric_type": "mean",
-            "bootstrap_mode": "family_clustered",
-            "reference_model": "Armiger Ultra (Fair Hybrid)",
-            "models": {
-              "Armiger Ultra (Fair Hybrid)": {
-                "n": 982,
-                "point_pct": 94.7,
-                "ci95_lo": 93.31,
-                "ci95_hi": 96.05,
-                "delta_vs_ref_pct": 0.0,
-                "delta_ci95_lo": 0.0,
-                "delta_ci95_hi": 0.0,
-                "p_value_vs_ref": 1.0
-              },
-              "Google Gemini Flash": {
-                "n": 982,
-                "point_pct": 94.09,
-                "ci95_lo": 92.6,
-                "ci95_hi": 95.52,
-                "delta_vs_ref_pct": 0.61,
-                "delta_ci95_lo": -1.22,
-                "delta_ci95_hi": 2.52,
-                "p_value_vs_ref": 0.5942883
-              }
-            },
-            "key_sha256": "b09076f711edcc88023c6091ab3561a1a735ecc3796706b419b971408fe4b13a",
-            "n_families": 968
-          }
-        }
-      },
-      "panel_2c_audio_strict_229": {
-        "panel_name": "chart1_2c_beyond_audio_strict",
-        "n": 229,
-        "metric_type": "mean",
-        "bootstrap_mode": "family_clustered",
-        "reference_model": "Armiger Ultra (Fair Hybrid)",
-        "models": {
-          "Armiger Ultra (Fair Hybrid)": {
-            "n": 229,
-            "point_pct": 97.82,
-            "ci95_lo": 95.71,
-            "ci95_hi": 99.56,
-            "delta_vs_ref_pct": 0.0,
-            "delta_ci95_lo": 0.0,
-            "delta_ci95_hi": 0.0,
-            "p_value_vs_ref": 1.0,
-            "readme_cited": false
-          }
-        },
-        "key_sha256": "26242160a1d69ea19d1001471feca84639539cb16a27a22238432584aef7cb37",
-        "n_families": 218,
-        "quantization_parity_int8": {
-          "int8_hyb_pct": 97.82,
-          "int8_raw_pct": 97.82
-        },
-        "loto_common_support_panels": {
-          "vs_openai_gpt": {
-            "panel_name": "chart1_2c_loto_vs_gpt_common_support",
-            "n": 209,
-            "metric_type": "mean",
-            "bootstrap_mode": "family_clustered",
-            "reference_model": "Armiger Ultra (Fair Hybrid)",
-            "models": {
-              "Armiger Ultra (Fair Hybrid)": {
-                "n": 209,
-                "point_pct": 97.61,
-                "ci95_lo": 95.24,
-                "ci95_hi": 99.51,
-                "delta_vs_ref_pct": 0.0,
-                "delta_ci95_lo": 0.0,
-                "delta_ci95_hi": 0.0,
-                "p_value_vs_ref": 1.0
-              },
-              "OpenAI GPT (Fast Tier)": {
-                "n": 209,
-                "point_pct": 91.39,
-                "ci95_lo": 87.56,
-                "ci95_hi": 95.0,
-                "delta_vs_ref_pct": 6.22,
-                "delta_ci95_lo": 1.94,
-                "delta_ci95_hi": 10.63,
-                "p_value_vs_ref": 0.01062202
-              }
-            },
-            "key_sha256": "21361772fa0483e08c38bb7aea84b9c0f29db0d6ced69239cab78bfeb77761c6",
-            "n_families": 199
-          },
-          "vs_google_gemini": {
-            "panel_name": "chart1_2c_loto_vs_gemini_common_support",
-            "n": 194,
-            "metric_type": "mean",
-            "bootstrap_mode": "family_clustered",
-            "reference_model": "Armiger Ultra (Fair Hybrid)",
-            "models": {
-              "Armiger Ultra (Fair Hybrid)": {
-                "n": 194,
-                "point_pct": 97.42,
-                "ci95_lo": 94.9,
-                "ci95_hi": 99.48,
-                "delta_vs_ref_pct": 0.0,
-                "delta_ci95_lo": 0.0,
-                "delta_ci95_hi": 0.0,
-                "p_value_vs_ref": 1.0
-              },
-              "Google Gemini Flash": {
-                "n": 194,
-                "point_pct": 98.45,
-                "ci95_lo": 96.41,
-                "ci95_hi": 100.0,
-                "delta_vs_ref_pct": -1.03,
-                "delta_ci95_lo": -4.08,
-                "delta_ci95_hi": 1.6,
-                "p_value_vs_ref": 0.7265625
-              }
-            },
-            "key_sha256": "df0886609a7027e6d1e2f449eac5e6f4af286d961d264e71f1041836c9aaba27",
-            "n_families": 187
-          }
-        }
-      },
-      "panel_2d_anime_valid_636": {
-        "panel_name": "chart1_2d_beyond_anime_valid636",
-        "n": 636,
-        "metric_type": "mean",
-        "bootstrap_mode": "family_clustered",
-        "reference_model": "Armiger Ultra (Fair Hybrid)",
-        "models": {
-          "Armiger Ultra (Fair Hybrid)": {
-            "n": 636,
-            "point_pct": 98.43,
-            "ci95_lo": 97.45,
-            "ci95_hi": 99.36,
-            "delta_vs_ref_pct": 0.0,
-            "delta_ci95_lo": 0.0,
-            "delta_ci95_hi": 0.0,
-            "p_value_vs_ref": 1.0,
-            "readme_cited": false
-          }
-        },
-        "key_sha256": "794c76f1adac7e45ccbd1a75c7dfe5abb8777b071dc67c49ee4485f64805341d",
-        "n_families": 625,
-        "quantization_parity_int8": {
-          "int8_pct": 98.43
-        },
-        "loto_common_support_panels": {
-          "vs_openai_gpt": {
-            "panel_name": "chart1_2d_loto_vs_gpt_common_support",
-            "n": 629,
-            "metric_type": "mean",
-            "bootstrap_mode": "family_clustered",
-            "reference_model": "Armiger Ultra (Fair Hybrid)",
-            "models": {
-              "Armiger Ultra (Fair Hybrid)": {
-                "n": 629,
-                "point_pct": 96.34,
-                "ci95_lo": 94.79,
-                "ci95_hi": 97.76,
-                "delta_vs_ref_pct": 0.0,
-                "delta_ci95_lo": 0.0,
-                "delta_ci95_hi": 0.0,
-                "p_value_vs_ref": 1.0
-              },
-              "OpenAI GPT (Fast Tier)": {
-                "n": 629,
-                "point_pct": 99.68,
-                "ci95_lo": 99.2,
-                "ci95_hi": 100.0,
-                "delta_vs_ref_pct": -3.34,
-                "delta_ci95_lo": -4.83,
-                "delta_ci95_hi": -2.04,
-                "p_value_vs_ref": 9.536743e-07
-              }
-            },
-            "key_sha256": "f8fdb5f6b96b4871c803eead8b7456be3c0e0d3b1d8d5093b50c37c5ddc37d1f",
-            "n_families": 618
-          },
-          "vs_google_gemini": {
-            "panel_name": "chart1_2d_loto_vs_gemini_common_support",
-            "n": 629,
-            "metric_type": "mean",
-            "bootstrap_mode": "family_clustered",
-            "reference_model": "Armiger Ultra (Fair Hybrid)",
-            "models": {
-              "Armiger Ultra (Fair Hybrid)": {
-                "n": 629,
-                "point_pct": 96.5,
-                "ci95_lo": 95.02,
-                "ci95_hi": 97.82,
-                "delta_vs_ref_pct": 0.0,
-                "delta_ci95_lo": 0.0,
-                "delta_ci95_hi": 0.0,
-                "p_value_vs_ref": 1.0
-              },
-              "Google Gemini Flash": {
-                "n": 629,
-                "point_pct": 99.68,
-                "ci95_lo": 99.2,
-                "ci95_hi": 100.0,
-                "delta_vs_ref_pct": -3.18,
-                "delta_ci95_lo": -4.66,
-                "delta_ci95_hi": -1.77,
-                "p_value_vs_ref": 1.096725e-05
-              }
-            },
-            "key_sha256": "330f172d7271556cd0f0417f11a2564a8bcba72ac4bfc9eb0bd775c9e730a344",
-            "n_families": 618
-          }
-        }
-      },
-      "panel_2e_junk_balanced_977": {
-        "panel_name": "chart1_2e_beyond_junk977_balanced",
-        "n": 977,
-        "metric_type": "balanced",
-        "bootstrap_mode": "family_clustered",
-        "reference_model": "Armiger Ultra (Fair Hybrid)",
-        "models": {
-          "Armiger Ultra (Fair Hybrid)": {
-            "n": 977,
-            "point_pct": 99.23,
-            "ci95_lo": 97.69,
-            "ci95_hi": 100.0,
-            "delta_vs_ref_pct": 0.0,
-            "delta_ci95_lo": 0.0,
-            "delta_ci95_hi": 0.0,
-            "p_value_vs_ref": 1.0,
-            "readme_cited": false
-          }
-        },
-        "key_sha256": "f7a057233a11c546c5943a643985938f0d954b00e3fd0d905f05df01aba6793d",
-        "n_families": 962,
-        "quantization_parity_int8": {
-          "int8_balanced_pct": 99.23
-        },
-        "loto_common_support_panels": {
-          "vs_openai_gpt": {
-            "panel_name": "chart1_2e_loto_vs_gpt_common_support",
-            "n": 975,
-            "metric_type": "balanced",
-            "bootstrap_mode": "family_clustered",
-            "reference_model": "Armiger Ultra (Fair Hybrid)",
-            "models": {
-              "Armiger Ultra (Fair Hybrid)": {
-                "n": 975,
-                "point_pct": 100.0,
-                "ci95_lo": 100.0,
-                "ci95_hi": 100.0,
-                "delta_vs_ref_pct": 0.0,
-                "delta_ci95_lo": 0.0,
-                "delta_ci95_hi": 0.0,
-                "p_value_vs_ref": 1.0
-              },
-              "OpenAI GPT (Fast Tier)": {
-                "n": 975,
-                "point_pct": 50.0,
-                "ci95_lo": 50.0,
-                "ci95_hi": 50.0,
-                "delta_vs_ref_pct": 50.0,
-                "delta_ci95_lo": 50.0,
-                "delta_ci95_hi": 50.0,
-                "p_value_vs_ref": 1.084202e-19
-              }
-            },
-            "key_sha256": "89e91bc4996c6c8d36933e7dad7f365c65595a195dfd3163a41de7acab66fcbb",
-            "n_families": 960
-          },
-          "vs_google_gemini": {
-            "status": "not_estimable_loto_n_pos_0",
-            "note": "Excluding Google leaves {openai, meta}; because OpenAI GPT predicted 0 junk positives across all 977 items, unanimous {openai, meta} support has n_pos = 0."
-          }
-        }
-      },
-      "panel_2f_swarm_public_757": {
-        "panel_name": "chart1_2f_swarm_public_757",
-        "n": 757,
-        "metric_type": "auroc",
-        "bootstrap_mode": "family_clustered",
-        "reference_model": "Armiger Ultra (Fair Hybrid)",
-        "models": {
-          "Armiger Ultra (Fair Hybrid)": {
-            "n": 757,
-            "point_pct": 92.42,
-            "ci95_lo": 90.26,
-            "ci95_hi": 94.39,
-            "delta_vs_ref_pct": 0.0,
-            "delta_ci95_lo": 0.0,
-            "delta_ci95_hi": 0.0,
-            "p_value_vs_ref": 1.0,
-            "readme_cited": true
-          },
-          "Way-4 Combined Priors": {
-            "n": 757,
-            "point_pct": 86.64,
-            "ci95_lo": 84.0,
-            "ci95_hi": 89.24,
-            "delta_vs_ref_pct": 5.78,
-            "delta_ci95_lo": 3.08,
-            "delta_ci95_hi": 8.47,
-            "p_value_vs_ref": 7.338249e-29,
-            "readme_cited": false
-          },
-          "DHT Seeder Baseline": {
-            "n": 757,
-            "point_pct": 53.86,
-            "ci95_lo": 50.25,
-            "ci95_hi": 57.53,
-            "delta_vs_ref_pct": 38.56,
-            "delta_ci95_lo": 34.44,
-            "delta_ci95_hi": 42.64,
-            "p_value_vs_ref": 4.556344e-124,
-            "readme_cited": false
-          }
-        },
-        "key_sha256": "bdba0212787462f80484046e20fbf22246a8aaf41a946cf6f95993f8a046d7ad",
-        "n_families": 500
-      },
-      "panel_2f_swarm_warehouse_10278": {
-        "panel_name": "chart1_2f_swarm_warehouse_10278",
-        "n": 10278,
-        "metric_type": "auroc",
-        "bootstrap_mode": "family_clustered",
-        "reference_model": "Armiger Ultra (Fair Hybrid)",
-        "models": {
-          "Armiger Ultra (Fair Hybrid)": {
-            "n": 10278,
-            "point_pct": 96.83,
-            "ci95_lo": 96.49,
-            "ci95_hi": 97.16,
-            "delta_vs_ref_pct": 0.0,
-            "delta_ci95_lo": 0.0,
-            "delta_ci95_hi": 0.0,
-            "p_value_vs_ref": 1.0,
-            "readme_cited": true
-          },
-          "DHT Seeder Baseline": {
-            "n": 10278,
-            "point_pct": 86.81,
-            "ci95_lo": 86.05,
-            "ci95_hi": 87.55,
-            "delta_vs_ref_pct": 10.02,
-            "delta_ci95_lo": 9.34,
-            "delta_ci95_hi": 10.7,
-            "p_value_vs_ref": 0.0,
-            "readme_cited": false
-          },
-          "Raw Seeder Count": {
-            "n": 10278,
-            "point_pct": 85.17,
-            "ci95_lo": 84.4,
-            "ci95_hi": 85.93,
-            "delta_vs_ref_pct": 11.66,
-            "delta_ci95_lo": 10.95,
-            "delta_ci95_hi": 12.38,
-            "p_value_vs_ref": 0.0,
-            "readme_cited": false
-          }
-        },
-        "key_sha256": "13c3d7f3ee022ea84bcb3685422e968f2a23d4667ed245be5490cd41b40a9724",
-        "n_families": 5813
-      }
-    },
-    "armiger_vs_llms_cost_comparison.png": {
-      "sha256": "447f0e9767b36fe1f5bc16623e249e0b897f65b147a7b8abbaebce4865c934e3",
-      "deployment_targets": [
-        "Armiger (15.7 MB M4 Pro CPU INT8)",
-        "Armiger Ultra (M4 Pro CPU FP32)",
-        "Google Gemini Flash",
-        "OpenAI GPT (Fast Tier)",
-        "Meta Muse Spark 1.3"
-      ],
-      "batched_usd_per_1m": [
-        0.0019,
-        0.0024,
-        183.01,
-        305.02,
-        646.32
-      ],
-      "realtime_usd_per_1m": [
-        0.003,
-        0.004,
-        243.2,
-        405.34,
-        858.9
-      ],
-      "measured_local_onnx_cpu": {
-        "host": "Apple M4 Pro CPU (8 intra-op threads)",
-        "int8_single_item_ms": 2.512,
-        "int8_batch64_items_per_sec": 396.9,
-        "fp32_single_item_ms": 2.637,
-        "fp32_batch64_items_per_sec": 376.0,
-        "fp32_onnx_sha256": "6459a20d7bf45d46d59efbcb50ffb8a519bacda14ae36403dcc510eceaa38f44",
-        "int8_onnx_sha256": "a0dab886be6252739d4c89ce01d65d8d2135204beaec6b00159d038cf420f329",
-        "method": "ONNX Runtime CPU, all 9 outputs, packed calibration tensors; 300 single-item runs after warmup; batch-64 throughput over 10,240 items"
-      },
-      "logged_provider_usage": {
-        "gpt": {
-          "calls": 540,
-          "records": 15909,
-          "reported_tokens": 11692736,
-          "tokens_per_record": 734.98,
-          "records_per_sec": 2.57
-        },
-        "muse": {
-          "calls": 472,
-          "records": 14821,
-          "reported_tokens": 14426307,
-          "tokens_per_record": 973.37,
-          "records_per_sec": 0.66
-        }
-      }
-    },
-    "armiger_vs_torrent_classifiers_6dims.png": {
-      "sha256": "7e9704d0c0fdb77029d826fe450e19ec277e0723e76bd27281deec8b5acedc55",
-      "panel_1_category_11class_oct15": {
-        "panel_name": "chart3_1_oct15_cat11",
-        "n": 2835,
-        "metric_type": "mean",
-        "bootstrap_mode": "family_clustered",
-        "reference_model": "Armiger Ultra (Fair Hybrid)",
-        "models": {
-          "Armiger Ultra (Fair Hybrid)": {
-            "n": 2835,
-            "point_pct": 94.85,
-            "ci95_lo": 93.84,
-            "ci95_hi": 95.79,
-            "delta_vs_ref_pct": 0.0,
-            "delta_ci95_lo": 0.0,
-            "delta_ci95_hi": 0.0,
-            "p_value_vs_ref": 1.0,
-            "readme_cited": true
-          },
-          "MIMMO BERT (360M)": {
-            "n": 2835,
-            "point_pct": 72.24,
-            "ci95_lo": 70.28,
-            "ci95_hi": 74.11,
-            "delta_vs_ref_pct": 22.61,
-            "delta_ci95_lo": 20.86,
-            "delta_ci95_hi": 24.4,
-            "p_value_vs_ref": 5.160424e-139,
-            "readme_cited": false
-          },
-          "MIMMO Cascade": {
-            "n": 2835,
-            "point_pct": 71.32,
-            "ci95_lo": 69.37,
-            "ci95_hi": 73.2,
-            "delta_vs_ref_pct": 23.53,
-            "delta_ci95_lo": 21.79,
-            "delta_ci95_hi": 25.33,
-            "p_value_vs_ref": 6.432248e-146,
-            "readme_cited": false
-          },
-          "RTN (rank-torrent-name)": {
-            "n": 2835,
-            "point_pct": 53.58,
-            "ci95_lo": 51.24,
-            "ci95_hi": 55.8,
-            "delta_vs_ref_pct": 41.27,
-            "delta_ci95_lo": 39.22,
-            "delta_ci95_hi": 43.31,
-            "p_value_vs_ref": 5.23558e-301,
-            "readme_cited": false
-          },
-          "PTT / Parsett": {
-            "n": 2835,
-            "point_pct": 53.58,
-            "ci95_lo": 51.24,
-            "ci95_hi": 55.8,
-            "delta_vs_ref_pct": 41.27,
-            "delta_ci95_lo": 39.22,
-            "delta_ci95_hi": 43.31,
-            "p_value_vs_ref": 5.23558e-301,
-            "readme_cited": false
-          },
-          "GuessIt": {
-            "n": 2835,
-            "point_pct": 38.69,
-            "ci95_lo": 36.63,
-            "ci95_hi": 40.73,
-            "delta_vs_ref_pct": 56.16,
-            "delta_ci95_lo": 54.16,
-            "delta_ci95_hi": 58.07,
-            "p_value_vs_ref": 0.0,
-            "readme_cited": false
-          },
-          "PTN (parse-torrent-title)": {
-            "n": 2835,
-            "point_pct": 35.59,
-            "ci95_lo": 33.58,
-            "ci95_hi": 37.61,
-            "delta_vs_ref_pct": 59.26,
-            "delta_ci95_lo": 57.29,
-            "delta_ci95_hi": 61.17,
-            "p_value_vs_ref": 0.0,
-            "readme_cited": false
-          },
-          "Anitomy": {
-            "n": 2835,
-            "point_pct": 33.4,
-            "ci95_lo": 31.46,
-            "ci95_hi": 35.33,
-            "delta_vs_ref_pct": 61.45,
-            "delta_ci95_lo": 59.52,
-            "delta_ci95_hi": 63.33,
-            "p_value_vs_ref": 0.0,
-            "readme_cited": false
-          },
-          "Bitmagnet Built-In": {
-            "n": 2835,
-            "point_pct": 35.17,
-            "ci95_lo": 33.17,
-            "ci95_hi": 37.16,
-            "delta_vs_ref_pct": 59.68,
-            "delta_ci95_lo": 57.79,
-            "delta_ci95_hi": 61.58,
-            "p_value_vs_ref": 0.0,
-            "readme_cited": false
-          }
-        },
-        "key_sha256": "9f84b326ad0ff28d418cbea9fdbcab03af98c56e500405f3fb9ea2c055dc2a30",
-        "n_families": 2746,
-        "quantization_parity_int8": {
-          "int8_hyb_pct": 94.81,
-          "int8_raw_pct": 94.43
-        }
-      },
-      "panel_1_video_mvtv_oct15": {
-        "panel_name": "chart3_1_oct15_video_mvtv",
-        "n": 1296,
-        "metric_type": "mean",
-        "bootstrap_mode": "family_clustered",
-        "reference_model": "Armiger Ultra (Fair Hybrid)",
-        "models": {
-          "Armiger Ultra (Fair Hybrid)": {
-            "n": 1296,
-            "point_pct": 95.83,
-            "ci95_lo": 94.67,
-            "ci95_hi": 96.89,
-            "delta_vs_ref_pct": 0.0,
-            "delta_ci95_lo": 0.0,
-            "delta_ci95_hi": 0.0,
-            "p_value_vs_ref": 1.0,
-            "readme_cited": false
-          },
-          "MIMMO BERT (360M)": {
-            "n": 1296,
-            "point_pct": 76.0,
-            "ci95_lo": 73.62,
-            "ci95_hi": 78.36,
-            "delta_vs_ref_pct": 19.83,
-            "delta_ci95_lo": 17.29,
-            "delta_ci95_hi": 22.38,
-            "p_value_vs_ref": 2.34286e-53,
-            "readme_cited": false
-          },
-          "MIMMO Cascade": {
-            "n": 1296,
-            "point_pct": 76.08,
-            "ci95_lo": 73.69,
-            "ci95_hi": 78.43,
-            "delta_vs_ref_pct": 19.75,
-            "delta_ci95_lo": 17.22,
-            "delta_ci95_hi": 22.29,
-            "p_value_vs_ref": 4.232115e-53,
-            "readme_cited": false
-          },
-          "RTN (rank-torrent-name)": {
-            "n": 1296,
-            "point_pct": 81.64,
-            "ci95_lo": 79.4,
-            "ci95_hi": 83.76,
-            "delta_vs_ref_pct": 14.2,
-            "delta_ci95_lo": 11.91,
-            "delta_ci95_hi": 16.61,
-            "p_value_vs_ref": 2.080856e-33,
-            "readme_cited": false
-          },
-          "PTT / Parsett": {
-            "n": 1296,
-            "point_pct": 81.64,
-            "ci95_lo": 79.4,
-            "ci95_hi": 83.76,
-            "delta_vs_ref_pct": 14.2,
-            "delta_ci95_lo": 11.91,
-            "delta_ci95_hi": 16.61,
-            "p_value_vs_ref": 2.080856e-33,
-            "readme_cited": false
-          },
-          "GuessIt": {
-            "n": 1296,
-            "point_pct": 84.65,
-            "ci95_lo": 82.64,
-            "ci95_hi": 86.56,
-            "delta_vs_ref_pct": 11.19,
-            "delta_ci95_lo": 9.06,
-            "delta_ci95_hi": 13.34,
-            "p_value_vs_ref": 5.721066e-25,
-            "readme_cited": false
-          },
-          "PTN (parse-torrent-title)": {
-            "n": 1296,
-            "point_pct": 77.85,
-            "ci95_lo": 75.5,
-            "ci95_hi": 80.12,
-            "delta_vs_ref_pct": 17.98,
-            "delta_ci95_lo": 15.44,
-            "delta_ci95_hi": 20.51,
-            "p_value_vs_ref": 3.758795e-44,
-            "readme_cited": false
-          },
-          "Anitomy": {
-            "n": 1296,
-            "point_pct": 73.07,
-            "ci95_lo": 70.59,
-            "ci95_hi": 75.51,
-            "delta_vs_ref_pct": 22.76,
-            "delta_ci95_lo": 20.08,
-            "delta_ci95_hi": 25.42,
-            "p_value_vs_ref": 2.558958e-61,
-            "readme_cited": false
-          },
-          "Bitmagnet Built-In": {
-            "n": 1296,
-            "point_pct": 43.21,
-            "ci95_lo": 40.42,
-            "ci95_hi": 46.03,
-            "delta_vs_ref_pct": 52.62,
-            "delta_ci95_lo": 49.65,
-            "delta_ci95_hi": 55.53,
-            "p_value_vs_ref": 1.177296e-188,
-            "readme_cited": false
-          }
-        },
-        "key_sha256": "9db94faedb271b65849b051228f2ba2251b0e17673f39f4fb1b28758e1b45b1d",
-        "n_families": 1272
-      },
-      "panel_2_catalog_matching_oct15": {
-        "panel_name": "chart3_2_oct15_catalog_matching",
-        "n": 1296,
-        "metric_type": "mean",
-        "bootstrap_mode": "family_clustered",
-        "reference_model": "Armiger Ultra (Fair Hybrid)",
-        "models": {
-          "Armiger Ultra (Fair Hybrid)": {
-            "n": 1296,
-            "point_pct": 95.06,
-            "ci95_lo": 93.8,
-            "ci95_hi": 96.21,
-            "delta_vs_ref_pct": 0.0,
-            "delta_ci95_lo": 0.0,
-            "delta_ci95_hi": 0.0,
-            "p_value_vs_ref": 1.0,
-            "readme_cited": true
-          },
-          "MIMMO BERT (360M)": {
-            "n": 1296,
-            "point_pct": 60.26,
-            "ci95_lo": 57.43,
-            "ci95_hi": 63.01,
-            "delta_vs_ref_pct": 34.8,
-            "delta_ci95_lo": 31.85,
-            "delta_ci95_hi": 37.75,
-            "p_value_vs_ref": 1.806545e-108,
-            "readme_cited": false
-          },
-          "MIMMO Cascade": {
-            "n": 1296,
-            "point_pct": 60.34,
-            "ci95_lo": 57.5,
-            "ci95_hi": 63.09,
-            "delta_vs_ref_pct": 34.72,
-            "delta_ci95_lo": 31.77,
-            "delta_ci95_hi": 37.69,
-            "p_value_vs_ref": 3.426741e-108,
-            "readme_cited": false
-          },
-          "RTN (rank-torrent-name)": {
-            "n": 1296,
-            "point_pct": 80.48,
-            "ci95_lo": 78.2,
-            "ci95_hi": 82.68,
-            "delta_vs_ref_pct": 14.58,
-            "delta_ci95_lo": 12.22,
-            "delta_ci95_hi": 17.09,
-            "p_value_vs_ref": 5.766383e-34,
-            "readme_cited": false
-          },
-          "PTT / Parsett": {
-            "n": 1296,
-            "point_pct": 80.48,
-            "ci95_lo": 78.2,
-            "ci95_hi": 82.68,
-            "delta_vs_ref_pct": 14.58,
-            "delta_ci95_lo": 12.22,
-            "delta_ci95_hi": 17.09,
-            "p_value_vs_ref": 5.766383e-34,
-            "readme_cited": false
-          },
-          "GuessIt": {
-            "n": 1296,
-            "point_pct": 84.03,
-            "ci95_lo": 81.99,
-            "ci95_hi": 86.02,
-            "delta_vs_ref_pct": 11.03,
-            "delta_ci95_lo": 8.82,
-            "delta_ci95_hi": 13.26,
-            "p_value_vs_ref": 8.031629e-23,
-            "readme_cited": false
-          },
-          "PTN (parse-torrent-title)": {
-            "n": 1296,
-            "point_pct": 77.62,
-            "ci95_lo": 75.25,
-            "ci95_hi": 79.91,
-            "delta_vs_ref_pct": 17.44,
-            "delta_ci95_lo": 14.84,
-            "delta_ci95_hi": 20.06,
-            "p_value_vs_ref": 1.358742e-39,
-            "readme_cited": false
-          },
-          "Anitomy": {
-            "n": 1296,
-            "point_pct": 72.76,
-            "ci95_lo": 70.24,
-            "ci95_hi": 75.21,
-            "delta_vs_ref_pct": 22.3,
-            "delta_ci95_lo": 19.53,
-            "delta_ci95_hi": 25.02,
-            "p_value_vs_ref": 7.898606e-57,
-            "readme_cited": false
-          },
-          "Bitmagnet Built-In": {
-            "n": 1296,
-            "point_pct": 43.21,
-            "ci95_lo": 40.42,
-            "ci95_hi": 46.03,
-            "delta_vs_ref_pct": 51.85,
-            "delta_ci95_lo": 48.92,
-            "delta_ci95_hi": 54.71,
-            "p_value_vs_ref": 1.029079e-185,
-            "readme_cited": false
-          }
-        },
-        "key_sha256": "9db94faedb271b65849b051228f2ba2251b0e17673f39f4fb1b28758e1b45b1d",
-        "n_families": 1272,
-        "quantization_parity_int8": {
-          "int8_hyb_pct": 95.06,
-          "int8_raw_pct": 94.29
-        }
-      },
-      "panel_3_audio_strict_oct15": {
-        "panel_name": "chart3_3_oct15_audio_strict545",
-        "n": 545,
-        "metric_type": "mean",
-        "bootstrap_mode": "family_clustered",
-        "reference_model": "Armiger Ultra (Fair Hybrid)",
-        "models": {
-          "Armiger Ultra (Fair Hybrid)": {
-            "n": 545,
-            "point_pct": 96.7,
-            "ci95_lo": 95.04,
-            "ci95_hi": 98.1,
-            "delta_vs_ref_pct": 0.0,
-            "delta_ci95_lo": 0.0,
-            "delta_ci95_hi": 0.0,
-            "p_value_vs_ref": 1.0,
-            "readme_cited": true
-          },
-          "RTN (rank-torrent-name)": {
-            "n": 545,
-            "point_pct": 93.76,
-            "ci95_lo": 91.55,
-            "ci95_hi": 95.73,
-            "delta_vs_ref_pct": 2.94,
-            "delta_ci95_lo": 0.56,
-            "delta_ci95_hi": 5.36,
-            "p_value_vs_ref": 0.02262884,
-            "readme_cited": false
-          },
-          "PTT / Parsett": {
-            "n": 545,
-            "point_pct": 93.76,
-            "ci95_lo": 91.55,
-            "ci95_hi": 95.73,
-            "delta_vs_ref_pct": 2.94,
-            "delta_ci95_lo": 0.56,
-            "delta_ci95_hi": 5.36,
-            "p_value_vs_ref": 0.02262884,
-            "readme_cited": false
-          },
-          "GuessIt": {
-            "n": 545,
-            "point_pct": 94.86,
-            "ci95_lo": 92.88,
-            "ci95_hi": 96.64,
-            "delta_vs_ref_pct": 1.83,
-            "delta_ci95_lo": -0.38,
-            "delta_ci95_hi": 4.15,
-            "p_value_vs_ref": 0.1538599,
-            "readme_cited": false
-          },
-          "PTN (parse-torrent-title)": {
-            "n": 545,
-            "point_pct": 93.21,
-            "ci95_lo": 90.94,
-            "ci95_hi": 95.28,
-            "delta_vs_ref_pct": 3.49,
-            "delta_ci95_lo": 0.96,
-            "delta_ci95_hi": 6.04,
-            "p_value_vs_ref": 0.009399242,
-            "readme_cited": false
-          },
-          "Anitomy": {
-            "n": 545,
-            "point_pct": 90.46,
-            "ci95_lo": 87.8,
-            "ci95_hi": 92.94,
-            "delta_vs_ref_pct": 6.24,
-            "delta_ci95_lo": 3.47,
-            "delta_ci95_hi": 9.13,
-            "p_value_vs_ref": 1.742852e-05,
-            "readme_cited": false
-          },
-          "Bitmagnet Built-In": {
-            "n": 545,
-            "point_pct": 88.26,
-            "ci95_lo": 85.31,
-            "ci95_hi": 90.99,
-            "delta_vs_ref_pct": 8.44,
-            "delta_ci95_lo": 5.48,
-            "delta_ci95_hi": 11.55,
-            "p_value_vs_ref": 3.808598e-08,
-            "readme_cited": false
-          },
-          "OpenAI GPT (Fast Tier)": {
-            "n": 545,
-            "point_pct": 94.68,
-            "ci95_lo": 91.85,
-            "ci95_hi": 97.1,
-            "delta_vs_ref_pct": 2.02,
-            "delta_ci95_lo": -0.96,
-            "delta_ci95_hi": 5.26,
-            "p_value_vs_ref": 0.1262895,
-            "readme_cited": false
-          }
-        },
-        "key_sha256": "e9642600eb6a7f256e38e138ca867506ebbab497735f5995078535dc46e0b4b4",
-        "n_families": 507,
-        "quantization_parity_int8": {
-          "int8_hyb_pct": 96.7,
-          "int8_raw_pct": 96.33
-        }
-      },
-      "panel_4_anime_oct15": {
-        "panel_name": "chart3_4_oct15_anime507",
-        "n": 507,
-        "metric_type": "mean",
-        "bootstrap_mode": "family_clustered",
-        "reference_model": "Armiger Ultra (Fair Hybrid)",
-        "models": {
-          "Armiger Ultra (Fair Hybrid)": {
-            "n": 507,
-            "point_pct": 99.61,
-            "ci95_lo": 99.01,
-            "ci95_hi": 100.0,
-            "delta_vs_ref_pct": 0.0,
-            "delta_ci95_lo": 0.0,
-            "delta_ci95_hi": 0.0,
-            "p_value_vs_ref": 1.0,
-            "readme_cited": false
-          }
-        },
-        "key_sha256": "8c12ff8d3922d0039049184ba006da841a5abf20e3b916f1b12d7dc10d24489b",
-        "n_families": 501,
-        "quantization_parity_int8": {
-          "int8_pct": 99.61
-        }
-      },
-      "panel_4_anime_dub_zero_cue_2000": {
-        "panel_name": "chart3_4_zero_cue_2000_anime_dub",
-        "n": 2000,
-        "metric_type": "mean",
-        "bootstrap_mode": "family_clustered",
-        "reference_model": "RTN (rank-torrent-name)",
-        "models": {
-          "RTN (rank-torrent-name)": {
-            "n": 2000,
-            "point_pct": 77.65,
-            "ci95_lo": 75.56,
-            "ci95_hi": 79.67,
-            "delta_vs_ref_pct": 0.0,
-            "delta_ci95_lo": 0.0,
-            "delta_ci95_hi": 0.0,
-            "p_value_vs_ref": 1.0,
-            "readme_cited": false
-          },
-          "PTT / Parsett": {
-            "n": 2000,
-            "point_pct": 77.65,
-            "ci95_lo": 75.56,
-            "ci95_hi": 79.67,
-            "delta_vs_ref_pct": 0.0,
-            "delta_ci95_lo": 0.0,
-            "delta_ci95_hi": 0.0,
-            "p_value_vs_ref": 1.0,
-            "readme_cited": false
-          },
-          "GuessIt": {
-            "n": 2000,
-            "point_pct": 50.55,
-            "ci95_lo": 47.98,
-            "ci95_hi": 53.09,
-            "delta_vs_ref_pct": 27.1,
-            "delta_ci95_lo": 24.32,
-            "delta_ci95_hi": 29.87,
-            "p_value_vs_ref": 1.016381e-92,
-            "readme_cited": false
-          },
-          "PTN (parse-torrent-title)": {
-            "n": 2000,
-            "point_pct": 68.65,
-            "ci95_lo": 66.19,
-            "ci95_hi": 71.04,
-            "delta_vs_ref_pct": 9.0,
-            "delta_ci95_lo": 6.73,
-            "delta_ci95_hi": 11.38,
-            "p_value_vs_ref": 7.57291e-21,
-            "readme_cited": false
-          },
-          "Anitomy": {
-            "n": 2000,
-            "point_pct": 47.9,
-            "ci95_lo": 45.35,
-            "ci95_hi": 50.45,
-            "delta_vs_ref_pct": 29.75,
-            "delta_ci95_lo": 27.05,
-            "delta_ci95_hi": 32.43,
-            "p_value_vs_ref": 3.748922e-118,
-            "readme_cited": false
-          }
-        },
-        "key_sha256": "15cb8e5e4f00cbcf0c2b51e8a1db36ee2d224874e6457595d2a41e99949ba725",
-        "n_families": 1748
-      },
-      "panel_5_adult_oct15": {
-        "panel_name": "chart3_5_oct15_adult2781",
-        "n": 2781,
-        "metric_type": "mean",
-        "bootstrap_mode": "family_clustered",
-        "reference_model": "Armiger Ultra (Fair Hybrid)",
-        "models": {
-          "Armiger Ultra (Fair Hybrid)": {
-            "n": 2781,
-            "point_pct": 98.49,
-            "ci95_lo": 98.01,
-            "ci95_hi": 98.92,
-            "delta_vs_ref_pct": 0.0,
-            "delta_ci95_lo": 0.0,
-            "delta_ci95_hi": 0.0,
-            "p_value_vs_ref": 1.0,
-            "readme_cited": true
-          },
-          "MIMMO BERT (360M)": {
-            "n": 2781,
-            "point_pct": 91.05,
-            "ci95_lo": 89.94,
-            "ci95_hi": 92.09,
-            "delta_vs_ref_pct": 7.44,
-            "delta_ci95_lo": 6.33,
-            "delta_ci95_hi": 8.57,
-            "p_value_vs_ref": 4.180133e-45,
-            "readme_cited": false
-          },
-          "MIMMO Cascade": {
-            "n": 2781,
-            "point_pct": 89.68,
-            "ci95_lo": 88.5,
-            "ci95_hi": 90.8,
-            "delta_vs_ref_pct": 8.81,
-            "delta_ci95_lo": 7.63,
-            "delta_ci95_hi": 10.0,
-            "p_value_vs_ref": 3.329571e-55,
-            "readme_cited": false
-          },
-          "RTN (rank-torrent-name)": {
-            "n": 2781,
-            "point_pct": 79.0,
-            "ci95_lo": 77.31,
-            "ci95_hi": 80.71,
-            "delta_vs_ref_pct": 19.49,
-            "delta_ci95_lo": 17.74,
-            "delta_ci95_hi": 21.23,
-            "p_value_vs_ref": 1.063634e-131,
-            "readme_cited": false
-          },
-          "PTT / Parsett": {
-            "n": 2781,
-            "point_pct": 79.0,
-            "ci95_lo": 77.31,
-            "ci95_hi": 80.71,
-            "delta_vs_ref_pct": 19.49,
-            "delta_ci95_lo": 17.74,
-            "delta_ci95_hi": 21.23,
-            "p_value_vs_ref": 1.063634e-131,
-            "readme_cited": false
-          },
-          "Bitmagnet Built-In": {
-            "n": 2781,
-            "point_pct": 76.73,
-            "ci95_lo": 74.96,
-            "ci95_hi": 78.47,
-            "delta_vs_ref_pct": 21.75,
-            "delta_ci95_lo": 19.99,
-            "delta_ci95_hi": 23.54,
-            "p_value_vs_ref": 1.28717e-148,
-            "readme_cited": false
-          }
-        },
-        "key_sha256": "1b7d20bd91612fc3bb53c9a229245556e3f312d18d4896fed05122da10a70866",
-        "n_families": 2715,
-        "quantization_parity_int8": {
-          "int8_pct": 98.49
-        }
-      },
-      "panel_6a_junk_oct15": {
-        "panel_name": "chart3_6a_junk_audit",
-        "oct15_junk_status": "n_pos = 1, not estimable",
-        "oct15_n_total": 2170,
-        "oct15_n_pos": 1,
-        "oct15_n_neg": 2169,
-        "oct15_specificity_only": {
-          "Armiger Ultra (Fair Hybrid)": {
-            "tn": 2168,
-            "n_neg": 2169,
-            "specificity_pct": 99.95
-          },
-          "Bitmagnet Built-In": {
-            "tn": 2168,
-            "n_neg": 2169,
-            "tp_on_n_pos_1": 0
-          },
-          "RTN (rank-torrent-name)": {
-            "tn": 2147,
-            "n_neg": 2169,
-            "tp_on_n_pos_1": 0
-          }
-        },
-        "beyond_junk_loto_no_gpt_n975": {
-          "panel_name": "chart1_2e_loto_vs_gpt_common_support",
-          "n": 975,
-          "metric_type": "balanced",
-          "bootstrap_mode": "family_clustered",
-          "reference_model": "Armiger Ultra (Fair Hybrid)",
-          "models": {
-            "Armiger Ultra (Fair Hybrid)": {
-              "n": 975,
-              "point_pct": 100.0,
-              "ci95_lo": 100.0,
-              "ci95_hi": 100.0,
-              "delta_vs_ref_pct": 0.0,
-              "delta_ci95_lo": 0.0,
-              "delta_ci95_hi": 0.0,
-              "p_value_vs_ref": 1.0
-            },
-            "OpenAI GPT (Fast Tier)": {
-              "n": 975,
-              "point_pct": 50.0,
-              "ci95_lo": 50.0,
-              "ci95_hi": 50.0,
-              "delta_vs_ref_pct": 50.0,
-              "delta_ci95_lo": 50.0,
-              "delta_ci95_hi": 50.0,
-              "p_value_vs_ref": 1.084202e-19
-            }
-          },
-          "key_sha256": "89e91bc4996c6c8d36933e7dad7f365c65595a195dfd3163a41de7acab66fcbb",
-          "n_families": 960
-        }
-      }
-    },
-    "armiger_categorical_breakdown.png": {
-      "sha256": "9246ce3c6eea024383ee21a44608f632c08e12cbb2027fac4b2f19352163e0df",
-      "left_oct15_confirmation_n2835": {
-        "Audiobook": {
-          "n": 95,
-          "armiger_ultra_pct": 96.84,
-          "armiger_int8_parity_pct": 96.84,
-          "mimmo_bert_pct": 0.0,
-          "bitmagnet_pct": 9.47
-        },
-        "Adult / XXX": {
-          "n": 1044,
-          "armiger_ultra_pct": 95.79,
-          "armiger_int8_parity_pct": 95.79,
-          "mimmo_bert_pct": 95.5,
-          "bitmagnet_pct": 39.37
-        },
-        "TV Show": {
-          "n": 601,
-          "armiger_ultra_pct": 97.67,
-          "armiger_int8_parity_pct": 97.67,
-          "mimmo_bert_pct": 58.4,
-          "bitmagnet_pct": 28.62
-        },
-        "Movie": {
-          "n": 695,
-          "armiger_ultra_pct": 94.24,
-          "armiger_int8_parity_pct": 94.24,
-          "mimmo_bert_pct": 78.85,
-          "bitmagnet_pct": 55.83
-        },
-        "Software": {
-          "n": 32,
-          "armiger_ultra_pct": 84.38,
-          "armiger_int8_parity_pct": 81.25,
-          "mimmo_bert_pct": 59.38,
-          "bitmagnet_pct": 15.62
-        },
-        "Music": {
-          "n": 140,
-          "armiger_ultra_pct": 92.14,
-          "armiger_int8_parity_pct": 92.14,
-          "mimmo_bert_pct": 77.86,
-          "bitmagnet_pct": 7.86
-        },
-        "Game": {
-          "n": 61,
-          "armiger_ultra_pct": 90.16,
-          "armiger_int8_parity_pct": 90.16,
-          "mimmo_bert_pct": 0.0,
-          "bitmagnet_pct": 0.0
-        },
-        "Ebook": {
-          "n": 25,
-          "armiger_ultra_pct": 88.0,
-          "armiger_int8_parity_pct": 88.0,
-          "mimmo_bert_pct": 80.0,
-          "bitmagnet_pct": 4.0
-        },
-        "Course": {
-          "n": 33,
-          "armiger_ultra_pct": 90.91,
-          "armiger_int8_parity_pct": 90.91,
-          "mimmo_bert_pct": 0.0,
-          "bitmagnet_pct": 0.0
-        },
-        "Comic": {
-          "n": 99,
-          "armiger_ultra_pct": 88.89,
-          "armiger_int8_parity_pct": 88.89,
-          "mimmo_bert_pct": 0.0,
-          "bitmagnet_pct": 0.0
-        }
-      },
-      "right_beyond_confirmation_n1025_loto": {
-        "Audiobook": {
-          "n_all3": 75,
-          "n_loto_no_gpt": 73,
-          "n_loto_no_gemini": 74,
-          "armiger_ultra_pct": 98.67,
-          "gpt_loto_support_pct": 100.0,
-          "gemini_loto_support_pct": 98.65
-        },
-        "Ebook": {
-          "n_all3": 125,
-          "n_loto_no_gpt": 122,
-          "n_loto_no_gemini": 119,
-          "armiger_ultra_pct": 93.6,
-          "gpt_loto_support_pct": 96.72,
-          "gemini_loto_support_pct": 99.16
-        },
-        "Comic": {
-          "n_all3": 120,
-          "n_loto_no_gpt": 114,
-          "n_loto_no_gemini": 118,
-          "armiger_ultra_pct": 100.0,
-          "gpt_loto_support_pct": 99.12,
-          "gemini_loto_support_pct": 95.76
-        },
-        "Movie": {
-          "n_all3": 95,
-          "n_loto_no_gpt": 88,
-          "n_loto_no_gemini": 88,
-          "armiger_ultra_pct": 95.79,
-          "gpt_loto_support_pct": 95.45,
-          "gemini_loto_support_pct": 95.45
-        },
-        "TV Show": {
-          "n_all3": 136,
-          "n_loto_no_gpt": 126,
-          "n_loto_no_gemini": 131,
-          "armiger_ultra_pct": 97.06,
-          "gpt_loto_support_pct": 99.21,
-          "gemini_loto_support_pct": 95.42
-        },
-        "Game": {
-          "n_all3": 135,
-          "n_loto_no_gpt": 133,
-          "n_loto_no_gemini": 133,
-          "armiger_ultra_pct": 96.3,
-          "gpt_loto_support_pct": 99.25,
-          "gemini_loto_support_pct": 99.25
-        },
-        "Software": {
-          "n_all3": 37,
-          "n_loto_no_gpt": 29,
-          "n_loto_no_gemini": 36,
-          "armiger_ultra_pct": 89.19,
-          "gpt_loto_support_pct": 96.55,
-          "gemini_loto_support_pct": 77.78
-        },
-        "Course": {
-          "n_all3": 100,
-          "n_loto_no_gpt": 99,
-          "n_loto_no_gemini": 96,
-          "armiger_ultra_pct": 94.0,
-          "gpt_loto_support_pct": 95.96,
-          "gemini_loto_support_pct": 98.96
-        },
-        "Adult / XXX": {
-          "n_all3": 174,
-          "n_loto_no_gpt": 164,
-          "n_loto_no_gemini": 162,
-          "armiger_ultra_pct": 83.91,
-          "gpt_loto_support_pct": 97.56,
-          "gemini_loto_support_pct": 98.77
-        },
-        "Music": {
-          "n_all3": 12,
-          "n_loto_no_gpt": 12,
-          "n_loto_no_gemini": 12,
-          "armiger_ultra_pct": 75.0,
-          "gpt_loto_support_pct": 100.0,
-          "gemini_loto_support_pct": 100.0
-        }
-      }
-    }
-  },
-  "five_split_category_summary": {
-    "oct15_confirmation": {
-      "panel_name": "five_split_oct15_confirmation",
-      "n": 2835,
-      "metric_type": "mean",
-      "bootstrap_mode": "family_clustered",
-      "reference_model": "armiger_ultra_hyb",
-      "key_sha256": "fd35c11c45d5fe78e3b39a49fd5fbd574e2f7b0b4df47ce0108fd4efb8cd1d21",
-      "n_families": 2746,
-      "quantization_variants": {
-        "armiger_ultra_hyb": {
-          "n": 2835,
-          "point_pct": 94.85,
-          "ci95_lo": 93.84,
-          "ci95_hi": 95.79,
-          "delta_vs_ref_pct": 0.0,
-          "delta_ci95_lo": 0.0,
-          "delta_ci95_hi": 0.0,
-          "p_value_vs_ref": 1.0
-        },
-        "armiger_ultra_raw": {
-          "n": 2835,
-          "point_pct": 94.46,
-          "ci95_lo": 93.42,
-          "ci95_hi": 95.43,
-          "delta_vs_ref_pct": 0.39,
-          "delta_ci95_lo": 0.07,
-          "delta_ci95_hi": 0.74,
-          "p_value_vs_ref": 0.04328525
-        },
-        "armiger_int8_hyb": {
-          "n": 2835,
-          "point_pct": 94.81,
-          "ci95_lo": 93.8,
-          "ci95_hi": 95.77,
-          "delta_vs_ref_pct": 0.04,
-          "delta_ci95_lo": 0.0,
-          "delta_ci95_hi": 0.11,
-          "p_value_vs_ref": 1.0
-        },
-        "armiger_int8_raw": {
-          "n": 2835,
-          "point_pct": 94.43,
-          "ci95_lo": 93.38,
-          "ci95_hi": 95.4,
-          "delta_vs_ref_pct": 0.42,
-          "delta_ci95_lo": 0.07,
-          "delta_ci95_hi": 0.79,
-          "p_value_vs_ref": 0.02895927
-        }
-      }
-    },
-    "fresh_confirmation": {
-      "panel_name": "five_split_fresh_confirmation",
-      "n": 1402,
-      "metric_type": "mean",
-      "bootstrap_mode": "family_clustered",
-      "reference_model": "armiger_ultra_hyb",
-      "key_sha256": "10a76a9cd0b83a2451b08645d3e3c37953d9014b188c9502e8065c6f8aa6f75e",
-      "n_families": 1352,
-      "quantization_variants": {
-        "armiger_ultra_hyb": {
-          "n": 1402,
-          "point_pct": 92.58,
-          "ci95_lo": 90.9,
-          "ci95_hi": 94.15,
-          "delta_vs_ref_pct": 0.0,
-          "delta_ci95_lo": 0.0,
-          "delta_ci95_hi": 0.0,
-          "p_value_vs_ref": 1.0
-        },
-        "armiger_ultra_raw": {
-          "n": 1402,
-          "point_pct": 92.3,
-          "ci95_lo": 90.62,
-          "ci95_hi": 93.89,
-          "delta_vs_ref_pct": 0.29,
-          "delta_ci95_lo": -0.21,
-          "delta_ci95_hi": 0.79,
-          "p_value_vs_ref": 0.3876953
-        },
-        "armiger_int8_hyb": {
-          "n": 1402,
-          "point_pct": 92.44,
-          "ci95_lo": 90.75,
-          "ci95_hi": 94.01,
-          "delta_vs_ref_pct": 0.14,
-          "delta_ci95_lo": 0.0,
-          "delta_ci95_hi": 0.36,
-          "p_value_vs_ref": 0.5
-        },
-        "armiger_int8_raw": {
-          "n": 1402,
-          "point_pct": 92.15,
-          "ci95_lo": 90.46,
-          "ci95_hi": 93.75,
-          "delta_vs_ref_pct": 0.43,
-          "delta_ci95_lo": -0.07,
-          "delta_ci95_hi": 0.97,
-          "p_value_vs_ref": 0.1795654
-        }
-      }
-    },
-    "beyond_confirmation": {
-      "panel_name": "five_split_beyond_confirmation",
-      "n": 1025,
-      "metric_type": "mean",
-      "bootstrap_mode": "family_clustered",
-      "reference_model": "armiger_ultra_hyb",
-      "key_sha256": "7bbb599846b3a4d84da3fc9c9269535b0f682d18c6ae84770cb0789b7ab63f40",
-      "n_families": 1010,
-      "quantization_variants": {
-        "armiger_ultra_hyb": {
-          "n": 1025,
-          "point_pct": 93.07,
-          "ci95_lo": 91.47,
-          "ci95_hi": 94.57,
-          "delta_vs_ref_pct": 0.0,
-          "delta_ci95_lo": 0.0,
-          "delta_ci95_hi": 0.0,
-          "p_value_vs_ref": 1.0
-        },
-        "armiger_ultra_raw": {
-          "n": 1025,
-          "point_pct": 91.61,
-          "ci95_lo": 89.86,
-          "ci95_hi": 93.26,
-          "delta_vs_ref_pct": 1.46,
-          "delta_ci95_lo": 0.68,
-          "delta_ci95_hi": 2.34,
-          "p_value_vs_ref": 0.0007286072
-        },
-        "armiger_int8_hyb": {
-          "n": 1025,
-          "point_pct": 92.98,
-          "ci95_lo": 91.37,
-          "ci95_hi": 94.5,
-          "delta_vs_ref_pct": 0.1,
-          "delta_ci95_lo": -0.2,
-          "delta_ci95_hi": 0.48,
-          "p_value_vs_ref": 1.0
-        },
-        "armiger_int8_raw": {
-          "n": 1025,
-          "point_pct": 91.61,
-          "ci95_lo": 89.85,
-          "ci95_hi": 93.27,
-          "delta_vs_ref_pct": 1.46,
-          "delta_ci95_lo": 0.68,
-          "delta_ci95_hi": 2.36,
-          "p_value_vs_ref": 0.001489639
-        }
-      }
-    },
-    "zero_cue_2000": {
-      "panel_name": "five_split_zero_cue_2000",
-      "n": 2000,
-      "metric_type": "mean",
-      "bootstrap_mode": "family_clustered",
-      "reference_model": "armiger_ultra_hyb",
-      "key_sha256": "7cd04be8e26bcb732febf2383cb01aafe3996f7e91413bec484b41b3b1884031",
-      "n_families": 1748,
-      "quantization_variants": {
-        "armiger_ultra_hyb": {
-          "n": 2000,
-          "point_pct": 91.0,
-          "ci95_lo": 89.67,
-          "ci95_hi": 92.29,
-          "delta_vs_ref_pct": 0.0,
-          "delta_ci95_lo": 0.0,
-          "delta_ci95_hi": 0.0,
-          "p_value_vs_ref": 1.0
-        },
-        "armiger_ultra_raw": {
-          "n": 2000,
-          "point_pct": 85.55,
-          "ci95_lo": 83.91,
-          "ci95_hi": 87.14,
-          "delta_vs_ref_pct": 5.45,
-          "delta_ci95_lo": 4.11,
-          "delta_ci95_hi": 6.81,
-          "p_value_vs_ref": 8.427409e-16
-        },
-        "armiger_int8_hyb": {
-          "n": 2000,
-          "point_pct": 90.95,
-          "ci95_lo": 89.6,
-          "ci95_hi": 92.25,
-          "delta_vs_ref_pct": 0.05,
-          "delta_ci95_lo": -0.15,
-          "delta_ci95_hi": 0.25,
-          "p_value_vs_ref": 1.0
-        },
-        "armiger_int8_raw": {
-          "n": 2000,
-          "point_pct": 85.55,
-          "ci95_lo": 83.93,
-          "ci95_hi": 87.15,
-          "delta_vs_ref_pct": 5.45,
-          "delta_ci95_lo": 4.12,
-          "delta_ci95_hi": 6.81,
-          "p_value_vs_ref": 1.239034e-15
-        }
-      }
-    },
-    "multilang_3000": {
-      "panel_name": "five_split_multilang_3000",
-      "n": 3000,
-      "metric_type": "mean",
-      "bootstrap_mode": "family_clustered",
-      "reference_model": "armiger_ultra_hyb",
-      "key_sha256": "75e98c942a4649f116e36bd91c22bf247d6386ab39a83d3cd287fa580dc235fc",
-      "n_families": 2560,
-      "quantization_variants": {
-        "armiger_ultra_hyb": {
-          "n": 3000,
-          "point_pct": 98.33,
-          "ci95_lo": 97.83,
-          "ci95_hi": 98.81,
-          "delta_vs_ref_pct": 0.0,
-          "delta_ci95_lo": 0.0,
-          "delta_ci95_hi": 0.0,
-          "p_value_vs_ref": 1.0
-        },
-        "armiger_ultra_raw": {
-          "n": 3000,
-          "point_pct": 97.4,
-          "ci95_lo": 96.79,
-          "ci95_hi": 97.98,
-          "delta_vs_ref_pct": 0.93,
-          "delta_ci95_lo": 0.49,
-          "delta_ci95_hi": 1.39,
-          "p_value_vs_ref": 4.056036e-05
-        },
-        "armiger_int8_hyb": {
-          "n": 3000,
-          "point_pct": 98.27,
-          "ci95_lo": 97.75,
-          "ci95_hi": 98.75,
-          "delta_vs_ref_pct": 0.07,
-          "delta_ci95_lo": 0.0,
-          "delta_ci95_hi": 0.17,
-          "p_value_vs_ref": 0.5
-        },
-        "armiger_int8_raw": {
-          "n": 3000,
-          "point_pct": 97.27,
-          "ci95_lo": 96.64,
-          "ci95_hi": 97.85,
-          "delta_vs_ref_pct": 1.07,
-          "delta_ci95_lo": 0.61,
-          "delta_ci95_hi": 1.54,
-          "p_value_vs_ref": 5.6141e-06
-        }
-      }
-    }
-  }
+  "schema_version": "3.1.0"
 }

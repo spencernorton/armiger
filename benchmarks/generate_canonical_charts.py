@@ -79,9 +79,9 @@ TEACHER_MODELS = {
     "Meta Muse Spark 1.3",
 }
 
-# Pre-declared static set of (chart_name, panel_key, model_name) entries that README.md MUST cite.
-# Never inferred from README.md text at generation time (remediating H3 tautology).
-README_CITED_PANEL_MODELS = {
+# Pre-declared static set of (chart_name, panel_key, model_name) entries that evaluation.md MUST cite.
+# Never inferred from evaluation.md text at generation time (remediating H3 tautology).
+EVALUATION_CITED_PANEL_MODELS = {
     ("armiger_vs_llms_overall_and_6dims.png", "panel_2a_category_11class", "Armiger Ultra (Fair Hybrid)"),
     ("armiger_vs_llms_overall_and_6dims.png", "panel_2f_swarm_public_757", "Armiger Ultra (Fair Hybrid)"),
     ("armiger_vs_llms_overall_and_6dims.png", "panel_2f_swarm_warehouse_10278", "Armiger Ultra (Fair Hybrid)"),
@@ -1113,7 +1113,7 @@ def build_all_charts_and_manifest(
             "gemini_loto_support_pct": round(m_v, 2),
         }
 
-    fallback_assets = assets_dir if (assets_dir / "armiger_vs_llms_overall_and_6dims.png").is_file() else (npz_path.parent.parent / "assets")
+    fallback_assets = assets_dir if (assets_dir / "armiger_vs_llms_overall_and_6dims.png").is_file() else (npz_path.parent.parent / "docs" / "assets")
     if render_pngs:
         # ==========================================================================
         # RENDER CHART 1: armiger_vs_llms_overall_and_6dims.png
@@ -1629,21 +1629,15 @@ def build_all_charts_and_manifest(
         "canonical_eval_vectors.json": hashlib.sha256(npz_path.read_bytes()).hexdigest(),
         "build_canonical_eval_vectors.py": hashlib.sha256((BENCH_DIR / "build_canonical_eval_vectors.py").read_bytes()).hexdigest(),
         "generate_canonical_charts.py": hashlib.sha256(pathlib.Path(__file__).read_bytes()).hexdigest(),
-        "assets/armiger_vs_llms_overall_and_6dims.png": sha_chart1,
-        "assets/armiger_vs_llms_cost_comparison.png": sha_chart2,
-        "assets/armiger_vs_torrent_classifiers_6dims.png": sha_chart3,
-        "assets/armiger_categorical_breakdown.png": sha_chart4,
+        "docs/assets/armiger_vs_llms_overall_and_6dims.png": sha_chart1,
+        "docs/assets/armiger_vs_llms_cost_comparison.png": sha_chart2,
+        "docs/assets/armiger_vs_torrent_classifiers_6dims.png": sha_chart3,
+        "docs/assets/armiger_categorical_breakdown.png": sha_chart4,
     }
     for r_file in sorted((BENCH_DIR / "receipts").glob("*.json")):
         prov_hashes[f"benchmarks/receipts/{r_file.name}"] = hashlib.sha256(r_file.read_bytes()).hexdigest()
-    for opt_rel in [
-        "validated_zero_cue_catalog.json",
-        "armiger_ultra.fp32.onnx",
-        "armiger.int8.onnx",
-    ]:
-        p_opt = repo_root / opt_rel
-        if p_opt.is_file():
-            prov_hashes[opt_rel] = hashlib.sha256(p_opt.read_bytes()).hexdigest()
+    model_manifest = REPO_ROOT / "src" / "armiger" / "model_manifest.json"
+    prov_hashes["src/armiger/model_manifest.json"] = hashlib.sha256(model_manifest.read_bytes()).hexdigest()
 
     manifest: Dict[str, Any] = {
         "schema_version": "3.1.0",
@@ -1706,7 +1700,7 @@ def build_all_charts_and_manifest(
                 if isinstance(panel_dict, dict) and "models" in panel_dict:
                     for m_name, st_dict in panel_dict["models"].items():
                         if isinstance(st_dict, dict) and "point_pct" in st_dict:
-                            st_dict["readme_cited"] = (chart_name, panel_key, m_name) in README_CITED_PANEL_MODELS
+                            st_dict["readme_cited"] = (chart_name, panel_key, m_name) in EVALUATION_CITED_PANEL_MODELS
 
     manifest_path.parent.mkdir(parents=True, exist_ok=True)
     manifest_path.write_text(json.dumps(manifest, indent=2, sort_keys=False) + "\n", encoding="utf-8")
@@ -1717,7 +1711,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Generate canonical Armiger benchmark charts and CHARTS_MANIFEST.json.")
     here = pathlib.Path(__file__).resolve().parent
     parser.add_argument("--vectors", type=pathlib.Path, default=here / "canonical_eval_vectors.json")
-    parser.add_argument("--assets-dir", type=pathlib.Path, default=here.parent / "assets")
+    parser.add_argument("--assets-dir", type=pathlib.Path, default=here.parent / "docs" / "assets")
     parser.add_argument("--manifest", type=pathlib.Path, default=here / "CHARTS_MANIFEST.json")
     args = parser.parse_args()
 

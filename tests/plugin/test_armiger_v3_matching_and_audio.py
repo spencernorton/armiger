@@ -7,13 +7,9 @@ from __future__ import annotations
 import pathlib
 import sys
 
-_ROOT = pathlib.Path(__file__).resolve().parents[2]
-if str(_ROOT) not in sys.path:
-    sys.path.insert(0, str(_ROOT))
-
 import unittest
 
-from audio_language_guard import (
+from armiger.audio_language_guard import (
     apply_audio_language_guard,
     apply_audio_language_guard_v3,
     apply_title_language_guard,
@@ -24,7 +20,7 @@ from audio_language_guard import (
     is_localized_foreign_alias,
     split_and_score_title_slug,
 )
-from byte_span_extractor import (
+from armiger.byte_span_extractor import (
     BIO_B_EP,
     BIO_B_TITLE,
     BIO_B_YEAR,
@@ -43,7 +39,7 @@ from byte_span_extractor import (
     snap_bio_span_boundaries,
     title_token_f1,
 )
-from zero_cue_plugin import (
+from armiger.zero_cue_plugin import (
     IDX_AUDIOBOOK,
     IDX_COMIC,
     IDX_COURSE,
@@ -225,18 +221,8 @@ class ArmigerV3MatchingAndAudioTests(unittest.TestCase):
 
 
     def test_encode_torrent_features_sorts_by_size_and_filters_padding(self) -> None:
-        import importlib.util
         import math
-        from pathlib import Path
-
-        mod_path = Path(__file__).resolve().parents[2] / "deploy" / "oci-dht" / "armiger_inference.py"
-        if not mod_path.exists():
-            mod_path = Path(__file__).resolve().parents[2] / "armiger_inference.py"
-        spec = importlib.util.spec_from_file_location("oci_armiger_inference", str(mod_path))
-        self.assertIsNotNone(spec)
-        mod = importlib.util.module_from_spec(spec)
-        assert spec.loader is not None
-        spec.loader.exec_module(mod)
+        from armiger import armiger_inference as mod
 
         files = [{"path": f"__ia_thumb_{i:03d}.jpg", "size": 1024} for i in range(70)]
         files.extend(
@@ -300,7 +286,7 @@ class ArmigerV3MatchingAndAudioTests(unittest.TestCase):
             from ultra_bridge import packet_from_input, run_v2_plugins
         except ImportError:
             self.skipTest("ultra_bridge is internal-only")
-        from zero_cue_plugin import ZeroCueCatalogPlugin
+        from armiger.zero_cue_plugin import ZeroCueCatalogPlugin
 
         with tempfile.TemporaryDirectory() as tmp:
             cat_file = pathlib.Path(tmp) / "zc.json"
@@ -450,8 +436,7 @@ class ArmigerV3MatchingAndAudioTests(unittest.TestCase):
         self.assertEqual([int(x) for x in snapped_adj[7:]], [3, 4, 4, 4])
 
         # (e) Hard -inf transition constraints hold even under extreme finite logits (2e9) and NumPy/Python parity holds
-        import byte_span_extractor as bse_mod
-
+        import armiger.byte_span_extractor as bse_mod
         extreme_logits = [[0.0, 0.0, 2e9, 0.0, 0.0, 0.0, 0.0], [0.0, 0.0, 0.0, 0.0, 2e9, 0.0, 0.0]]
         np_extreme = [int(x) for x in decode_bio_logits_viterbi(extreme_logits)]
         self.assertEqual(count_illegal_bio_transitions(np_extreme), 0)
@@ -592,7 +577,7 @@ class ArmigerV3MatchingAndAudioTests(unittest.TestCase):
         self.assertTrue(rep_mp3["is_english_compatible"])
 
     def test_wave9_structural_file_tree_disambiguation(self) -> None:
-        from zero_cue_plugin import IDX_EBOOK, _extract_file_surface, apply_structural_and_zero_cue_disambiguation
+        from armiger.zero_cue_plugin import IDX_EBOOK, _extract_file_surface, apply_structural_and_zero_cue_disambiguation
 
         uniform = [1.0 / 11.0] * 11
         # 1. Multi-file structured course tree resolves to course before tv_show
@@ -748,8 +733,8 @@ class ArmigerV3MatchingAndAudioTests(unittest.TestCase):
         self.assertEqual(src_gm_c2, "v3_structural_game")
 
     def test_wave10_concat_english_slug_and_stalled_swarm_honeypot_shield(self) -> None:
-        from swarm_survival import SwarmResidualAdapter
-        from zero_cue_plugin import parse_clean_candidates
+        from armiger.swarm_survival import SwarmResidualAdapter
+        from armiger.zero_cue_plugin import parse_clean_candidates
 
         # 1. Concatenated LibriVox/Gutenberg English slug segmentation + non-English language marker guard
         slug_res = split_and_score_title_slug("thepaintedveil_2103_librivox")
