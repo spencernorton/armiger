@@ -1,5 +1,9 @@
 # Changelog
 
+## 3.2.1
+
+- Fix Torznab XML filtering when upstream indexers such as Prowlarr send numeric file counts in the `files` attribute.
+
 ## 3.2.0
 
 - Prebuilt Armiger images with the verified Ultra model for x86-64 and ARM64, plus a pinned Rats Search backend image.
