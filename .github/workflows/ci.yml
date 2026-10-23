@@ -40,8 +40,9 @@ jobs:
           python -I "$GITHUB_WORKSPACE/tests/smoke_installed.py"
       - name: Validate supported Compose manifests
         run: |
-          docker compose --env-file examples/bitmagnet/.env.example -f examples/bitmagnet/docker-compose.yml config --quiet
-          docker compose --env-file examples/rats-search/.env.example -f examples/rats-search/docker-compose.yml config --quiet
+          docker compose -f examples/bitmagnet/docker-compose.yml config --quiet
+          docker compose -f examples/rats-search/docker-compose.yml config --quiet
+          docker compose -f examples/standalone/docker-compose.yml config --quiet
   test:
     name: test
     if: always()
@@ -52,3 +53,60 @@ jobs:
         env:
           RESULT: ${{ needs.verify.result }}
         run: test "$RESULT" = success
+  publish:
+    name: Publish ${{ matrix.image }}
+    if: github.repository == 'spencernorton/armiger' && github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+    needs: test
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - image: armiger
+            dockerfile: examples/Dockerfile
+            platforms: linux/amd64,linux/arm64
+          - image: armiger-rats-search
+            dockerfile: examples/rats-search/Dockerfile
+            platforms: linux/amd64
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: docker/setup-qemu-action@c7c53464625b32c7a7e944ae62b3e17d2b600130 # v3
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+      - uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Select release tag; preserve existing releases
+        id: release
+        env:
+          IMAGE: ghcr.io/spencernorton/${{ matrix.image }}
+        run: |
+          VERSION=$(python3 -c 'import tomllib; print(tomllib.load(open("pyproject.toml", "rb"))["project"]["version"])')
+          echo "tag=$IMAGE:$VERSION" >> "$GITHUB_OUTPUT"
+          if docker buildx imagetools inspect "$IMAGE:$VERSION" > /dev/null 2>&1; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+            echo "Release $IMAGE:$VERSION already exists; leaving it unchanged."
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Build and publish tested release
+        if: steps.release.outputs.exists != 'true'
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
+        with:
+          context: .
+          file: ${{ matrix.dockerfile }}
+          platforms: ${{ matrix.platforms }}
+          push: true
+          tags: ${{ steps.release.outputs.tag }}
+          labels: |
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.version=${{ steps.release.outputs.tag }}
+          cache-from: type=gha,scope=${{ matrix.image }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.image }}

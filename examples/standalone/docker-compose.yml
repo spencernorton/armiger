@@ -1,0 +1,10 @@
+services:
+  armiger-ultra:
+    image: ghcr.io/spencernorton/armiger:3.2.0
+    restart: unless-stopped
+    ports:
+      - '127.0.0.1:8096:8096'
+    volumes:
+      - armiger_models:/models
+volumes:
+  armiger_models:

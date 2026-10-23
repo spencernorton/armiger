@@ -1,5 +1,26 @@
 # Python reference
 
+## Python installation
+
+For Python callers, install Python 3.12 and Git, then clone the repository and create a virtual environment:
+
+```bash
+git clone https://github.com/spencernorton/armiger.git
+cd armiger
+python3.12 -m venv .venv
+source .venv/bin/activate
+```
+
+On Windows, use `py -3.12 -m venv .venv` and `.venv\Scripts\Activate.ps1` instead of the last two commands. On Linux, install CPU-only PyTorch first: `python -m pip install torch --index-url https://download.pytorch.org/whl/cpu`.
+
+```bash
+python -m pip install '.[ultra]'
+python -m armiger download
+python examples/classify.py
+```
+
+The example prints `Content type: movie`. On subsequent runs, activate the virtual environment and run your script; no reinstall is needed. `python -m armiger serve` runs the same local HTTP interface as the container. Add `--offline` to require cached models without downloading.
+
 ## Input and output
 
 `ArmigerUltraPipeline.classify(item)` takes a dictionary containing `name`, optional total `size`, `files` (`path` and `size` per entry), and optional `swarm`/source counters. It returns an `ArmigerUltraPrediction` supporting dictionary-style access and `.to_dict()`.
@@ -66,9 +87,31 @@ The complete pipeline composes these components. Most callers need only `Armiger
 
 ## Compatibility and versions
 
-Library version 3.1.0 and model version 3.0.0 are separate. Existing flat imports such as `armiger_inference` and `armiger_ultra_pipeline` remain compatibility aliases for this release; new code should import from `armiger`. `ArmigerPipeline` aliases `ArmigerUltraPipeline`.
+Library version 3.2.0 and model version 3.0.0 are separate. Existing flat imports such as `armiger_inference` and `armiger_ultra_pipeline` remain compatibility aliases for this release; new code should import from `armiger`. `ArmigerPipeline` aliases `ArmigerUltraPipeline`.
 
 Model weights, vocabulary, calibration, adapter and catalog must be from a compatible bundle. Do not mix assets from different releases. The complete `all` download also includes the PyTorch checkpoint for tooling that needs it.
+
+## Docker settings and updates
+
+The Compose files work without a `.env` file. If a port is already in use, create `.env` beside `compose.yaml` and put only the setting you need in it, for example `BITMAGNET_HTTP_PORT=3335`. Start again and use that port in your browser.
+
+| Setup | Optional settings (defaults) |
+| --- | --- |
+| Bitmagnet | `BITMAGNET_HTTP_PORT=3333`, `BITMAGNET_DHT_PORT=3334`, `ARMIGER_HTTP_PORT=8096`, `ARMIGER_PROXY_PORT=8097`, `TMDB_API_KEY=` |
+| Rats Search | `RATS_HTTP_PORT=8095`, `ARMIGER_HTTP_PORT=8098` |
+
+Bitmagnet's database has no published port and uses an internal password. To choose your own, set `POSTGRES_PASSWORD` **before the first start**; keep it unchanged while reusing that database. TMDB enrichment is optional. Automatic deletion of flagged items is disabled.
+
+Images are pinned to a release, so restarting does not silently upgrade software. To update, back up your data, download the Compose file for the new release into the same folder, preserve any local edits and `.env`, then run:
+
+```bash
+docker compose pull
+docker compose up -d
+```
+
+Keep the same folder name so Compose reuses your existing volumes. Armiger supports Linux x86-64 and ARM64. The Rats Search backend currently supports x86-64 (with emulation on ARM).
+
+The companion Rats Search image builds upstream [v2.3.5](https://github.com/librats/rats-search/tree/8415a208025d3827f2f380f3bfe530557a10eaba), including its pinned submodules. Rats Search's MIT license and Manticore's GPL license, component licenses and corresponding source archive are included under `/usr/share/doc/`. Manticore's source is also [available directly](https://github.com/manticoresoftware/manticoresearch/tree/2c59803fefb5512dd868fbf42aa759d78e617e74).
 
 ## Remote Docker server
 

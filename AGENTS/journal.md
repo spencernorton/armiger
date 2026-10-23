@@ -1,3 +1,12 @@
+## 2026-10-23 — codex — ready-made containers
+
+- **Branch:** codex/prebuilt-containers
+- **What changed:** Publish versioned Armiger and pinned Rats Search images after protected main checks; fresh Compose setups need no build, clone or required environment file. Add standalone Ultra HTTP service and reduce setup to download, start, open.
+- **Validation:** HTTP contract tests, Compose configuration and native ARM64 image startup/classification pass. Complete suite, Rats backend build and public registry verification are release gates in progress.
+- **Deployment:** Local disposable verification only; publication follows protected GitHub checks.
+- **Next step:** Finish image checks, publish, verify anonymous pulls and fresh setups.
+- **Status file updated:** Tracker records the release work and remaining gates.
+
 ## 2026-10-23 — codex — fresh all-in-one setup scope
 
 - **Branch:** codex/plain-setup-guides

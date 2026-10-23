@@ -1,5 +1,8 @@
 # syntax=docker/dockerfile:1
 FROM python:3.12-slim
+LABEL org.opencontainers.image.source="https://github.com/spencernorton/armiger" \
+      org.opencontainers.image.licenses="Apache-2.0" \
+      org.opencontainers.image.title="Armiger Ultra"
 WORKDIR /opt/armiger
 RUN python -m pip install --no-cache-dir torch --index-url https://download.pytorch.org/whl/cpu
 COPY pyproject.toml README.md LICENSE NOTICE ./
@@ -11,4 +14,6 @@ ADD --chmod=0444 --checksum=sha256:daccc692be45d6810918dab809f46f59d0c6d670aed88
 RUN chmod -R a+rX /opt/connectors && mkdir -p /models && chown armiger:armiger /models
 ENV ARMIGER_MODEL_DIR=/models ARMIGER_VARIANT=ultra ARMIGER_AUTO_DOWNLOAD=true PYTHONUNBUFFERED=1
 USER armiger
-CMD ["python", "/opt/connectors/bitmagnet/bitmagnet_connector.py"]
+EXPOSE 8096
+HEALTHCHECK --interval=15s --timeout=5s --start-period=180s --retries=20 CMD python -c "import os, urllib.request; urllib.request.urlopen('http://127.0.0.1:' + os.environ.get('ARMIGER_CONNECTOR_PORT', '8096') + '/healthz', timeout=4)"
+CMD ["python", "-m", "armiger", "serve", "--host", "0.0.0.0"]

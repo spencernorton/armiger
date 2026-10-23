@@ -1,51 +1,33 @@
 # Rats Search + Armiger Ultra
 
-Armiger automatically assigns content categories to items found by Rats Search. This example starts a **new Rats Search server** and Armiger Ultra together. It runs in the background and **does not include the Rats Search desktop interface or a web search page**.
+Start a new Rats Search server with Armiger Ultra already connected. This is a background server with an API; it does **not** include the Rats Search desktop interface or a web search page.
 
-## 1. Get the files
+You need [Docker](https://docs.docker.com/get-started/get-docker/) running, with Docker Compose available. Rats Search runs as an x86-64 container; Docker Desktop uses emulation on Apple Silicon.
 
-Install [Docker](https://docs.docker.com/get-started/get-docker/) and [Git](https://git-scm.com/downloads), and make sure Docker is running. Docker Desktop includes Docker Compose; Linux users also need the [Compose plugin](https://docs.docker.com/compose/install/linux/).
+## 1. Download the setup
 
-If you already downloaded Armiger for the Bitmagnet guide, use that same repository's `examples/rats-search` folder and skip the first two commands below. Keep an existing `.env` instead of copying over it.
+Create a folder called `armiger-rats`. Save [this Compose file](https://raw.githubusercontent.com/spencernorton/armiger/main/examples/rats-search/docker-compose.yml) inside it as **`compose.yaml`**. If it opens in your browser, use **Save As**.
 
-```bash
-git clone https://github.com/spencernorton/armiger.git
-cd armiger/examples/rats-search
-cp .env.example .env
-```
+The file is ready to use. You do not need to edit it, install Python or compile Rats Search.
 
-The default settings are ready to use.
+## 2. Start it
 
-## 2. Start
+Open a terminal in that folder and run:
 
 ```bash
-docker compose up -d --build
+docker compose up -d
 ```
 
-The first build compiles Rats Search and can take a while. Allow several GB of free disk space. On Apple Silicon and other ARM computers, Docker must be able to run x86-64 containers; this example needs emulation for Rats Search's bundled search engine.
+Docker downloads the ready-made containers. Armiger downloads and checks its model once. Allow several minutes on the first start.
 
-Armiger downloads its model automatically. You do not need Python, a GPU, an API key or a separate standalone Armiger install.
+## 3. Check it is ready
 
-## 3. Check it works
+Open **[Armiger status](http://localhost:8098/healthz)** on the computer running Docker. When ready, it shows `"status": "ok"`. Armiger automatically categorizes newly indexed items; a fresh index may initially be empty.
 
-```bash
-docker compose ps
-```
+Rats Search's API is at `http://localhost:8095`. This is a connection address for software, not a search page. If Armiger is still starting, run `docker compose logs --tail=50 armiger-ultra`.
 
-Both services should eventually say `healthy`. On the computer running Docker, open **[Armiger status](http://localhost:8098/healthz)** and check for `"status": "ok"`.
+## Stop and start
 
-Rats Search's API is available at `http://localhost:8095`. That is a software connection endpoint, not a search page to open in your browser. Armiger categorizes newly indexed items automatically; a fresh index may initially be empty.
+From the same folder, run `docker compose down` to stop or `docker compose up -d` to start again. Your index and model stay saved. Adding `-v` to the stop command erases them. Automatic deletion of flagged items is off.
 
-## Everyday use
-
-Run these from the same folder:
-
-| Task | Command |
-| --- | --- |
-| See Armiger's logs | `docker compose logs --tail=50 armiger-ultra` |
-| See Rats Search's logs | `docker compose logs --tail=50 rats-search` |
-| Stop | `docker compose down` |
-| Start again | `docker compose up -d` |
-| Update | `git pull --ff-only`, then `docker compose up -d --build` |
-
-Stopping keeps your index and downloaded model. Do not add `-v` unless you intend to erase this example's saved data. If the build runs out of memory, increase Docker's memory allocation and try again. Change ports in `.env` if they are already in use. For a remote server, follow the [remote access instructions](../../docs/reference.md#remote-docker-server). Automatic removal of flagged items is off.
+[Optional settings and updates](../../docs/reference.md#docker-settings-and-updates) · [Using a remote server](../../docs/reference.md#remote-docker-server)

@@ -16,9 +16,18 @@ def main():
     classify = commands.add_parser("classify", help="classify one JSON object from stdin")
     classify.add_argument("--model-dir")
     classify.add_argument("--variant", choices=("ultra", "cpu"), default="ultra")
+    server = commands.add_parser("serve", help="run the standalone Ultra HTTP service")
+    server.add_argument("--model-dir")
+    server.add_argument("--host", default="127.0.0.1")
+    server.add_argument("--port", type=int, default=8096)
+    server.add_argument("--offline", action="store_true")
     args = parser.parse_args()
     if args.command == "download":
         print(download_model(args.directory, variant=args.variant, offline=args.offline))
+        return
+    if args.command == "serve":
+        from .server import serve
+        serve(args.model_dir, host=args.host, port=args.port, offline=args.offline)
         return
     directory = model_directory(args.model_dir)
     download_model(directory, variant=args.variant, offline=True)
