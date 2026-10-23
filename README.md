@@ -1,4 +1,13 @@
-# Armiger
+<h1 align="center">Armiger</h1>
+
+<p align="center">
+  <a href="https://norvitech.com/ai-models/#armiger"><img alt="Armiger on NorviTech" src="https://img.shields.io/badge/NorviTech-Suite-FD8024.svg"></a>
+  <a href="https://github.com/spencernorton/armiger/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/spencernorton/armiger/actions/workflows/ci.yml/badge.svg?branch=main"></a>
+  <a href="https://github.com/spencernorton/armiger/releases"><img alt="Latest release" src="https://img.shields.io/github/v/release/spencernorton/armiger?label=release"></a>
+  <a href="https://huggingface.co/NorviTech/armiger-ultra"><img alt="Hugging Face models" src="https://img.shields.io/badge/Hugging_Face-models-FFD21E.svg?logo=huggingface&amp;logoColor=black"></a>
+  <a href="LICENSE"><img alt="Apache-2.0 licence" src="https://img.shields.io/badge/licence-Apache--2.0-blue.svg"></a>
+  <a href="https://buy.stripe.com/8x26oH2U44f65TRe574wM04"><img alt="Donate via Stripe" src="https://img.shields.io/badge/donate-Stripe-635bff.svg?logo=stripe&amp;logoColor=white"></a>
+</p>
 
 Armiger helps Bitmagnet and Rats Search label torrents by type and language, using names and file lists. **Armiger Ultra** also adds title matching, audio-language checks and estimates of download availability. It runs on a CPU; no GPU or paid API is required.
 
