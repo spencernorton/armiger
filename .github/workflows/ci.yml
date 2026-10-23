@@ -8,7 +8,7 @@ on:
 permissions:
   contents: read
 jobs:
-  test:
+  verify:
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     strategy:
@@ -39,3 +39,13 @@ jobs:
         run: |
           docker compose --env-file examples/bitmagnet/.env.example -f examples/bitmagnet/docker-compose.yml config --quiet
           docker compose --env-file examples/rats-search/.env.example -f examples/rats-search/docker-compose.yml config --quiet
+  test:
+    name: test
+    if: always()
+    needs: verify
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Require both supported Python checks
+        env:
+          RESULT: ${{ needs.verify.result }}
+        run: test "$RESULT" = success
