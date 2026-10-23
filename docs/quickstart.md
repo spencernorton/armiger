@@ -6,12 +6,12 @@ You need [Python 3.12](https://www.python.org/downloads/), [Git](https://git-scm
 
 ## 1. Get the files
 
+If you already downloaded Armiger for a Docker guide, open a terminal in that repository folder and continue to step 2. Otherwise:
+
 ```bash
 git clone https://github.com/spencernorton/armiger.git
 cd armiger
 ```
-
-If you already cloned the repository, open a terminal in that folder instead.
 
 ## 2. Install
 
@@ -28,6 +28,8 @@ On **Windows PowerShell**:
 py -3.12 -m venv .venv
 .venv\Scripts\Activate.ps1
 ```
+
+If PowerShell blocks activation, open Command Prompt in the same folder and use `.venv\Scripts\activate.bat` instead.
 
 On Linux, install CPU-only PyTorch first to avoid downloading unnecessary GPU libraries:
 

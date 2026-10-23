@@ -6,15 +6,15 @@ Armiger adds content-type and language tags to items in Bitmagnet. This example 
 
 Install [Docker](https://docs.docker.com/get-started/get-docker/) and [Git](https://git-scm.com/downloads), and make sure Docker is running. Docker Desktop includes Docker Compose; Linux users also need the [Compose plugin](https://docs.docker.com/compose/install/linux/).
 
-Open a terminal and run:
+If you already downloaded Armiger, use its `examples/bitmagnet` folder and skip the first two commands below. Keep an existing `.env` instead of copying over it.
+
+For a new download, open a terminal and run:
 
 ```bash
 git clone https://github.com/spencernorton/armiger.git
 cd armiger/examples/bitmagnet
 cp .env.example .env
 ```
-
-If you already cloned this repository, open a terminal in its `examples/bitmagnet` folder and run only the last command. If `.env` already exists, keep it.
 
 ## 2. Start
 

@@ -6,13 +6,15 @@ Armiger automatically assigns content categories to items found by Rats Search. 
 
 Install [Docker](https://docs.docker.com/get-started/get-docker/) and [Git](https://git-scm.com/downloads), and make sure Docker is running. Docker Desktop includes Docker Compose; Linux users also need the [Compose plugin](https://docs.docker.com/compose/install/linux/).
 
+If you already downloaded Armiger for the Bitmagnet guide, use that same repository's `examples/rats-search` folder and skip the first two commands below. Keep an existing `.env` instead of copying over it.
+
 ```bash
 git clone https://github.com/spencernorton/armiger.git
 cd armiger/examples/rats-search
 cp .env.example .env
 ```
 
-If you already cloned this repository, use its `examples/rats-search` folder. Keep an existing `.env`; otherwise copy `.env.example` as shown. The default settings are ready to use.
+The default settings are ready to use.
 
 ## 2. Start
 
