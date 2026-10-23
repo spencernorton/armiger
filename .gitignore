@@ -10,3 +10,6 @@ build/
 .venv/
 venv/
 .DS_Store
+.env
+models/
+models-cpu/

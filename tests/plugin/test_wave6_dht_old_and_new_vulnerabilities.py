@@ -26,45 +26,40 @@ from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 from cryptography.hazmat.primitives.serialization import Encoding, PublicFormat
 import numpy as np
 
-_THIS_FILE = Path(__file__).resolve()
-_REPO_ROOT = _THIS_FILE.parent.parent.parent if _THIS_FILE.parent.name == "plugin" else _THIS_FILE.parent
-for _candidate in (_REPO_ROOT, _REPO_ROOT / "armiger", _REPO_ROOT / "deploy" / "oci-dht", _REPO_ROOT / "tests" / "plugin"):
-    if _candidate.exists():
-        _s = str(_candidate)
-        if _s not in sys.path:
-            sys.path.insert(0, _s)
+from armiger.artifacts import model_directory
+_REPO_ROOT = model_directory()
 
-import audio_language_guard as alg
-import calibration_and_dht as cdht
-import csam_guard as cg
-import swarm_survival as ss
-import zero_cue_plugin as zcp
-from calibration_and_dht import (
+import armiger.audio_language_guard as alg
+import armiger.calibration_and_dht as cdht
+import armiger.csam_guard as cg
+import armiger.swarm_survival as ss
+import armiger.zero_cue_plugin as zcp
+from armiger.calibration_and_dht import (
     ArmigerCalibrator,
     ArmigerDHTUpdater,
     SignedDHTManifest,
 )
-from csam_guard import (
+from armiger.csam_guard import (
     CSAMGuard,
     WOTSPlusSHAKE256,
     generate_ed25519_keypair,
 )
-from swarm_survival import (
+from armiger.swarm_survival import (
     MAX_ADAPTER_WEIGHT_ABS,
     SwarmSurvivalNet,
     validate_adapter_weights,
 )
-from zero_cue_plugin import (
+from armiger.zero_cue_plugin import (
     IDX_GAME,
     IDX_SOFTWARE,
     resolve_category_v3,
 )
 
 try:
-    import dht_head_delta as dhd
-    import pq_xmss_merkle as pqx
-    import zero_cue_binary as zcb
-    from dht_head_delta import (
+    import armiger.dht_head_delta as dhd
+    import armiger.pq_xmss_merkle as pqx
+    import armiger.zero_cue_binary as zcb
+    from armiger.dht_head_delta import (
         ALL_9_HEAD_NAMES,
         HDLT_HEADER_PREFIX,
         HDLT_MAGIC,
@@ -76,14 +71,14 @@ try:
         reconstruct_from_head_delta,
         validate_head_delta_tensor_specs,
     )
-    from pq_xmss_merkle import (
+    from armiger.pq_xmss_merkle import (
         XMSSMerkleTree,
         XMSSStatefulVerifier,
         XMSSStateManager,
         XMSSVerifier,
         verify_xmss_signature,
     )
-    from zero_cue_binary import (
+    from armiger.zero_cue_binary import (
         ZCB3_EXT_FLAG,
         ZCB3_HEADER_STRUCT,
         ZCB3_MAGIC,
@@ -99,9 +94,9 @@ except ImportError:
     _HAS_TRACK_D = False
 
 try:
-    import armiger_dht_db_sync as dbsync
-    import armiger_dht_rsi as rsi
-    from armiger_ultra_pipeline import (
+    import armiger.armiger_dht_db_sync as dbsync
+    import armiger.armiger_dht_rsi as rsi
+    from armiger.armiger_ultra_pipeline import (
         ArmigerUltraPipeline,
         DHT_UPDATE_SCHEMA,
         DHTUpdateRejected,

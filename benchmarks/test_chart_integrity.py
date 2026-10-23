@@ -163,7 +163,7 @@ def test_manifest_sha256_and_png_chunks(tmp_path: pathlib.Path):
 
     # Verify all 4 PNGs have only IHDR, IDAT, IEND chunks and RGB mode
     for chart_name, chart_meta in manifest["charts"].items():
-        png_path = REPO_ROOT / "assets" / chart_name
+        png_path = REPO_ROOT / "docs" / "assets" / chart_name
         assert png_path.is_file(), f"Chart missing: {png_path}"
         chunks = verify_png_chunks_clean(png_path)
         assert chunks[0] == "IHDR" and chunks[-1] == "IEND"
@@ -188,13 +188,13 @@ def test_manifest_sha256_and_png_chunks(tmp_path: pathlib.Path):
         )
 
 
-def test_readme_tables_match_charts_manifest():
-    """Verify README.md contains canonical CHARTS_MANIFEST.json metrics and zero stale numbers."""
-    readme_path = REPO_ROOT / "README.md"
+def test_evaluation_claims_match_charts_manifest():
+    """Verify evaluation.md contains canonical CHARTS_MANIFEST.json metrics and zero stale numbers."""
+    readme_path = REPO_ROOT / "docs" / "evaluation.md"
     assert readme_path.is_file()
     text = readme_path.read_text(encoding="utf-8")
 
-    # Canonical numbers that must appear in README
+    # Canonical numbers that must appear in evaluation guide
     for required_token in ("94.85%", "95.83%", "95.06%", "96.70%", "96.83%", "93.07%", "97.84%", "97.05%"):
         assert required_token in text, f"Missing canonical metric {required_token} in {readme_path}"
 
@@ -202,10 +202,10 @@ def test_readme_tables_match_charts_manifest():
     # on-disk receipt with full coverage (982/982 records per model).
     if "Claude Haiku" in text:
         receipt = REPO_ROOT / "benchmarks" / "receipts" / "llm_beyond_fresh_receipt.json"
-        assert receipt.is_file(), "Claude Haiku claim in README without llm_beyond_fresh_receipt.json"
+        assert receipt.is_file(), "Claude Haiku claim in evaluation guide without llm_beyond_fresh_receipt.json"
         for required_token in ("92.45%", "47.67%", "llm_beyond_fresh_receipt.json"):
             assert required_token in text, f"Missing receipt-backed LLM metric {required_token} in {readme_path}"
 
-    # Stale pre-audit numbers that must never reappear in README
+    # Stale pre-audit numbers that must never reappear in evaluation guide
     for stale_token in ("99.95%", "98.48%", "97.13%", "72.35%", "35.29%", "97.55%", "Vinci-MLE", "true" + "spec", "tru" + "spec", "tc" + "2000", "multilang" + "3000"):
         assert stale_token not in text, f"Stale metric {stale_token} found in {readme_path}"

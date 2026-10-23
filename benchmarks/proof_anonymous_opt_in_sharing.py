@@ -40,8 +40,8 @@ ROOT_DIR = Path(__file__).resolve().parents[1]
 if str(ROOT_DIR) not in sys.path:
     sys.path.insert(0, str(ROOT_DIR))
 from armiger import ArmigerPipeline
-from armiger_dht_db_sync import ArmigerDHTDBSync
-from armiger_dht_rsi import (
+from armiger.armiger_dht_db_sync import ArmigerDHTDBSync
+from armiger.armiger_dht_rsi import (
     AnonymityGuard,
     AnonymityViolationError,
     ArmigerDHTRSIEngine,
