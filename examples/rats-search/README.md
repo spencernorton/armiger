@@ -1,48 +1,51 @@
 # Rats Search + Armiger Ultra
 
-Starts Rats Search in console mode and an Armiger Ultra classifier. The connector polls recently indexed metadata and writes content categories to Rats Search's Manticore index.
+Armiger automatically assigns content categories to items found by Rats Search. This example starts a **new Rats Search server** and Armiger Ultra together. It runs in the background and **does not include the Rats Search desktop interface or a web search page**.
 
-## Start
+**Already using Rats Search?** Keep your current collection. See the [connector for an existing installation](https://github.com/spencernorton/Armiger-Connectors/tree/main/rats-search) instead of creating a separate index here.
 
-Install Docker with Compose v2 and Git. The pinned upstream Rats Search image builds from source and includes an x86-64 Manticore binary; ARM machines use Docker's x86-64 emulation. Its first build is slower than Bitmagnet's and needs several GB of disk and build memory.
+## 1. Get the files
+
+Install [Docker](https://docs.docker.com/get-started/get-docker/) and [Git](https://git-scm.com/downloads), and make sure Docker is running. Docker Desktop includes Docker Compose; Linux users also need the [Compose plugin](https://docs.docker.com/compose/install/linux/).
 
 ```bash
 git clone https://github.com/spencernorton/armiger.git
 cd armiger/examples/rats-search
 cp .env.example .env
+```
+
+If you already cloned this repository, use its `examples/rats-search` folder. Keep an existing `.env`; otherwise copy `.env.example` as shown. The default settings are ready to use.
+
+## 2. Start
+
+```bash
 docker compose up -d --build
+```
+
+The first build compiles Rats Search and can take a while. Allow several GB of free disk space. On Apple Silicon and other ARM computers, Docker must be able to run x86-64 containers; this example needs emulation for Rats Search's bundled search engine.
+
+Armiger downloads its model automatically. You do not need Python, a GPU, an API key or a separate standalone Armiger install.
+
+## 3. Check it works
+
+```bash
 docker compose ps
 ```
 
-The defaults enable the Rats REST API and indexer on first initialization. Armiger then downloads roughly 59 MB of verified model data. No GPU, API key or manual model installation is needed.
+Both services should eventually say `healthy`. On the computer running Docker, open **[Armiger status](http://localhost:8098/healthz)** and check for `"status": "ok"`.
 
-- **Rats Search REST API:** <http://localhost:8095> (console backend, not a browser UI).
-- **Armiger health:** <http://localhost:8098/healthz>.
+Rats Search's API is available at `http://localhost:8095`. That is a software connection endpoint, not a search page to open in your browser. Armiger categorizes newly indexed items automatically; a fresh index may initially be empty.
 
-Both HTTP ports bind to localhost and can be changed in `.env`. Rats data and Armiger models live in separate named volumes. The connector shares Rats Search's container network to reach its loopback-only Manticore service; it does not require host networking.
+## Everyday use
 
-## Verify classification
+Run these from the same folder:
 
-```bash
-curl -fsS http://localhost:8098/healthz
-curl -fsS http://localhost:8098/v1/rats-search/classify \
-  -H 'Content-Type: application/json' \
-  -d '{"torrents":[{"name":"Tears.of.Steel.2012.1080p.BluRay.x264-OPEN","size":2400000000,"files":[{"path":"Tears.of.Steel.2012.mkv","size":2400000000}]}]}'
-```
+| Task | Command |
+| --- | --- |
+| See Armiger's logs | `docker compose logs --tail=50 armiger-ultra` |
+| See Rats Search's logs | `docker compose logs --tail=50 rats-search` |
+| Stop | `docker compose down` |
+| Start again | `docker compose up -d` |
+| Update | `git pull --ff-only`, then `docker compose up -d --build` |
 
-Expect the example to be classified as `movie`. This request evaluates metadata without adding a torrent to the index. Newly indexed torrents are categorized by the background poller; a fresh crawler may initially have no items. Check connector logs for REST or Manticore errors.
-
-Automatic deletion is off (`ARMIGER_PRUNE_MALWARE=false`). Set it to `true` only if you want flagged items removed. Predictions are metadata checks, not payload inspection.
-
-## Stop, update and troubleshoot
-
-```bash
-docker compose logs --tail=50 rats-search armiger-ultra
-docker compose down
-git pull --ff-only
-docker compose up -d --build
-```
-
-`down` preserves data; `down -v` deletes this stack's index and model volumes. If the upstream build runs out of memory, increase Docker's memory allocation and rebuild. If the REST health check fails with an existing volume, ensure `/data/rats.json` contains `"restApi": true` and `"httpPort": 8095`; initial configuration is not overwritten on restart.
-
-To connect Armiger to an existing desktop/server installation instead, see [the connector repository](https://github.com/spencernorton/Armiger-Connectors/tree/main/rats-search).
+Stopping keeps your index and downloaded model. Do not add `-v` unless you intend to erase this example's saved data. If the build runs out of memory, increase Docker's memory allocation and try again. Change ports in `.env` if they are already in use. On a remote server, use SSH port forwarding to reach the local status/API ports. Automatic removal of flagged items is off.

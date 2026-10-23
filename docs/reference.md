@@ -21,7 +21,22 @@ pipeline = ArmigerUltraPipeline.from_directory(
 
 Use `variant="int8"` to run the pipeline with the INT8 model (download `--variant all` first). `from_directory` loads local data; it does not fetch missing models. `ARMIGER_MODEL_DIR` sets the default directory for the constructor. Download and check data with `python -m armiger download`; the model manifest records its immutable upstream revision and file hashes.
 
+## Model storage
+
+`python -m armiger download` and the default Python constructor share a versioned cache under `~/.cache/armiger/`. Set `ARMIGER_MODEL_DIR` to choose a different folder. Alternatively, download with `--directory ./models` and load with `ArmigerUltraPipeline.from_directory("./models")`. The CLI uses `--model-dir ./models` for classification. Keep the same location for downloading and loading.
+
+`python -m armiger download --offline` verifies cached Ultra files without accessing the network. Model data is reused between sessions; download again if a new library release selects a different model revision.
+
 ## Standalone ONNX
+
+For only the lightweight model, install the package without the Ultra extra and download its CPU files:
+
+```bash
+python -m pip install .
+python -m armiger download --directory ./models-cpu --variant cpu
+```
+
+This path needs NumPy and ONNX Runtime, but no PyTorch, catalog or swarm adapter.
 
 ```python
 from armiger import ArmigerStandaloneONNX

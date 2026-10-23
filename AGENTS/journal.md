@@ -1,3 +1,12 @@
+## 2026-10-23 — codex — plain setup guides
+
+- **Branch:** codex/plain-setup-guides
+- **What changed:** Prioritize Bitmagnet, Rats Search, then standalone; link to Armiger's NorviTech page; rewrite setup around prerequisites, expected results and saved data. Add one runnable standalone example.
+- **Validation:** Standalone example prints `Content type: movie`; wheel metadata, local links, setup order, Compose configuration and patch whitespace pass. Compose runtime is unchanged from the verified cleanup.
+- **Deployment:** No production changes. GitHub's website link is updated directly.
+- **Next step:** Complete protected PR checks and merge the guide update.
+- **Status file updated:** Tracker and private handoff record the guide pass.
+
 ## 2026-10-23 — codex — Compose verification complete
 
 - **Branch:** codex/package-and-setup

@@ -1,10 +1,14 @@
 # Bitmagnet + Armiger Ultra
 
-Starts PostgreSQL, stock Bitmagnet and an Armiger Ultra sidecar. Armiger classifies crawled metadata and adds searchable tags. CPU inference is the default; no model account or GPU is needed.
+Armiger adds content-type and language tags to items in Bitmagnet. This example starts a **new Bitmagnet installation**, its database and Armiger Ultra together.
 
-## Start
+**Already running Bitmagnet?** Keep your existing setup. Use the [connector for your existing instance](https://github.com/spencernorton/Armiger-Connectors/tree/main/bitmagnet) instead of starting a second index here.
 
-Install Docker with Compose v2, then:
+## 1. Get the files
+
+Install [Docker](https://docs.docker.com/get-started/get-docker/) and [Git](https://git-scm.com/downloads), and make sure Docker is running. Docker Desktop includes Docker Compose; Linux users also need the [Compose plugin](https://docs.docker.com/compose/install/linux/).
+
+Open a terminal and run:
 
 ```bash
 git clone https://github.com/spencernorton/armiger.git
@@ -12,44 +16,44 @@ cd armiger/examples/bitmagnet
 cp .env.example .env
 ```
 
-Set `POSTGRES_PASSWORD` in `.env` to your own password. Other values can stay at their defaults. Then:
+If you already cloned this repository, open a terminal in its `examples/bitmagnet` folder and run only the last command. If `.env` already exists, keep it.
+
+## 2. Start
+
+Open `.env` in a text editor. Replace `replace-with-a-password` with a password of your choice, save it, then run:
 
 ```bash
 docker compose up -d --build
+```
+
+The first start builds Armiger and downloads its model. Allow several minutes. You do not need Python, a GPU or a separate Armiger install. A TMDB API key is optional; you can leave it blank.
+
+## 3. Check it works
+
+```bash
 docker compose ps
 ```
 
-The first build installs Python dependencies; the first start downloads roughly 59 MB of verified model data. Allow several minutes. PostgreSQL and the models use named volumes and survive container restarts.
+`postgres` and `armiger-ultra` should say `healthy`; `bitmagnet` should be running. While the model downloads, Armiger may show `starting`.
 
-- **Bitmagnet:** <http://localhost:3333>
-- **Armiger health:** <http://localhost:8096/healthz>
-- **Filtered Torznab:** <http://localhost:8097/torznab> for clients on this host.
+On the computer running Docker, open:
 
-HTTP ports bind to localhost. `BITMAGNET_DHT_PORT` exposes the BitTorrent crawler's TCP/UDP port. Set `TMDB_API_KEY` in `.env` only if you want Bitmagnet's own TMDB enrichment.
+- **[Bitmagnet](http://localhost:3333)** — your index and search page.
+- **[Armiger status](http://localhost:8096/healthz)** — should show `"status": "ok"`.
 
-## Verify classification
+Armiger labels newly indexed items automatically. Look for `armiger-movie`, `armiger-tv-show` and language tags in Bitmagnet. A new index starts empty; no results yet does not mean Armiger failed.
 
-```bash
-curl -fsS http://localhost:8096/healthz
-curl -fsS http://localhost:8096/v1/bitmagnet/classify \
-  -H 'Content-Type: application/json' \
-  -d '{"torrents":[{"name":"Tears.of.Steel.2012.1080p.BluRay.x264-OPEN","size":2400000000,"files":[{"path":"Tears.of.Steel.2012.mkv","size":2400000000}]}]}'
-```
+## Everyday use
 
-The response should classify the example as `movie`. This request only evaluates the supplied metadata. As Bitmagnet indexes real items, the poller writes `armiger-*` tags to its database; an empty new index can take time to populate. Check logs for GraphQL errors if tags do not appear.
+Run these from the same folder:
 
-Automatic deletion is disabled initially (`ARMIGER_PRUNE_MALWARE=false`). Enable it only if you want flagged torrents removed from the index. Armiger's safety predictions describe metadata, not inspected payloads.
+| Task | Command |
+| --- | --- |
+| See Armiger's logs | `docker compose logs --tail=50 armiger-ultra` |
+| Stop | `docker compose down` |
+| Start again | `docker compose up -d` |
+| Update | `git pull --ff-only`, then `docker compose up -d --build` |
 
-## Stop, update and troubleshoot
+Stopping keeps the database and downloaded model. Keep the same database password when starting again. Do not add `-v` to the stop command unless you intend to erase this example's saved data.
 
-```bash
-docker compose logs --tail=50 armiger-ultra bitmagnet
-docker compose down
-# From the same checkout after pulling a reviewed release:
-git pull --ff-only
-docker compose up -d --build
-```
-
-`down` keeps data; `down -v` deletes this stack's database and model volumes. Change ports in `.env` if already occupied. Keep the original database password when reusing its volume. If first-start downloads fail, inspect logs and restart `armiger-ultra`; verified files are reused.
-
-For an existing indexer or additional integrations, see [Armiger-Connectors](https://github.com/spencernorton/Armiger-Connectors).
+If a port is already in use, change its value in `.env` and start again; use that new port in your browser. On a remote server, these links need SSH port forwarding because they listen locally by default. Automatic removal of flagged items is off; normal setup only adds labels.
