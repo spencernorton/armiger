@@ -1,3 +1,11 @@
+## 2026-10-23 — codex — Compose verification complete
+
+- **Branch:** codex/package-and-setup
+- **Validation:** Full suite: 267 passed, one internal-only bridge integration skipped. Both supported Compose stacks pass fresh download, real classification, synthetic database writes and data/cache persistence after container recreation. Installed-wheel INT8 and Ultra inference pass outside the checkout.
+- **Deployment:** None. Required GitHub checks govern merging. Concurrent security work remains in its own PR; file moves retain compatibility aliases.
+- **Next step:** Merge the cleanup after its required checks pass; subsequent runtime hardening targets `src/armiger/` and `tests/`.
+- **Status file updated:** Private status handoff records the PRs and measurements.
+
 ## 2026-10-23 — codex — setup verification checkpoint
 
 - **Branch:** codex/package-and-setup
