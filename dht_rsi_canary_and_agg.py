@@ -36,6 +36,7 @@ from dht_rsi_models_and_privacy import (
     CanaryRegressionReport,
     CatalogConsensusResult,
     ContinuousAggregationResult,
+    EXCLUDED_SCOPE_CATEGORIES,
     ContinuousDeltaSubmission,
     EncryptedTelemetryBundle,
     PeerAttestation,
@@ -61,11 +62,15 @@ from dht_rsi_verification import (
 # =====================================================================
 
 def generate_golden_canary_suite(seed: int = 20261018) -> List[CanaryItem]:
-    """Generates exactly 500 deterministic reference canaries covering all 8 heads and edge cases."""
+    """Generates exactly 500 deterministic reference canaries covering all 8 heads and edge cases.
+
+    Every category spans >= 12 distinct structural packaging strata (Kish N_eff >= 12 over digit-stripped
+    templates) so a candidate cannot pass the gate by acing one packaging clone family.
+    """
     rng = random.Random(seed)
     items: List[CanaryItem] = []
 
-    # 1. 120 Movies
+    # 1. 120 Movies (15 packaging strata x 8; scene / P2P / YTS / remux / DVD / AV1 / MULTi)
     movie_templates = [
         ("Big.Buck.Bunny.{year}.1080p.BluRay.x264-OPEN", "english", False, False),
         ("Sintel.{year}.KOREAN.1080p.BluRay.x264-OPEN", "non_english", True, False),
@@ -73,6 +78,15 @@ def generate_golden_canary_suite(seed: int = 20261018) -> List[CanaryItem]:
         ("Tears.of.Steel.{year}.2160p.UHD.Remux.HEVC.DV.TrueHD.Atmos", "english", True, False),
         ("Coffee.Run.{year}.1080p.WEBRip.x265.AAC5.1", "english", False, False),
         ("Spring.Open.Film.{year}.JAPANESE.1080p.BluRay.x264", "non_english", True, True),
+        ("Glass Half ({year}) [1080p] [YTS.MX]", "english", False, False),
+        ("Agent.327.Operation.Barbershop.{year}.MULTi.1080p.WEB.H264-OPEN", "non_english", True, False),
+        ("Hero.{year}.DVDRip.XviD-OPEN", "english", False, False),
+        ("Charge {year} 2160p WEB-DL DDP5.1 HDR10 H.265-OPEN", "english", True, False),
+        ("Cosmos.Laundromat.First.Cycle.{year}.1080p.BluRay.x264.DTS-OPEN", "english", True, False),
+        ("Caminandes.Llamigos.{year}.4K.HDR.DV.WEBRip.AV1.Opus-OPEN", "english", False, False),
+        ("Daily.Dweebs.{year}.ITALIAN.720p.BluRay.x264-OPEN", "non_english", True, False),
+        ("Wing.It.{year}.1080p.AMZN.WEB-DL.DDP5.1.H.264-OPEN", "english", False, False),
+        ("Sprite.Fright.{year}.JAPANESE.1080p.WEB-DL.AAC2.0.H.264-OPEN", "non_english", True, True),
     ]
     for i in range(120):
         tmpl, lang, subs, anime = movie_templates[i % len(movie_templates)]
@@ -82,7 +96,7 @@ def generate_golden_canary_suite(seed: int = 20261018) -> List[CanaryItem]:
             item_id=f"canary_mov_{i:03d}",
             title=title,
             ground_truth={
-                "category": "anime" if anime else "movie",
+                "category": "movie",
                 "adult": False,
                 "anime": anime,
                 "lang": lang,
@@ -93,13 +107,18 @@ def generate_golden_canary_suite(seed: int = 20261018) -> List[CanaryItem]:
             },
         ))
 
-    # 2. 100 TV Shows
+    # 2. 100 TV Shows (10 packaging strata x 10; scene episode / season pack / daily / P2P / human naming)
     tv_templates = [
         ("Cosmos.Laundromat.S01E{ep:02d}.1080p.WEB-DL.DDP5.1.Atmos.H.264-OPEN", "english", True, False),
         ("Caminandes.S04E{ep:02d}.720p.HDTV.x264-OPEN", "english", False, False),
         ("Spring.Chronicles.S02E{ep:02d}.GERMAN.1080p.WEB-DL.DDP5.1.x264", "non_english", True, False),
         ("Open.Science.Lectures.S03E{ep:02d}.1080p.WEB-DL.DDP5.1.H.264", "english", True, False),
         ("Creative.Commons.Chronicles.S02E{ep:02d}.KOREAN.1080p.WEB-DL.DDP5.1.Atmos", "non_english", True, False),
+        ("Open Chronicles - S01E{ep:02d} - The Open Episode (1080p AMZN WEB-DL x265 OPEN)", "english", True, False),
+        ("Open.Chronicles.S0{ep}.COMPLETE.1080p.BluRay.x264-OPEN", "english", True, False),
+        ("Open.Daily.Show.2024.10.{ep:02d}.720p.WEB.h264-OPEN", "english", False, False),
+        ("Open Chronicles {ep}x{ep:02d} HDTV XviD-OPEN", "english", False, False),
+        ("Open.Chronicles.S05E{ep:02d}.SPANISH.2160p.WEB-DL.DV.HDR.H.265-OPEN", "non_english", True, False),
     ]
     for i in range(100):
         tmpl, lang, subs, anime = tv_templates[i % len(tv_templates)]
@@ -120,13 +139,18 @@ def generate_golden_canary_suite(seed: int = 20261018) -> List[CanaryItem]:
             },
         ))
 
-    # 3. 50 Anime
+    # 3. 50 Anime (10 fansub/batch/BD packaging strata x 5; category tv_show + anime head)
     anime_titles = [
         ("[OpenAnime] Spring - {ep:02d} [1080p][HEVC][Multiple Subtitle]", "non_english", True),
         ("[CC-Anime] Charge - Open Anime Project - {ep:02d} (1080p) [82C108B7]", "non_english", True),
         ("[OpenSub] Caminandes - {ep:02d} [720p].mkv", "non_english", True),
         ("Wing It Open Series Part 3 - {ep:02d} [1080p Dual-Audio]", "english", True),
         ("Open Blender Anime S01E{ep:02d} [1080p][Multi-Sub]", "non_english", True),
+        ("[OpenBD] Spring (BD 1080p FLAC) [Batch] - {ep:02d}", "non_english", True),
+        ("Spring.Open.Anime.S01E{ep:02d}.1080p.CR.WEB-DL.AAC2.0.H.264-OPEN", "non_english", True),
+        ("[Open-Raws] Spring {ep:02d} (1280x720 x264 AAC).mp4", "non_english", False),
+        ("[OpenDub] Charge - Episode {ep:02d} [English Dub][1080p]", "english", False),
+        ("Spring Open Anime - {ep:02d} VOSTFR [1080p]", "non_english", False),
     ]
     for i in range(50):
         tmpl, lang, subs = anime_titles[i % len(anime_titles)]
@@ -135,7 +159,7 @@ def generate_golden_canary_suite(seed: int = 20261018) -> List[CanaryItem]:
             item_id=f"canary_ani_{i:03d}",
             title=tmpl.format(ep=ep),
             ground_truth={
-                "category": "anime",
+                "category": "tv_show",
                 "adult": False,
                 "anime": True,
                 "lang": lang,
@@ -146,116 +170,184 @@ def generate_golden_canary_suite(seed: int = 20261018) -> List[CanaryItem]:
             },
         ))
 
-    # 4. 40 Music
-    for i in range(40):
-        items.append(CanaryItem(
-            item_id=f"canary_mus_{i:03d}",
-            title=f"Artist_{i} - Album_{i} (2024) [FLAC 24bit-96kHz]",
-            ground_truth={
-                "category": "music",
-                "adult": False,
-                "anime": False,
-                "lang": "english",
-                "junk": False,
-                "owner_scope": "allowed_type",
-                "english_subs": False,
-                "title_language": "english_title",
-            },
-        ))
+    def _gt(category: str, **over: Any) -> Dict[str, Any]:
+        gt = {
+            "category": category,
+            "adult": False,
+            "anime": False,
+            "lang": "english",
+            "junk": False,
+            "owner_scope": "excluded",  # v3 policy: non-video categories are excluded from owner scope
+            "english_subs": False,
+            "title_language": "english_title",
+        }
+        gt.update(over)
+        return gt
 
-    # 5. 30 Comics/Manga
-    for i in range(30):
-        items.append(CanaryItem(
-            item_id=f"canary_com_{i:03d}",
-            title=f"Pepper.and.Carrot.Issue.{i+1}.2024.Digital.CC-BY.cbr",
-            ground_truth={
-                "category": "comic",
-                "adult": False,
-                "anime": False,
-                "lang": "english",
-                "junk": False,
-                "owner_scope": "allowed_type",
-                "english_subs": False,
-                "title_language": "english_title",
-            },
-        ))
+    def _block(prefix: str, n: int, category: str, templates: Sequence[str], **over: Any) -> None:
+        for i in range(n):
+            yr = 1995 + (i * 7) % 30
+            title = templates[i % len(templates)].format(n=i + 1, i=i, year=yr, year0=yr - 9)
+            items.append(CanaryItem(item_id=f"canary_{prefix}_{i:03d}", title=title, ground_truth=_gt(category, **over)))
 
-    # 6. 30 Audiobooks
-    for i in range(30):
-        items.append(CanaryItem(
-            item_id=f"canary_aud_{i:03d}",
-            title=f"SciFi Masterpiece Vol {i+1} - Unabridged [M4B 64kbps]",
-            ground_truth={
-                "category": "audiobook",
-                "adult": False,
-                "anime": False,
-                "lang": "english",
-                "junk": False,
-                "owner_scope": "allowed_type",
-                "english_subs": False,
-                "title_language": "english_title",
-            },
-        ))
+    # 4. 40 Music (16 strata: FLAC/MP3/WEB/vinyl/live/OST/compilation/SACD/DSD/opus/single/EP/cassette)
+    _block("mus", 40, "music", [
+        "Artist_{i} - Album_{i} ({year}) [FLAC 24bit-96kHz]",
+        "Open_Artist-Album_{n}-WEB-FLAC-{year}-GRP",
+        "Open Artist - Album {n} ({year}) [MP3 320 CBR]",
+        "Open_Artist_-_Album_{n}-(VINYL)-{year}-LP-Rip-24-192",
+        "Open Artist - Live at Open Stage {year} [Bootleg SBD] [FLAC]",
+        "Album {n} (Original Motion Picture Soundtrack) ({year}) [MP3 V0]",
+        "Open Artist - Discography ({year0}-{year}) [FLAC]",
+        "VA - Open Compilation Vol. {n} ({year}) [WEB] [AAC 256]",
+        "Open Artist - Album {n} ({year}) [SACD ISO DSD64]",
+        "Open_Artist-Album_{n}-CD-FLAC-{year}-GRP",
+        "Open Artist - Single {n} ({year}) [Opus 128] [WEB]",
+        "Open_Artist-EP_{n}-(Deluxe_Edition)-WEB-{year}-GRP",
+        "Open Artist - Album {n} ({year}) [Cassette Rip] [MP3 192]",
+        "Open Artist - Album {n} ({year}) (Japan Edition) [ALAC M4A]",
+        "Open_Artist--Album_{n}-(Remastered_{year})-16BIT-WEB-FLAC-GRP",
+        "Open Artist - Album {n} ({year}) [Hi-Res 24-88.2 FLAC] [Qobuz]",
+    ])
 
-    # 7. 30 Ebooks
-    for i in range(30):
-        items.append(CanaryItem(
-            item_id=f"canary_ebk_{i:03d}",
-            title=f"Distributed Systems Handbook Edition {i+1}.epub",
-            ground_truth={
-                "category": "ebook",
-                "adult": False,
-                "anime": False,
-                "lang": "english",
-                "junk": False,
-                "owner_scope": "allowed_type",
-                "english_subs": False,
-                "title_language": "english_title",
-            },
-        ))
+    # 5. 30 Comics/Manga (15 strata: cbr/cbz/cb7, digital, c2c, manga, webcomic, TPB, omnibus, pdf scans)
+    _block("com", 30, "comic", [
+        "Pepper.and.Carrot.Issue.{n}.{year}.Digital.CC-BY.cbr",
+        "Pepper and Carrot {n:03d} ({year}) (Digital) (Open-Empire).cbz",
+        "Open Comics Presents v{n:02d} ({year}) (digital) (Son of Ultron-Empire).cbr",
+        "Carrot Chronicles Vol.{n} - The Open Arc (c2c) (Scanned).cbz",
+        "[Open Scans] Carrot Chronicles v{n:02d} (Manga) (English) [cbz]",
+        "Pepper & Carrot Webcomic Collection Part {n} [CBZ]",
+        "Open.Comics.Annual.{year}.{n:03d}.cb7",
+        "Pepper and Carrot - Book {n} (TPB) ({year}) (Digital-Empire).cbz",
+        "Carrot Chronicles ch{n:03d} [Open Scans] (webcomic) [digital].cbz",
+        "Pepper and Carrot Omnibus Vol {n} ({year}) (Digital) (Zone-Empire).cbr",
+        "Open Comics {n:03d} ({year}) (c2c) (Scan-Kryptonia).cbz",
+        "Carrot Chronicles - Tome {n} (FRENCH) (Scan) [cbr]",
+        "Pepper.and.Carrot.{year}.Collected.Edition.v{n}.PDF",
+        "[Open Scans] Carrot Chronicles - Chapter {n} (Manhwa) (Webtoon) [cbz]",
+        "Open Comics Presents #{n} ({year}) (digital-Empire) [Weekly Pack].cbz",
+    ])
 
-    # 8. 30 Games / Software
+    # 6. 30 Audiobooks (15 strata: m4b, chaptered mp3, LibriVox, Audible AAX, FLAC, scene, opus, zip, dramatised)
+    _block("aud", 30, "audiobook", [
+        "SciFi Masterpiece Vol {n} - Unabridged [M4B 64kbps]",
+        "Open Author - The Long Voyage {n} (Unabridged) [MP3 Chaptered 128k]",
+        "longvoyage_{n:02d}_librivox",
+        "The Long Voyage Book {n} - Open Author (Audible) [AAX-to-M4B]",
+        "Open Author - Long Voyage {n} [FLAC Audiobook] [Narrated by Open Reader]",
+        "Open.Author.-.The.Long.Voyage.{n}.{year}.Audiobook.MP3-GRP",
+        "The Long Voyage {n} by Open Author (Audiobook, Unabridged, Chaptered).m4b",
+        "Long Voyage Chronicles {n} (Abridged) [MP3 64k] Audiobook",
+        "[Audiobook] Open Author - Long Voyage Omnibus {n} (Narrated) m4b",
+        "Open Author - Long Voyage {n} (Unabridged) [Opus 32k] [Audiobook]",
+        "The Long Voyage {n} - Open Author - BBC Radio Full Cast Dramatisation [MP3]",
+        "Open Author - The Long Voyage Series Books 1-{n} (Audiobook) [MP3 96k].zip",
+        "Long.Voyage.{n}.{year}.Audiobook.Unabridged.AAC.M4A-GRP",
+        "Open Author - Long Voyage {n} (Graphic Audio) [MP3 128k]",
+        "The Long Voyage {n} (Open Author) [Audiobook] [Spanish] [MP3]",
+    ])
+
+    # 7. 30 Ebooks (15 strata: epub/mobi/azw3/pdf/djvu/fb2/cbz-less, Standard-Ebooks, Gutenberg, technical, bundles)
+    _block("ebk", 30, "ebook", [
+        "Distributed Systems Handbook Edition {n}.epub",
+        "open-author_the-long-voyage-{n}.epub",
+        "pg{n}-images.epub",
+        "Distributed Systems Handbook {n}e ({year}) [PDF]",
+        "Open Author - The Long Voyage {n} (retail) [MOBI]",
+        "Open.Author.-.The.Long.Voyage.{n}.{year}.AZW3-GRP",
+        "The Long Voyage Vol {n} by Open Author (epub+mobi)",
+        "Learning Distributed Systems, {n}th Edition - Open Press ({year}).pdf",
+        "Open Author - Long Voyage Series Books 1-{n} (epub)",
+        "Open Author - The Long Voyage {n} ({year}) [DJVU]",
+        "Open.Author.-.The.Long.Voyage.{n}.{year}.RETAIL.ePub.eBook-GRP",
+        "The Long Voyage {n} - Open Author.fb2.zip",
+        "Open Press - Distributed Systems Cookbook {n}e ({year}) [EPUB] [True PDF]",
+        "Open Author - The Long Voyage {n} (Open Magazine Issue {n}, {year}) [PDF]",
+        "Open Author - The Long Voyage {n} (Light Novel) (Vol {n}) [Yen Press] [epub]",
+    ])
+
+    # 8. 30 Games / Software alternating (15 strata each: GOG/itch/repack/console/portable vs iso/dmg/deb/msi/AppImage)
+    game_templates = [
+        "IndieGame.v{n}.0.GOG.installer",
+        "Open.Quest.{n}.Linux.Native.GOG.Edition",
+        "Open Quest {n} (itch.io) [Windows] [DRM-Free].zip",
+        "Open.Quest.{n}.Deluxe.Edition-FitGirl.Repack",
+        "Open Quest {n} [NSP] [v1.0.{n}] [eShop]",
+        "Open.Quest.{n}.PS2.(USA).iso",
+        "Open Quest {n} - Switch (XCI) [Base Game + Update]",
+        "OpenQuest-{n}-win64.zip",
+        "supertuxkart-{n}.0-linux-64bit.tar.xz",
+        "Open Quest {n} (USA) (Rev 1).nsp",
+        "Open.Quest.{n}-CODEX",
+        "Open Quest {n} [GOG] [Goodies] [v2.{n}.0]",
+        "Open Quest {n} (Europe) (En,Fr,De).chd",
+        "Open.Quest.{n}.Update.v1.{n}-RUNE",
+        "Open Quest {n} Portable [Steam Rip] [Multi12]",
+    ]
+    software_templates = [
+        "OpenSource.Toolchain.v{n}.Linux.x86_64.iso",
+        "OpenToolchain-{n}.0.dmg",
+        "opentoolchain_{n}.0_amd64.deb",
+        "opentoolchain-{n}.0.tar.xz",
+        "OpenToolchain {n}.0 Setup x64.msi",
+        "OpenToolchain Portable {n}.0 Multilingual x64",
+        "OpenToolchain.Pro.v{n}.0.{year}.Pre-Activated.macOS",
+        "OpenToolchain-{n}.0-windows-x64.zip",
+        "OpenToolchain_v{n}.0_Linux_AppImage",
+        "OpenToolchain-{n}.0.x86_64.rpm",
+        "ubuntu-24.{n:02d}-desktop-amd64.iso",
+        "OpenToolchain.v{n}.0.Incl.Keygen-CORE",
+        "OpenToolchain {n}.0 (x64) + Crack [OpenPatch]",
+        "opentoolchain-{n}.0-src.tar.gz",
+        "OpenToolchain_{n}.0_win32_portable.7z",
+    ]
     for i in range(30):
         is_game = (i % 2 == 0)
+        tmpls = game_templates if is_game else software_templates
+        title = tmpls[(i // 2) % len(tmpls)].format(n=i + 1, year=1995 + (i * 7) % 30)
         items.append(CanaryItem(
             item_id=f"canary_sw_{i:03d}",
-            title=f"OpenSource.Toolchain.v{i+1}.Linux.x86_64.iso" if not is_game else f"IndieGame.v{i+1}.0.GOG.installer",
-            ground_truth={
-                "category": "game" if is_game else "software",
-                "adult": False,
-                "anime": False,
-                "lang": "english",
-                "junk": False,
-                "owner_scope": "allowed_type",
-                "english_subs": False,
-                "title_language": "english_title",
-            },
+            title=title,
+            ground_truth=_gt("game" if is_game else "software"),
         ))
 
-    # 9. 20 Courses
-    for i in range(20):
-        items.append(CanaryItem(
-            item_id=f"canary_crs_{i:03d}",
-            title=f"OpenCourseWare - Advanced Machine Learning Foundations 2024 Course Part {i+1}",
-            ground_truth={
-                "category": "course",
-                "adult": False,
-                "anime": False,
-                "lang": "english",
-                "junk": False,
-                "owner_scope": "allowed_type",
-                "english_subs": True,
-                "title_language": "english_title",
-            },
-        ))
+    # 9. 20 Courses (15 strata: OCW/Udemy/Coursera/MIT/NPTEL/Pluralsight/TGC/Packt/LinkedIn/Skillshare/edX/...)
+    _block("crs", 20, "course", [
+        "OpenCourseWare - Advanced Machine Learning Foundations {year} Course Part {n}",
+        "[Udemy] Complete Machine Learning Bootcamp {year} - Part {n}",
+        "Coursera - Machine Learning Specialization - Course {n} (Open University)",
+        "MIT OCW 6.{n:03d} Introduction to Algorithms - Lecture Videos",
+        "NPTEL - Data Structures and Algorithms - Week {n} (IIT Open)",
+        "Pluralsight - Building Distributed Systems Path - Module {n}",
+        "TTC Video - The Great Courses - Understanding Statistics Lecture {n}",
+        "Packt - Hands-On Machine Learning Video Course {year} Section {n}",
+        "LinkedIn Learning - Python Essential Training Chapter {n}",
+        "Skillshare - Open Design Masterclass {year} - Lesson {n}",
+        "[FreeCourseSite.com] Udemy - Docker and Kubernetes Complete Guide {year} Part {n}",
+        "edX - OpenX - CS{n}0 Introduction to Computer Science (Verified Track)",
+        "Domestika - Open Illustration Course {n} [ENG SUB]",
+        "ZeroToMastery - Complete Web Developer {year} - Section {n}",
+        "O'Reilly Live Training - Distributed Systems Fundamentals Day {n} ({year})",
+    ], english_subs=True)
 
-    # 10. 25 Junk / Malware Traps (Critical safety gates!)
+    # 10. 25 Junk / Malware Traps (Critical safety gates!) - 15 lure styles
     malware_names = [
         "OpenMovie.2024.1080p.WEBRip.exe",
         "Unsigned_Trojan_Installer_v2.4.vbs",
         "Codec_Update_Required_To_Play.scr",
         "PublicArchive.2024.password_in_description.rar",
         "Big.Buck.Bunny.2024.CAM.1080p.download_tool.bat",
+        "Sintel.2024.1080p.BluRay.x264-OPEN.mkv.lnk",
+        "FREE_Crack_Activator_KMS_All_Versions.cmd",
+        "Elephants.Dream.2024.Full.Movie.HD.Click_Here.html",
+        "Tears.of.Steel.2024.1080p.PROPER.mkv.exe",
+        "Open_Installer_Setup_Protected.iso.zip.js",
+        "Cosmos.Laundromat.S01E01.1080p.WEB-DL.mp4.scr",
+        "Open.Quest.2024.Crack.Only.RELOADED.exe.pif",
+        "Install_Dolby_Atmos_Decoder_Required.ps1",
+        "OpenMovie.2024.Fake.Screener.1080p.HDRip.wmv.vbe",
+        "Premiere.S01E01.pass_in_desc.unlock_code.mp4",
     ]
     for i in range(25):
         _base = malware_names[i % len(malware_names)]
@@ -264,39 +356,65 @@ def generate_golden_canary_suite(seed: int = 20261018) -> List[CanaryItem]:
         items.append(CanaryItem(
             item_id=f"canary_jnk_{i:03d}",
             title=name,
-            ground_truth={
-                "category": "unknown",
-                "adult": False,
-                "anime": False,
-                "lang": "multi_or_unknown",
-                "junk": True,  # MALWARE / JUNK TRAP!
-                "owner_scope": "excluded",
-                "english_subs": False,
-                "title_language": "english_title",
-            },
+            ground_truth=_gt("unknown", lang="multi_or_unknown", junk=True),  # MALWARE / JUNK TRAP!
             is_malware_trap=True,
         ))
 
-    # 11. 25 Adult / XXX Boundary Items
+    # 11. 25 Adult / XXX Boundary Items - 15 studio naming styles
+    xxx_templates = [
+        "Adult_Studio.24.10.18.Scene{n}.XXX.1080p.MP4-ARC",
+        "AdultStudio.24.{n:02d}.01.Open.Performer.XXX.2160p.MP4-GRP",
+        "[AdultStudio] Open Performer {n} - Scene Title (XXX) [1080p]",
+        "AdultStudio - Open Performer {n} - Scene Title XXX WEB-DL 720p",
+        "Adult.Studio.Siterip.Part.{n}.XXX.MP4",
+        "AdultStudio.Vol.{n}.Open.Performer.XXX.1080p.HEVC",
+        "OnlyFans - Open Performer {n} Siterip (XXX) [MP4]",
+        "AdultStudio.Open.Performer.{n}.XXX.4K.DVDRip.x264-GRP",
+        "Adult Studio Vol {n} XXX (Uncensored JAV Style) [1080p]",
+        "AdultStudio.E{n:03d}.Open.Performer.XXX.1080p.HEVC.x265-GRP",
+        "Adult.Studio.{n}.XXX.DVDRip.x264-OPENXXX",
+        "AdultStudio.24.10.{n:02d}.Open.Performer.And.Open.Performer.XXX.720p.WEB.x264-GRP",
+        "[AdultStudio.com] Open Performer {n} (XXX) [VR 180 3D 4K]",
+        "AdultStudio - Open Performer {n} (Full HD XXX Movie) (DVDRip).mp4",
+        "Adult Studio Collection {n} XXX WEB-DL 1080p MP4-GRP [Siterip]",
+    ]
     for i in range(25):
         items.append(CanaryItem(
             item_id=f"canary_xxx_{i:03d}",
-            title=f"Adult_Studio.24.10.18.Scene{i+1}.XXX.1080p.MP4-ARC",
-            ground_truth={
-                "category": "xxx",
-                "adult": True,  # ADULT TRAP!
-                "anime": False,
-                "lang": "english",
-                "junk": False,
-                "owner_scope": "excluded",
-                "english_subs": False,
-                "title_language": "english_title",
-            },
+            title=xxx_templates[i % len(xxx_templates)].format(n=i + 1),
+            ground_truth=_gt("xxx", adult=True),  # ADULT TRAP!
             is_adult_boundary=True,
         ))
 
     assert len(items) == 500, f"Expected 500 items, got {len(items)}"
+    neff = canary_template_neff(items)
+    low = {c: round(v, 2) for c, v in neff.items() if v < MIN_CANARY_STRATUM_NEFF}
+    assert not low, f"canary packaging-stratum diversity too low (Kish N_eff < {MIN_CANARY_STRATUM_NEFF}): {low}"
     return items
+
+
+MIN_CANARY_STRATUM_NEFF = 12.0
+
+
+def canary_stratum(item: CanaryItem) -> str:
+    """Structural packaging stratum of a canary = its naming template with all digits removed, so episode,
+    year or part numbering alone cannot fake packaging diversity."""
+    return re.sub(r"\d+", "", item.title)
+
+
+def canary_template_neff(items: Sequence[CanaryItem]) -> Dict[str, float]:
+    """Kish effective number of distinct packaging strata per category:
+    N_eff = (sum w)^2 / sum w^2 over per-stratum item counts."""
+    counts: Dict[str, Dict[str, int]] = {}
+    for it in items:
+        cat = str(it.ground_truth["category"])
+        key = canary_stratum(it)
+        counts.setdefault(cat, {})[key] = counts.setdefault(cat, {}).get(key, 0) + 1
+    out: Dict[str, float] = {}
+    for cat, ws in counts.items():
+        tot = sum(ws.values())
+        out[cat] = (tot * tot) / float(sum(w * w for w in ws.values()))
+    return out
 
 
 class GoldenCanaryRegressionGate:
@@ -317,8 +435,16 @@ class GoldenCanaryRegressionGate:
         min_adult_acc: float = 0.985,
         min_category_acc: float = 0.950,
         max_category_regression: float = 0.005,
+        min_excluded_rejection_acc: float = 0.98,
+        min_stratum_category_acc: float = 0.5,
     ) -> CanaryRegressionReport:
-        """Run all 500 canary items against candidate predictor and evaluate safety gates."""
+        """Run all 500 canary items against candidate predictor and evaluate safety gates.
+
+        Besides the aggregate gates, two worst-group gates stop a candidate from hiding a packaging-family
+        failure inside a good average: `excluded_rejection_accuracy` (owner_scope=="excluded" recall over
+        `EXCLUDED_SCOPE_CATEGORIES`) and `stratum_worst_group_accuracy` (min over (category, packaging stratum)
+        of category+owner_scope accuracy; e.g. acing `.m4b` audiobooks cannot cover failing pure-`.mp3` ones).
+        """
         total = len(self.canary_items)
         clean_correct = 0
         clean_total = 0
@@ -329,12 +455,24 @@ class GoldenCanaryRegressionGate:
         adult_correct = 0
         category_correct = 0
         owner_scope_correct = 0
+        excluded_total = 0
+        excluded_correct = 0
+        strata: Dict[str, List[int]] = {}  # "category|stratum" -> [correct, total]
 
         regressions: List[Dict[str, Any]] = []
 
+        category_scores: Dict[str, List[float]] = {}
         for item in self.canary_items:
             pred = predictor_fn(item)
             gt = item.ground_truth
+            probs = pred.get("category_probabilities")
+            if probs is not None:
+                if not isinstance(probs, dict) or gt["category"] not in probs:
+                    raise ValueError("missing_canary_category_probability")
+                prob = probs[gt["category"]]
+                if isinstance(prob, bool) or not isinstance(prob, (int, float)) or not math.isfinite(prob) or not 0 <= prob <= 1:
+                    raise ValueError("invalid_canary_category_probability")
+                category_scores.setdefault(gt["category"], []).append(1.0 - float(prob))
 
             # 1. Junk / Malware check (including pre-CSAM neural_junk check when exposed)
             pred_junk = bool(pred.get("junk", False))
@@ -369,14 +507,27 @@ class GoldenCanaryRegressionGate:
                 })
 
             # 3. Category check
+            gt_cat = str(gt["category"]).lower()
             pred_cat = str(pred.get("category", "")).lower()
-            if pred_cat == str(gt["category"]).lower():
+            cat_ok = pred_cat == gt_cat
+            if cat_ok:
                 category_correct += 1
 
             # 4. Scope check
             pred_scope = str(pred.get("owner_scope", "")).lower()
-            if pred_scope == str(gt["owner_scope"]).lower():
+            scope_ok = pred_scope == str(gt["owner_scope"]).lower()
+            if scope_ok:
                 owner_scope_correct += 1
+            if gt_cat in EXCLUDED_SCOPE_CATEGORIES:
+                excluded_total += 1
+                if pred_scope == "excluded":
+                    excluded_correct += 1
+
+            # 5. Per-(category, packaging stratum) worst-group bookkeeping
+            cell = strata.setdefault(f"{gt_cat}|{canary_stratum(item)}", [0, 0])
+            cell[1] += 1
+            if cat_ok and scope_ok:
+                cell[0] += 1
 
         # Probe predictor_fn on a non-regex neural junk canary so CSAMGuard title regexes cannot mask a dead neural junk head
         try:
@@ -414,99 +565,68 @@ class GoldenCanaryRegressionGate:
         adult_acc = adult_correct / total
         category_acc = category_correct / total
         owner_scope_acc = owner_scope_correct / total
+        excluded_rejection_acc = excluded_correct / excluded_total if excluded_total > 0 else 1.0
+        stratum_acc = {k: c / t for k, (c, t) in strata.items() if t > 0}
+        worst_stratum, worst_group_acc = ("", 1.0)
+        if stratum_acc:
+            worst_stratum = min(stratum_acc, key=lambda k: (stratum_acc[k], k))
+            worst_group_acc = stratum_acc[worst_stratum]
+        for k, acc in sorted(stratum_acc.items()):
+            if acc < min_stratum_category_acc:
+                regressions.append({"stratum": k, "accuracy": round(acc, 4), "type": "STRATUM_WORST_GROUP"})
+
+        def _report(passed: bool, reason: str) -> CanaryRegressionReport:
+            return CanaryRegressionReport(
+                passed=passed,
+                reason=reason,
+                total_items=total,
+                junk_balanced_accuracy=junk_bal_acc,
+                junk_false_negatives=junk_false_negatives,
+                adult_accuracy=adult_acc,
+                category_accuracy=category_acc,
+                owner_scope_accuracy=owner_scope_acc,
+                regressions=regressions,
+                excluded_rejection_accuracy=excluded_rejection_acc,
+                stratum_worst_group_accuracy=worst_group_acc,
+                worst_stratum=worst_stratum,
+                stratum_accuracy=stratum_acc,
+                nonconformity_quantiles={
+                    cat: sorted(scores)[min(len(scores) - 1, math.ceil((len(scores) + 1) * 0.95) - 1)]
+                    for cat, scores in category_scores.items()
+                },
+            )
 
         # Check critical safety gates
         if junk_false_negatives > 0:
-            return CanaryRegressionReport(
-                passed=False,
-                reason=f"CRITICAL_SAFETY_FAIL: {junk_false_negatives} malware traps passed as clean",
-                total_items=total,
-                junk_balanced_accuracy=junk_bal_acc,
-                junk_false_negatives=junk_false_negatives,
-                adult_accuracy=adult_acc,
-                category_accuracy=category_acc,
-                owner_scope_accuracy=owner_scope_acc,
-                regressions=regressions,
-            )
-
+            return _report(False, f"CRITICAL_SAFETY_FAIL: {junk_false_negatives} malware traps passed as clean")
         if junk_bal_acc < min_junk_balanced_acc:
-            return CanaryRegressionReport(
-                passed=False,
-                reason=f"JUNK_ACCURACY_REGRESSION: {junk_bal_acc:.4f} < {min_junk_balanced_acc:.4f}",
-                total_items=total,
-                junk_balanced_accuracy=junk_bal_acc,
-                junk_false_negatives=junk_false_negatives,
-                adult_accuracy=adult_acc,
-                category_accuracy=category_acc,
-                owner_scope_accuracy=owner_scope_acc,
-                regressions=regressions,
-            )
-
+            return _report(False, f"JUNK_ACCURACY_REGRESSION: {junk_bal_acc:.4f} < {min_junk_balanced_acc:.4f}")
         if adult_acc < min_adult_acc:
-            return CanaryRegressionReport(
-                passed=False,
-                reason=f"ADULT_ACCURACY_REGRESSION: {adult_acc:.4f} < {min_adult_acc:.4f}",
-                total_items=total,
-                junk_balanced_accuracy=junk_bal_acc,
-                junk_false_negatives=junk_false_negatives,
-                adult_accuracy=adult_acc,
-                category_accuracy=category_acc,
-                owner_scope_accuracy=owner_scope_acc,
-                regressions=regressions,
-            )
-
+            return _report(False, f"ADULT_ACCURACY_REGRESSION: {adult_acc:.4f} < {min_adult_acc:.4f}")
         if category_acc < min_category_acc:
-            return CanaryRegressionReport(
-                passed=False,
-                reason=f"CATEGORY_ACCURACY_REGRESSION: {category_acc:.4f} < {min_category_acc:.4f}",
-                total_items=total,
-                junk_balanced_accuracy=junk_bal_acc,
-                junk_false_negatives=junk_false_negatives,
-                adult_accuracy=adult_acc,
-                category_accuracy=category_acc,
-                owner_scope_accuracy=owner_scope_acc,
-                regressions=regressions,
-            )
-
+            return _report(False, f"CATEGORY_ACCURACY_REGRESSION: {category_acc:.4f} < {min_category_acc:.4f}")
         if owner_scope_acc < 0.985:
-            return CanaryRegressionReport(
-                passed=False,
-                reason=f"OWNER_SCOPE_ACCURACY_REGRESSION: {owner_scope_acc:.4f} < 0.9850",
-                total_items=total,
-                junk_balanced_accuracy=junk_bal_acc,
-                junk_false_negatives=junk_false_negatives,
-                adult_accuracy=adult_acc,
-                category_accuracy=category_acc,
-                owner_scope_accuracy=owner_scope_acc,
-                regressions=regressions,
+            return _report(False, f"OWNER_SCOPE_ACCURACY_REGRESSION: {owner_scope_acc:.4f} < 0.9850")
+        if excluded_rejection_acc < min_excluded_rejection_acc:
+            return _report(
+                False,
+                f"EXCLUDED_REJECTION_REGRESSION: {excluded_rejection_acc:.4f} < {min_excluded_rejection_acc:.4f}",
+            )
+        if worst_group_acc < min_stratum_category_acc:
+            return _report(
+                False,
+                f"STRATUM_WORST_GROUP_REGRESSION: {worst_stratum} {worst_group_acc:.4f} < {min_stratum_category_acc:.4f}",
             )
 
         if baseline_metrics and "category_accuracy" in baseline_metrics:
             base_cat = baseline_metrics["category_accuracy"]
             if category_acc < (base_cat - max_category_regression):
-                return CanaryRegressionReport(
-                    passed=False,
-                    reason=f"CATEGORY_REGRESSION_DELTA: {category_acc:.4f} < baseline {base_cat:.4f} - {max_category_regression}",
-                    total_items=total,
-                    junk_balanced_accuracy=junk_bal_acc,
-                    junk_false_negatives=junk_false_negatives,
-                    adult_accuracy=adult_acc,
-                    category_accuracy=category_acc,
-                    owner_scope_accuracy=owner_scope_acc,
-                    regressions=regressions,
+                return _report(
+                    False,
+                    f"CATEGORY_REGRESSION_DELTA: {category_acc:.4f} < baseline {base_cat:.4f} - {max_category_regression}",
                 )
 
-        return CanaryRegressionReport(
-            passed=True,
-            reason="all_500_golden_canary_gates_passed",
-            total_items=total,
-            junk_balanced_accuracy=junk_bal_acc,
-            junk_false_negatives=junk_false_negatives,
-            adult_accuracy=adult_acc,
-            category_accuracy=category_acc,
-            owner_scope_accuracy=owner_scope_acc,
-            regressions=regressions,
-        )
+        return _report(True, "all_500_golden_canary_gates_passed")
 
 
 # =====================================================================
@@ -542,6 +662,15 @@ class ByzantineResilientAggregator:
     VIDEO_CATEGORIES = {"movie", "tv_show", "anime", "xxx", "course"}
     AUDIO_ONLY_CATEGORIES = {"music", "audiobook"}
     PRINT_CATEGORIES = {"ebook", "comic"}
+    # Structural (non-neural) category evidence a record can carry: the catalog reference type that the
+    # PhysicalGroundTruthVerifier resolved the category from. A record without one is a neural-only vote.
+    STRUCTURAL_CATALOG_SUPPORT = {
+        "series_catalog": {"tv_show", "anime", "xxx"},
+        "movie_catalog": {"movie", "anime", "xxx"},
+        "anime_catalog": {"anime", "tv_show", "movie"},
+        "audio_catalog": {"music"},
+        "isbn": {"audiobook", "ebook"},
+    }
 
     def __init__(
         self,
@@ -578,7 +707,9 @@ class ByzantineResilientAggregator:
 
     @property
     def trusted_pq_signers(self) -> Dict[str, str]:
-        return {s[3]: f"federation_pq_signer_{i}" for i, s in enumerate(self.federation_signers)}
+        # Same base identity as `trusted_ed_signers` (+ "_pq"): ThresholdSignatureVerifier pairs each WOTS+ root with its
+        # Ed25519 signer by identity, so a different name ("federation_pq_signer_N") left every emitted manifest unpaired.
+        return {s[3]: f"federation_signer_{i}_pq" for i, s in enumerate(self.federation_signers)}
 
     def ingest_submission(self, submission: Union[TelemetrySubmission, Dict[str, Any]]) -> None:
         """Queue an encrypted telemetry submission for batch catalog aggregation."""
@@ -663,6 +794,28 @@ class ByzantineResilientAggregator:
                 canonical_title=item.get("canonical_title"),
             )
         raise TypeError(f"Unsupported telemetry submission type: {type(item)}")
+
+    @classmethod
+    def structural_category_support(cls, record_dict: Mapping[str, Any]) -> Optional[Set[str]]:
+        """Categories independently supported by a record's structural evidence, or None for a neural-only vote.
+
+        Evidence = the catalog reference type (`verified_features.catalog_type`) the contributor's physical
+        verifier resolved, narrowed by the deterministic episode marker (an episodic release cannot be a movie).
+        A contributor whose own `evidence_masks.category` is False is a neural-only vote regardless.
+        """
+        vf = record_dict.get("verified_features")
+        if not isinstance(vf, dict):
+            return None
+        masks = record_dict.get("evidence_masks")
+        if isinstance(masks, dict) and masks.get("category") is False:
+            return None
+        supported = cls.STRUCTURAL_CATALOG_SUPPORT.get(str(vf.get("catalog_type", "none") or "none").strip().lower())
+        if supported is None:
+            return None
+        supported = set(supported)
+        if vf.get("episode_marker") is True:
+            supported.discard("movie")
+        return supported
 
     @classmethod
     def verify_physical_stream_signature(
@@ -761,6 +914,12 @@ class ByzantineResilientAggregator:
                 return False, f"stream_signature_mismatch:{category}_implausible_size_mb:{dp_size_mb}", {}
             if dp_dur_float is not None and dp_dur_float <= 0.0:
                 return False, f"stream_signature_mismatch:{category}_non_positive_duration", {}
+
+        # 4. Structural evidence must not contradict the claimed category (single-file Movie<->TV poisoning:
+        #    a `series_catalog` / episode-marked release claimed as `movie`, or a `movie_catalog` one as `tv_show`).
+        support = cls.structural_category_support(record_dict)
+        if support is not None and category not in support:
+            return False, f"structural_evidence_contradiction:{category}!={vf.get('catalog_type')}", {}
 
         sig = {
             "has_video": has_video,
@@ -1117,6 +1276,7 @@ class ByzantineResilientAggregator:
         label_asn_sets: Dict[Tuple[Any, ...], Set[int]] = {}
         label_exemplar: Dict[Tuple[Any, ...], Tuple[Dict[str, Any], Dict[str, Any], Optional[str]]] = {}
         label_title_asns: Dict[Tuple[Any, ...], Dict[str, Set[int]]] = {}
+        label_structural_asns: Dict[Tuple[Any, ...], Set[int]] = {}
 
         # Also track per-ASN majority vote so a single ASN flooding observations only gets 1 ASN vote
         asn_label_votes: Dict[int, Dict[Tuple[Any, ...], int]] = {}
@@ -1139,6 +1299,9 @@ class ByzantineResilientAggregator:
             label_obs_counts[composite_key] = label_obs_counts.get(composite_key, 0) + 1
             label_asn_sets.setdefault(composite_key, set()).add(asn_val)
             label_exemplar[composite_key] = (rec_d, s_sig, eff_t)
+            support = self.structural_category_support(rec_d)
+            if support is not None and composite_key[0] in support:
+                label_structural_asns.setdefault(composite_key, set()).add(asn_val)
             if eff_t is not None and str(eff_t).strip() != "":
                 norm_title_vote = str(eff_t).strip()
                 label_title_asns.setdefault(composite_key, {}).setdefault(norm_title_vote, set()).add(asn_val)
@@ -1188,6 +1351,21 @@ class ByzantineResilientAggregator:
                 agreement_ratio=agreement_ratio,
             )
 
+        # Structural-evidence agreement: >= min_distinct_asns ASNs must back the winning category with their own
+        # catalog/episode evidence. ASN-count alone can be met by many peers running the same biased checkpoint.
+        structural_asns = label_structural_asns.get(best_key, set())
+        if len(structural_asns) < self.min_distinct_asns:
+            return CatalogConsensusResult(
+                consensus_reached=False,
+                reason=f"insufficient_structural_evidence_asns:{len(structural_asns)}<{self.min_distinct_asns}",
+                blinded_hash=target_blinded_hash,
+                distinct_asns=len(winning_asns),
+                total_valid_observations=total_valid,
+                quarantined_byzantine_count=len(quarantined_reasons),
+                quarantined_reasons=quarantined_reasons,
+                agreement_ratio=agreement_ratio,
+            )
+
         exemplar_rec, exemplar_sig, _exemplar_title = label_exemplar[best_key]
         verified_title: Optional[str] = canonical_title
         if verified_title is None:
@@ -1204,6 +1382,7 @@ class ByzantineResilientAggregator:
             f"category_prior:{best_key[0]}": round(agreement_ratio, 4),
             "junk_rate_delta": 0.0,
             "verified_asn_quorum": float(len(winning_asns)),
+            "structural_evidence_asn_quorum": float(len(structural_asns)),
         }
         delta = ZeroCueCatalogDelta(
             blinded_hash=str(exemplar_rec.get("blinded_hash", target_blinded_hash)),
@@ -1506,21 +1685,13 @@ class ByzantineResilientAggregator:
                 rejected_count += 1
                 continue
 
-            def _is_valid_finite_scalar(val: Any) -> bool:
-                if isinstance(val, bool) or not isinstance(val, (int, float)):
-                    return False
-                try:
-                    return math.isfinite(float(val))
-                except (OverflowError, ValueError, TypeError):
-                    return False
-
             has_non_finite = False
             for dv in deltas_dict.values():
                 if isinstance(dv, (list, tuple)):
-                    if not dv or any(not _is_valid_finite_scalar(x) for x in dv):
+                    if not dv or any(isinstance(x, bool) or not isinstance(x, (int, float)) or not math.isfinite(float(x)) for x in dv):
                         has_non_finite = True
                         break
-                elif not _is_valid_finite_scalar(dv):
+                elif isinstance(dv, bool) or not isinstance(dv, (int, float)) or not math.isfinite(float(dv)):
                     has_non_finite = True
                     break
             if has_non_finite:

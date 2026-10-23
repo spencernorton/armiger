@@ -458,6 +458,51 @@ def _softmax(logits: np.ndarray) -> np.ndarray:
     return exps / np.sum(exps, axis=-1, keepdims=True)
 
 
+_DEFAULT_MONDRIAN_THRESHOLDS: Dict[str, float] = {"adult": 0.5451, "junk": 0.1010, "owner_scope": 0.4770}
+
+
+def _mondrian_value(v: Any) -> Optional[float]:
+    return float(v) if isinstance(v, (int, float)) and not isinstance(v, bool) and 0.0 < float(v) < 1.0 else None
+
+
+def load_mondrian_thresholds(calibration_path: str | Path | None) -> Tuple[Dict[str, float], Dict[str, Dict[str, float]]]:
+    """(global gate thresholds, per-gate strata) from `calibration.json`; defaults only where nothing is fitted.
+
+    Same precedence as `calibration_and_dht.ArmigerCalibrator`: `mondrian_thresholds[gate]` (a dict replaces the
+    legacy block entirely), else legacy `mondrian_conformal_thresholds[gate]["threshold" | "threshold_*"]`;
+    strata from `mondrian_stratified_thresholds[gate]["strata"][<category>]` (fitted per predicted category).
+    """
+    thresholds = dict(_DEFAULT_MONDRIAN_THRESHOLDS)
+    strata: Dict[str, Dict[str, float]] = {}
+    try:
+        cfg = json.loads(Path(calibration_path).read_text(encoding="utf-8")) if calibration_path else {}
+    except (OSError, ValueError):
+        cfg = {}
+    if not isinstance(cfg, dict):
+        return thresholds, strata
+    flat = cfg.get("mondrian_thresholds")
+    if not isinstance(flat, dict):
+        legacy = cfg.get("mondrian_conformal_thresholds")
+        flat = {}
+        for gate, block in (legacy.items() if isinstance(legacy, dict) else ()):
+            if isinstance(block, dict):
+                keys = ["threshold"] + sorted(k for k in block if str(k).startswith("threshold_"))
+                flat[gate] = next((block[k] for k in keys if _mondrian_value(block.get(k)) is not None), None)
+            else:
+                flat[gate] = block
+    for gate in thresholds:
+        v = _mondrian_value(flat.get(gate, flat.get("scope") if gate == "owner_scope" else None))
+        if v is not None:
+            thresholds[gate] = v
+    raw_strata = cfg.get("mondrian_stratified_thresholds")
+    for gate, block in (raw_strata.items() if isinstance(raw_strata, dict) else ()):
+        per = block.get("strata") if isinstance(block, dict) else None
+        if isinstance(per, dict):
+            g_key = "owner_scope" if gate == "scope" else str(gate)
+            strata[g_key] = {str(k): t for k, v in per.items() if (t := _mondrian_value(v)) is not None}
+    return thresholds, strata
+
+
 class ArmigerStandaloneONNX:
     """Self-contained ONNX Runtime classifier for `NorviTech/armiger` and `NorviTech/armiger-ultra`."""
 
@@ -483,13 +528,24 @@ class ArmigerStandaloneONNX:
             default_vocab = self.onnx_path.with_name("vocab.json")
         self.vocab_path = Path(vocab_path) if vocab_path else default_vocab
         _get_vocab_ext_map(self.vocab_path)
-        self.calibration_path = Path(calibration_path) if calibration_path else (base / "calibration.json")
+        default_cal = base / "calibration.json"
+        if not default_cal.exists() and self.onnx_path.with_name("calibration.json").exists():
+            default_cal = self.onnx_path.with_name("calibration.json")
+        self.calibration_path = Path(calibration_path) if calibration_path else default_cal
+        self.mondrian_thresholds, self.mondrian_strata = load_mondrian_thresholds(self.calibration_path)
         self.session = ort.InferenceSession(str(self.onnx_path), providers=["CPUExecutionProvider"])
         self.head_names = [o.name for o in self.session.get_outputs()]
 
     @staticmethod
     def _apply_v3_post_neural_guard(row: Mapping[str, Any], item_res: Dict[str, Any]) -> Dict[str, Any]:
         return _apply_v3_post_neural_guard(row, item_res)
+
+    def mondrian_threshold(self, gate: str, stratum: Optional[str] = None) -> float:
+        """Stratified Mondrian threshold for `gate` (per predicted category when fitted, else global)."""
+        per = self.mondrian_strata.get(gate, {})
+        if stratum is not None and str(stratum) in per:
+            return per[str(stratum)]
+        return self.mondrian_thresholds[gate]
 
     def predict_batch(self, rows: Sequence[Mapping[str, Any]]) -> List[Dict[str, Any]]:
         feed = build_onnx_batch_inputs(rows)
@@ -507,11 +563,14 @@ class ArmigerStandaloneONNX:
                     probs_2d = exps / np.maximum(1e-12, np.sum(exps, axis=-1, keepdims=True))
                     raw_nm = str(rows[i].get("name") or rows[i].get("title") or "")
                     try:
-                        from armiger.byte_span_extractor import decode_bio_logits_viterbi, decode_bio_tags_to_spans
-                    except ImportError:
-                        from byte_span_extractor import decode_bio_logits_viterbi, decode_bio_tags_to_spans
-                    raw_b = raw_nm.encode("utf-8", errors="replace")[: vec.shape[0]]
-                    tag_ids = [int(x) for x in decode_bio_logits_viterbi(vec, raw_b).tolist()]
+                        try:
+                            from armiger.byte_span_extractor import decode_bio_logits_viterbi, decode_bio_tags_to_spans
+                        except ImportError:
+                            from byte_span_extractor import decode_bio_logits_viterbi, decode_bio_tags_to_spans
+                        raw_b = raw_nm.encode("utf-8", errors="replace")[: vec.shape[0]]
+                        tag_ids = [int(x) for x in decode_bio_logits_viterbi(vec, raw_b).tolist()]
+                    except Exception:
+                        tag_ids = [int(x) for x in np.argmax(probs_2d, axis=-1).tolist()]
                     classes = NEURAL_HEAD_CLASSES.get(
                         h,
                         list(SPAN_BIO_CLASSES),
@@ -537,17 +596,18 @@ class ArmigerStandaloneONNX:
             self._apply_v3_post_neural_guard(rows[i], item_res)
             p_junk = item_res["probabilities"].get("junk", {}).get("junk", 0.0)
             p_adult = item_res["probabilities"].get("adult", {}).get("adult", 0.0)
-            p_excl = (
-                0.05
-                if item_res["heads"].get("owner_scope") == "allowed_type"
-                else item_res["probabilities"].get("owner_scope", {}).get("excluded", 0.0)
-            )
+            # Calibrated excluded probability is kept as-is: the conformal gate (not the argmax label) decides.
+            p_excl = item_res["probabilities"].get("owner_scope", {}).get("excluded", 0.0)
+            stratum = item_res["heads"].get("category")
+            thr = {g: self.mondrian_threshold(g, stratum) for g in ("adult", "junk", "owner_scope")}
             item_res["p_junk"] = p_junk
             item_res["mondrian_gates"] = {
-                "adult_flagged": bool(p_adult >= 0.5451),
-                "junk_flagged": bool(p_junk >= 0.1010),
-                "scope_excluded": bool(p_excl >= 0.4770),
-                "passed_all": bool(p_adult < 0.5451 and p_junk < 0.1010 and p_excl < 0.4770),
+                "adult_flagged": bool(p_adult >= thr["adult"]),
+                "junk_flagged": bool(p_junk >= thr["junk"]),
+                "scope_excluded": bool(p_excl >= thr["owner_scope"]),
+                "passed_all": bool(p_adult < thr["adult"] and p_junk < thr["junk"] and p_excl < thr["owner_scope"]),
+                "thresholds": thr,
+                "owner_scope_stratum": stratum,
             }
             results.append(item_res)
         return results
@@ -699,6 +759,39 @@ def _apply_v3_post_neural_guard(row: Mapping[str, Any], item_res: Dict[str, Any]
         if heads.get("category") in ("movie", "tv_show", "audiobook", "course"):
             heads["lang"] = "english"
 
+    # 5b. Owner Policy Rule 3 (`evaluate_owner_policy_rule3`)
+    rule3_res: Dict[str, Any] = {
+        "is_localized_foreign_alias": False,
+        "rule3_case": "standard",
+    }
+    try:
+        try:
+            from armiger.audio_language_guard import evaluate_owner_policy_rule3
+        except ImportError:
+            from audio_language_guard import evaluate_owner_policy_rule3
+        p_en_cur = 0.85 if heads.get("lang") in ("english", "multi_or_unknown") else 0.15
+        p_for_t_cur = 0.85 if heads.get("title_language") == "non_english_title" else 0.10
+        p_anime_cur = 0.90 if heads.get("anime") == "anime" else 0.05
+        rule3_res = evaluate_owner_policy_rule3(
+            name,
+            p_en=p_en_cur,
+            p_title_foreign=p_for_t_cur,
+            p_anime=p_anime_cur,
+        )
+    except Exception:
+        pass
+
+    item_res["is_localized_foreign_alias"] = bool(rule3_res.get("is_localized_foreign_alias", False))
+    item_res["rule3_case"] = str(rule3_res.get("rule3_case", "standard"))
+    if rule3_res.get("is_localized_foreign_alias"):
+        heads["title_language"] = "non_english_title"
+    elif rule3_res.get("rule3_case") == "english_title_with_multi_audio" and not (is_sub_only_trap or bool(all_h & _V3_NON_EN_AUDIO_H)):
+        heads["title_language"] = "english_title"
+        heads["lang"] = "english"
+    elif rule3_res.get("rule3_case") == "foreign_work_with_english_dub" and not (is_sub_only_trap or bool(all_h & _V3_NON_EN_AUDIO_H)):
+        if heads.get("lang") == "non_english":
+            heads["lang"] = "english"
+
     # 6. Byte-Span Clean Title & Release Year Extraction
     m_yr = re.search(r"(?<![\dA-Za-z])(19[2-9]\d|20[0-2]\d)(?![\dA-Za-z])", name)
     rel_year = int(m_yr.group(1)) if m_yr else None
@@ -721,10 +814,20 @@ def _apply_v3_post_neural_guard(row: Mapping[str, Any], item_res: Dict[str, Any]
         "release_year": rel_year,
     }
     p_junk = float(probs.get("junk", {}).get("junk", 0.0))
-    if heads.get("category") in ("movie", "tv_show") and p_adult < 0.5451 and p_junk < 0.1010:
+    if (
+        heads.get("category") in ("movie", "tv_show")
+        and p_adult < 0.5451
+        and p_junk < 0.1010
+        and not rule3_res.get("is_localized_foreign_alias", False)
+    ):
         heads["owner_scope"] = "allowed_type"
     else:
         heads["owner_scope"] = "excluded"
+        if is_nested and rule3_res.get("is_localized_foreign_alias", False):
+            probs.setdefault("owner_scope", {})["excluded"] = 0.98
+            probs.setdefault("owner_scope", {})["allowed_type"] = 0.02
+            probs.setdefault("title_language", {})["non_english_title"] = 0.98
+            probs.setdefault("title_language", {})["english_title"] = 0.02
     if not is_nested and "owner_scope" in item_res and isinstance(item_res["owner_scope"], dict):
         item_res["owner_scope"]["label"] = heads["owner_scope"]
     if is_nested:
