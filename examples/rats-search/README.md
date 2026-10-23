@@ -48,4 +48,4 @@ Run these from the same folder:
 | Start again | `docker compose up -d` |
 | Update | `git pull --ff-only`, then `docker compose up -d --build` |
 
-Stopping keeps your index and downloaded model. Do not add `-v` unless you intend to erase this example's saved data. If the build runs out of memory, increase Docker's memory allocation and try again. Change ports in `.env` if they are already in use. On a remote server, use SSH port forwarding to reach the local status/API ports. Automatic removal of flagged items is off.
+Stopping keeps your index and downloaded model. Do not add `-v` unless you intend to erase this example's saved data. If the build runs out of memory, increase Docker's memory allocation and try again. Change ports in `.env` if they are already in use. For a remote server, follow the [remote access instructions](../../docs/reference.md#remote-docker-server). Automatic removal of flagged items is off.

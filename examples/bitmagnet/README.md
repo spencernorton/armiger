@@ -54,4 +54,4 @@ Run these from the same folder:
 
 Stopping keeps the database and downloaded model. Keep the same database password when starting again. Do not add `-v` to the stop command unless you intend to erase this example's saved data.
 
-If a port is already in use, change its value in `.env` and start again; use that new port in your browser. On a remote server, these links need SSH port forwarding because they listen locally by default. Automatic removal of flagged items is off; normal setup only adds labels.
+If a port is already in use, change its value in `.env` and start again; use that new port in your browser. For a remote server, use the [remote access instructions](../../docs/reference.md#remote-docker-server) to open these links from your own computer. Automatic removal of flagged items is off; normal setup only adds labels.

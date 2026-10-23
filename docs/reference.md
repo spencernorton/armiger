@@ -69,3 +69,21 @@ The complete pipeline composes these components. Most callers need only `Armiger
 Library version 3.1.0 and model version 3.0.0 are separate. Existing flat imports such as `armiger_inference` and `armiger_ultra_pipeline` remain compatibility aliases for this release; new code should import from `armiger`. `ArmigerPipeline` aliases `ArmigerUltraPipeline`.
 
 Model weights, vocabulary, calibration, adapter and catalog must be from a compatible bundle. Do not mix assets from different releases. The complete `all` download also includes the PyTorch checkpoint for tooling that needs it.
+
+## Remote Docker server
+
+The Docker examples keep their web and status ports local to the server. To open them from your own computer, open a terminal **on your own computer** and use one of these commands. Replace `user@server` with your server's SSH login.
+
+For Bitmagnet:
+
+```bash
+ssh -N -L 3333:127.0.0.1:3333 -L 8096:127.0.0.1:8096 user@server
+```
+
+For Rats Search:
+
+```bash
+ssh -N -L 8095:127.0.0.1:8095 -L 8098:127.0.0.1:8098 user@server
+```
+
+Leave that terminal open and use the `localhost` links in the setup guide. If you changed ports in `.env`, adjust the matching port numbers here. Close the terminal when finished.
