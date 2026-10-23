@@ -1,3 +1,13 @@
+## 2026-10-23 — pin Torznab numeric file-count connector fix (3.2.1)
+
+- **Branch:** fix/pin-torznab-files-connector
+- **What changed:** Pin merged `Armiger-Connectors` `fd5c3faae6f5bd915a66010b7d1ed67ed8dd96f8` (`v1.1.1`, PR #3) in `examples/Dockerfile` with updated SHA-256 checksum and bump release version to `3.2.1` so CI publishes updated container images and Compose packages.
+- **Why:** Prowlarr and standard Torznab feeds send `<torznab:attr name="files" value="36"/>` as a numeric file count rather than a semicolon-delimited path list.
+- **Validation:** Connector suite (14 passed) and Armiger runtime suite pass.
+- **Deployment:** Published via protected `main` CI to GHCR (`3.2.1`).
+- **Next step:** Merge after green required checks and tag `v3.2.1`.
+- **Status file updated:** Recorded in `shared-ops/projects/status/bitagent.md`.
+
 ## 2026-10-23 — codex — packaged setup acceptance and release provenance
 
 - **Branch:** codex/prebuilt-containers
