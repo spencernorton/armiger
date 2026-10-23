@@ -50,8 +50,5 @@ services:
       ARMIGER_PRUNE_MALWARE: ${ARMIGER_PRUNE_MALWARE:-false}
       ARMIGER_PRUNE_DEAD_SWARMS: 'false'
       ARMIGER_REJECT_DEAD_SWARMS: 'false'
-    volumes:
-      - armiger_models:/models
 volumes:
   postgres_data:
-  armiger_models:

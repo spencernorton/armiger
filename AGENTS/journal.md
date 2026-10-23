@@ -1,3 +1,12 @@
+## 2026-10-23 — codex — keep bundled-model containers stateless
+
+- **Branch:** codex/prebuilt-containers
+- **Decision:** Remove redundant model-cache volumes. The pinned model ships in the image; each processor uses that version directly. Only Bitmagnet's database and Rats Search's index require persistent volumes in the default setups.
+- **Why:** Fewer novice settings, no duplicate model copies, and image updates always select the matching bundled model. Python callers retain the verified-download cache API.
+- **Validation:** Recheck the simplified Compose definitions and fresh startup; prior source, wheel, offline inference and backend-write checks remain applicable.
+- **Next step:** Complete protected publication and anonymous-pull acceptance.
+- **Status file updated:** Final private checkpoint records the image and data-volume model.
+
 ## 2026-10-23 — codex — bundled container acceptance
 
 - **Branch:** codex/prebuilt-containers

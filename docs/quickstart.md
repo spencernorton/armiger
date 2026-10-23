@@ -13,10 +13,6 @@ services:
     restart: unless-stopped
     ports:
       - '127.0.0.1:8096:8096'
-    volumes:
-      - armiger_models:/models
-volumes:
-  armiger_models:
 ```
 
 ## 2. Start it
@@ -43,6 +39,6 @@ The JSON response includes `"category": "movie"`. This classifies metadata; it d
 
 ## Stop and start
 
-From the same folder, run `docker compose down` to stop or `docker compose up -d` to start again. The downloaded model stays saved. Adding `-v` to the stop command erases it. For startup errors, run `docker compose logs --tail=50`.
+From the same folder, run `docker compose down` to stop or `docker compose up -d` to start again. The model is part of the image; you do not need a separate model folder. For startup errors, run `docker compose logs --tail=50`.
 
 [Python installation](reference.md#python-installation) · [Updates](reference.md#docker-settings-and-updates) · [Remote server](reference.md#remote-docker-server)

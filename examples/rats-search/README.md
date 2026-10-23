@@ -28,6 +28,6 @@ Rats Search's API is at `http://localhost:8095`. This is a connection address fo
 
 ## Stop and start
 
-From the same folder, run `docker compose down` to stop or `docker compose up -d` to start again. Your index and model stay saved. Adding `-v` to the stop command erases them. Automatic deletion of flagged items is off.
+From the same folder, run `docker compose down` to stop or `docker compose up -d` to start again. Your index stays saved. Adding `-v` to the stop command erases them. Automatic deletion of flagged items is off.
 
 [Optional settings and updates](../../docs/reference.md#docker-settings-and-updates) · [Using a remote server](../../docs/reference.md#remote-docker-server)

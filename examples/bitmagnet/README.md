@@ -26,7 +26,7 @@ To check Armiger itself, open [its status page](http://localhost:8096/healthz). 
 
 ## Stop and start
 
-From the same folder, run `docker compose down` to stop or `docker compose up -d` to start again. Your index and model stay saved. Adding `-v` to the stop command erases them.
+From the same folder, run `docker compose down` to stop or `docker compose up -d` to start again. Your index stays saved. Adding `-v` to the stop command erases them.
 
 The setup contains Bitmagnet, its private database and Armiger. Their connection settings are already filled in. Automatic deletion of flagged items is off.
 
