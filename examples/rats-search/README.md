@@ -2,8 +2,6 @@
 
 Armiger automatically assigns content categories to items found by Rats Search. This example starts a **new Rats Search server** and Armiger Ultra together. It runs in the background and **does not include the Rats Search desktop interface or a web search page**.
 
-**Already using Rats Search?** Keep your current collection. See the [connector for an existing installation](https://github.com/spencernorton/Armiger-Connectors/tree/main/rats-search) instead of creating a separate index here.
-
 ## 1. Get the files
 
 Install [Docker](https://docs.docker.com/get-started/get-docker/) and [Git](https://git-scm.com/downloads), and make sure Docker is running. Docker Desktop includes Docker Compose; Linux users also need the [Compose plugin](https://docs.docker.com/compose/install/linux/).

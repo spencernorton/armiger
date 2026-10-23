@@ -1,3 +1,13 @@
+## 2026-10-23 — codex — fresh all-in-one setup scope
+
+- **Branch:** codex/plain-setup-guides
+- **Decision:** The main Bitmagnet and Rats Search guides cover fresh all-in-one setups. Adding Armiger to existing installations is deferred.
+- **What changed:** Remove existing-installation detours from the setup flow; retain the supported fresh-stack commands and expected results.
+- **Validation:** Guide order, links, example output and Compose configuration verified in this pass.
+- **Deployment:** None; protected PR checks govern merging.
+- **Next step:** Merge the guide pass after required checks.
+- **Status file updated:** Tracker and private handoff record the scope.
+
 ## 2026-10-23 — codex — plain setup guides
 
 - **Branch:** codex/plain-setup-guides

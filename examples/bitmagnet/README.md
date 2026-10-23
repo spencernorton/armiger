@@ -2,8 +2,6 @@
 
 Armiger adds content-type and language tags to items in Bitmagnet. This example starts a **new Bitmagnet installation**, its database and Armiger Ultra together.
 
-**Already running Bitmagnet?** Keep your existing setup. Use the [connector for your existing instance](https://github.com/spencernorton/Armiger-Connectors/tree/main/bitmagnet) instead of starting a second index here.
-
 ## 1. Get the files
 
 Install [Docker](https://docs.docker.com/get-started/get-docker/) and [Git](https://git-scm.com/downloads), and make sure Docker is running. Docker Desktop includes Docker Compose; Linux users also need the [Compose plugin](https://docs.docker.com/compose/install/linux/).
