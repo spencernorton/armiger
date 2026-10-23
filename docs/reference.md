@@ -21,7 +21,22 @@ pipeline = ArmigerUltraPipeline.from_directory(
 
 Use `variant="int8"` to run the pipeline with the INT8 model (download `--variant all` first). `from_directory` loads local data; it does not fetch missing models. `ARMIGER_MODEL_DIR` sets the default directory for the constructor. Download and check data with `python -m armiger download`; the model manifest records its immutable upstream revision and file hashes.
 
+## Model storage
+
+`python -m armiger download` and the default Python constructor share a versioned cache under `~/.cache/armiger/`. Set `ARMIGER_MODEL_DIR` to choose a different folder. Alternatively, download with `--directory ./models` and load with `ArmigerUltraPipeline.from_directory("./models")`. The CLI uses `--model-dir ./models` for classification. Keep the same location for downloading and loading.
+
+`python -m armiger download --offline` verifies cached Ultra files without accessing the network. Model data is reused between sessions; download again if a new library release selects a different model revision.
+
 ## Standalone ONNX
+
+For only the lightweight model, install the package without the Ultra extra and download its CPU files:
+
+```bash
+python -m pip install .
+python -m armiger download --directory ./models-cpu --variant cpu
+```
+
+This path needs NumPy and ONNX Runtime, but no PyTorch, catalog or swarm adapter.
 
 ```python
 from armiger import ArmigerStandaloneONNX
@@ -54,3 +69,21 @@ The complete pipeline composes these components. Most callers need only `Armiger
 Library version 3.1.0 and model version 3.0.0 are separate. Existing flat imports such as `armiger_inference` and `armiger_ultra_pipeline` remain compatibility aliases for this release; new code should import from `armiger`. `ArmigerPipeline` aliases `ArmigerUltraPipeline`.
 
 Model weights, vocabulary, calibration, adapter and catalog must be from a compatible bundle. Do not mix assets from different releases. The complete `all` download also includes the PyTorch checkpoint for tooling that needs it.
+
+## Remote Docker server
+
+The Docker examples keep their web and status ports local to the server. To open them from your own computer, open a terminal **on your own computer** and use one of these commands. Replace `user@server` with your server's SSH login.
+
+For Bitmagnet:
+
+```bash
+ssh -N -L 3333:127.0.0.1:3333 -L 8096:127.0.0.1:8096 user@server
+```
+
+For Rats Search:
+
+```bash
+ssh -N -L 8095:127.0.0.1:8095 -L 8098:127.0.0.1:8098 user@server
+```
+
+Leave that terminal open and use the `localhost` links in the setup guide. If you changed ports in `.env`, adjust the matching port numbers here. Close the terminal when finished.

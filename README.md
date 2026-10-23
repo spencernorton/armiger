@@ -1,52 +1,27 @@
 # Armiger
 
-Fast local classification of torrent and media metadata, with ONNX inference and optional enrichment. Armiger reads names, file paths, sizes and optional swarm counters; it does not inspect media payloads.
+Armiger helps Bitmagnet and Rats Search label torrents by type and language, using names and file lists. **Armiger Ultra** also adds title matching, audio-language checks and estimates of download availability. It runs on a CPU; no GPU or paid API is required.
 
-**Armiger Ultra** combines the model with catalog matching, audio-language rules, swarm viability estimates, calibration and metadata safety checks. It runs on a CPU; a GPU is not required.
+## Choose your setup
 
-## Get started
+1. **[Bitmagnet + Armiger Ultra](examples/bitmagnet/README.md)** — classify items and add searchable tags in Bitmagnet.
+2. **[Rats Search + Armiger Ultra](examples/rats-search/README.md)** — classify items in Rats Search.
+3. **[Standalone Armiger Ultra](docs/quickstart.md)** — run Armiger on its own or use it from Python.
 
-| Setup | Guide |
-| --- | --- |
-| **Armiger Ultra** — use the complete pipeline locally | [Install and run](docs/quickstart.md) |
-| **Bitmagnet + Armiger Ultra** — start the indexer, database and classifier with Docker Compose | [Bitmagnet setup](examples/bitmagnet/README.md) |
-| **Rats Search + Armiger Ultra** — run the classifier alongside Rats Search | [Rats Search setup](examples/rats-search/README.md) |
+Choose one guide. The Docker setups include Armiger Ultra, so you do **not** need to install the standalone version first. Both Docker guides start with a fresh, all-in-one installation.
 
-For local Python use, install from this checkout and download the pinned model bundle:
+## What Armiger does
 
-```bash
-git clone https://github.com/spencernorton/armiger.git
-cd armiger
-python3 -m venv .venv
-source .venv/bin/activate
-python -m pip install '.[ultra]'
-python -m armiger download --directory ./models
-```
+Armiger reads names, file paths, sizes and optional swarm counters. It predicts content type, language, subtitle availability and other metadata. Ultra combines those predictions with its catalog and additional checks.
 
-```python
-from armiger import ArmigerUltraPipeline
+It does not inspect media payloads. Metadata predictions can be wrong and do not prove that a download is safe. See [evaluation and limitations](docs/evaluation.md) for measured results and label coverage. Sharing is off by default.
 
-pipeline = ArmigerUltraPipeline.from_directory("./models", preload_catalog=True)
-result = pipeline.classify({
-    "name": "Tears.of.Steel.2012.1080p.BluRay.x264-OPEN",
-    "size": 2_400_000_000,
-    "files": [{"path": "Tears.of.Steel.2012.mkv", "size": 2_400_000_000}],
-})
-print(result["category"])  # movie
-```
+## More information
 
-The [Ultra guide](docs/quickstart.md) covers prerequisites, model storage, CPU-only inference and a command-line check. Model downloads are checksummed and cached; inference can run offline after setup. Sharing is disabled unless explicitly enabled.
+- [Armiger on NorviTech](https://norvitech.com/ai-models/#armiger)
+- [Python API and component reference](docs/reference.md)
+- [Optional distributed updates](docs/distributed-updates.md)
+- [Other integrations](https://github.com/spencernorton/Armiger-Connectors) — DH-Waypoint, Torznab and Arr.
+- [Help and bug reports](https://github.com/spencernorton/armiger/issues) · [Contributing](.github/CONTRIBUTING.md) · [Security reporting](.github/SECURITY.md)
 
-## What it returns
-
-The model predicts content category, adult/junk indicators, anime, audio/title language, subtitle availability, catalog scope and title/year/episode spans. Ultra adds catalog disambiguation and swarm estimates. See the [API and component reference](docs/reference.md) for inputs, outputs and configuration.
-
-Metadata-derived language, swarm and safety predictions can be wrong. They are not payload inspection or proof that a download is safe. [Evaluation](docs/evaluation.md) documents measured results, label coverage and current release-gate limitations.
-
-## Documentation and support
-
-- [Distributed updates and sharing](docs/distributed-updates.md) — optional advanced features.
-- [Additional connectors](https://github.com/spencernorton/Armiger-Connectors) — DH-Waypoint, Torznab and Arr integrations.
-- [Contributing](.github/CONTRIBUTING.md) · [Issues](https://github.com/spencernorton/armiger/issues) · [Security reporting](.github/SECURITY.md).
-
-Library **3.1.0** uses the pinned **3.0.0** model bundle. Weights are hosted on [Hugging Face](https://huggingface.co/NorviTech/armiger-ultra); source and reproducible evaluation tools live here. Apache-2.0: [license](LICENSE), [notices](NOTICE), [use policy](.github/LEGAL.md).
+Library **3.1.0** uses model bundle **3.0.0**. Model files are downloaded from a fixed [Hugging Face](https://huggingface.co/NorviTech/armiger-ultra) revision and verified before use. Apache-2.0: [license](LICENSE), [notices](NOTICE), [use policy](.github/LEGAL.md).

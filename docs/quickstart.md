@@ -1,62 +1,69 @@
-# Set up Armiger Ultra
+# Standalone Armiger Ultra
 
-Ultra runs the complete classification and enrichment pipeline on a CPU. Use Python 3.10–3.12, internet access for the initial installation/download, and roughly 2 GB of free disk for dependencies and cached assets. No GPU, API key or account is required for the public model.
+Use this guide to run Armiger on its own or call it from Python. If you followed the [Bitmagnet](../examples/bitmagnet/README.md) or [Rats Search](../examples/rats-search/README.md) Docker guide, you already have Armiger Ultra and can skip this page.
 
-For an indexer deployment, use [Bitmagnet Compose](../examples/bitmagnet/README.md) or [Rats Search Compose](../examples/rats-search/README.md).
+You need [Python 3.12](https://www.python.org/downloads/), [Git](https://git-scm.com/downloads), and internet access for the initial install and model download. No Docker, GPU, account or API key is required.
 
-## Install
+## 1. Get the files
+
+If you already downloaded Armiger for a Docker guide, open a terminal in that repository folder and continue to step 2. Otherwise:
 
 ```bash
 git clone https://github.com/spencernorton/armiger.git
 cd armiger
-python3 -m venv .venv
+```
+
+## 2. Install
+
+On **macOS or Linux**:
+
+```bash
+python3.12 -m venv .venv
 source .venv/bin/activate
+```
+
+On **Windows PowerShell**:
+
+```powershell
+py -3.12 -m venv .venv
+.venv\Scripts\Activate.ps1
+```
+
+If PowerShell blocks activation, open Command Prompt in the same folder and use `.venv\Scripts\activate.bat` instead.
+
+On Linux, install CPU-only PyTorch first to avoid downloading unnecessary GPU libraries:
+
+```bash
+python -m pip install torch --index-url https://download.pytorch.org/whl/cpu
+```
+
+Then, on any platform:
+
+```bash
 python -m pip install '.[ultra]'
-python -m armiger download --directory ./models
+python -m armiger download
 ```
 
-On Windows, activate with `.venv\Scripts\activate`.
+Allow several minutes for dependencies. The model download itself is about 59 MB. Armiger checks the downloaded files and saves them for reuse.
 
-The download installs the FP32 ONNX model, swarm adapter, hashed lookup catalog, vocabulary, calibration and model config. Every file is verified against the packaged SHA-256 manifest at a fixed Hugging Face revision. Model code comes from the installed Python package, not the download. The Ultra data is approximately 59 MB.
-
-## Check the installation
-
-From the checkout (or anywhere with the virtual environment activated), run:
+## 3. Try it
 
 ```bash
-printf '%s\n' '{"name":"Tears.of.Steel.2012.1080p.BluRay.x264-OPEN","size":2400000000,"files":[{"path":"Tears.of.Steel.2012.mkv","size":2400000000}]}' \
-  | python -m armiger classify --model-dir ./models
+python examples/classify.py
 ```
 
-The JSON response should include `"category": "movie"`, `heads`, `mondrian_gates`, `plugin_trace` and `swarm_viability`. Missing swarm counters produce an unknown viability estimate; they do not mean the swarm is dead. The [README](../README.md) shows the equivalent Python call.
+You should see:
 
-## Storage and offline use
-
-`--directory` chooses the download location; `--model-dir` chooses the inference location. Set `ARMIGER_MODEL_DIR` to use one location across commands and Python clients. Without either, Armiger uses `~/.cache/armiger/<model-revision>/`.
-
-```bash
-export ARMIGER_MODEL_DIR="$PWD/models"
-python -m armiger download --offline
+```text
+Content type: movie
 ```
 
-The offline check verifies the complete cached bundle. Inference never downloads files implicitly. Keep the model directory when updating the library; new library releases may pin a new model revision. Download again when the offline verification reports missing or mismatched files.
+The example classifies the name and file information for *Tears of Steel*, an openly licensed film. It does not download the film. Open [the example](../examples/classify.py) to see the Python call and replace its input with your own metadata.
 
-## Lightweight ONNX only
+## Next time
 
-This omits the Ultra catalog and swarm adapter and requires no PyTorch:
+Open a terminal in the repository folder, activate `.venv` using the command above, and run your script. You do not need to reinstall or download the model each time. Once installed, local classification works offline.
 
-```bash
-python -m pip install .
-python -m armiger download --directory ./models-cpu --variant cpu
-printf '%s\n' '{"name":"Tears.of.Steel.2012.1080p.WEB-DL","files":[{"path":"Tears.of.Steel.2012.mkv","size":2400000000}]}' \
-  | python -m armiger classify --model-dir ./models-cpu --variant cpu
-```
+The default model folder is `~/.cache/armiger/` under your user account. To choose a different folder or use the smaller ONNX-only model, see the [Python reference](reference.md).
 
-## Troubleshooting
-
-- **Missing model:** run the download command for the same directory and variant used for inference.
-- **No PyTorch:** install `'.[ultra]'` from the checkout for the full swarm adapter.
-- **Checksum/download error:** retry the download; an incomplete download does not replace an existing verified file.
-- **Unexpected result:** include synthetic metadata, library/model versions and the output in a [bug report](https://github.com/spencernorton/armiger/issues/new/choose).
-
-DHT sharing is off by default. [Distributed updates](distributed-updates.md) explains explicit opt-in and its limits.
+If a command says Python 3.12 is missing, install that version first. If model loading fails, activate `.venv` and run `python -m armiger download` again. For more help, [report the error](https://github.com/spencernorton/armiger/issues/new/choose).
