@@ -2,13 +2,18 @@
 
 Start a new Rats Search server with Armiger Ultra already connected. This is a background server with an API; it does **not** include the Rats Search desktop interface or a web search page.
 
-You need [Docker](https://docs.docker.com/get-started/get-docker/) running, with Docker Compose available. Rats Search runs as an x86-64 container; Docker Desktop uses emulation on Apple Silicon.
+You need [Docker](https://docs.docker.com/get-started/get-docker/) running, with **Docker Compose 2.34 or newer** (included in current Docker Desktop). Rats Search runs as an x86-64 container; Docker Desktop uses emulation on Apple Silicon.
 
-## 1. Download the setup
+## 1. Save the setup
 
-Create a folder called `armiger-rats`. Save [this Compose file](https://raw.githubusercontent.com/spencernorton/armiger/main/examples/rats-search/docker-compose.yml) inside it as **`compose.yaml`**. If it opens in your browser, use **Save As**.
+Create a folder called `armiger-rats`. Save this as **`compose.yaml`** inside it:
 
-The file is ready to use. You do not need to edit it, install Python or compile Rats Search.
+```yaml
+include:
+  - oci://ghcr.io/spencernorton/armiger-rats-search-stack:3.2.0
+```
+
+This loads the complete setup from our versioned package. All connections are already configured.
 
 ## 2. Start it
 
@@ -18,7 +23,7 @@ Open a terminal in that folder and run:
 docker compose up -d
 ```
 
-Docker downloads the ready-made containers, including Armiger’s verified model. Allow several minutes for the first download.
+Docker downloads the ready-made containers, including Armiger’s verified model. Allow several minutes for the first download. If Docker asks whether you trust this setup, answer `y`.
 
 ## 3. Check it is ready
 
@@ -30,4 +35,4 @@ Rats Search's API is at `http://localhost:8095`. This is a connection address fo
 
 From the same folder, run `docker compose down` to stop or `docker compose up -d` to start again. Your index stays saved. Adding `-v` to the stop command erases that saved data. Automatic deletion of flagged items is off.
 
-[Optional settings and updates](../../docs/reference.md#docker-settings-and-updates) · [Using a remote server](../../docs/reference.md#remote-docker-server)
+[Custom settings, older Docker versions and updates](../../docs/reference.md#docker-settings-and-updates) · [Using a remote server](../../docs/reference.md#remote-docker-server)

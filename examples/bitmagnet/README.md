@@ -1,12 +1,17 @@
 # Bitmagnet + Armiger Ultra
 
-Start a new Bitmagnet installation with Armiger Ultra already connected. You need [Docker](https://docs.docker.com/get-started/get-docker/) running, with Docker Compose available.
+Start a new Bitmagnet installation with Armiger Ultra already connected. You need [Docker](https://docs.docker.com/get-started/get-docker/) running, with **Docker Compose 2.34 or newer** (included in current Docker Desktop).
 
-## 1. Download the setup
+## 1. Save the setup
 
-Create a folder called `armiger-bitmagnet`. Save [this Compose file](https://raw.githubusercontent.com/spencernorton/armiger/main/examples/bitmagnet/docker-compose.yml) inside it as **`compose.yaml`**. If it opens in your browser, use **Save As**.
+Create a folder called `armiger-bitmagnet`. Save this as **`compose.yaml`** inside it:
 
-The file is ready to use. You do not need to edit it, create a password file, install Python or build anything.
+```yaml
+include:
+  - oci://ghcr.io/spencernorton/armiger-bitmagnet-stack:3.2.0
+```
+
+This loads the complete setup from our versioned package. All connections are already configured.
 
 ## 2. Start it
 
@@ -16,7 +21,7 @@ Open a terminal in that folder and run:
 docker compose up -d
 ```
 
-Docker downloads the ready-made containers, including Armiger’s verified model. Allow several minutes for the first download.
+Docker downloads the ready-made containers, including Armiger’s verified model. Allow several minutes for the first download. If Docker asks whether you trust this setup, answer `y`.
 
 ## 3. Open Bitmagnet
 
@@ -30,4 +35,4 @@ From the same folder, run `docker compose down` to stop or `docker compose up -d
 
 The setup contains Bitmagnet, its private database and Armiger. Their connection settings are already filled in. Automatic deletion of flagged items is off.
 
-[Optional settings and updates](../../docs/reference.md#docker-settings-and-updates) · [Using a remote server](../../docs/reference.md#remote-docker-server)
+[Custom settings, older Docker versions and updates](../../docs/reference.md#docker-settings-and-updates) · [Using a remote server](../../docs/reference.md#remote-docker-server)

@@ -1,3 +1,12 @@
+## 2026-10-23 — codex — two-line packaged integration setups
+
+- **Branch:** codex/prebuilt-containers
+- **What changed:** Publish the full Bitmagnet and Rats Search Compose setups as versioned OCI artifacts after their images. Main guides use two-line `include` files (Compose 2.34+). Full files remain available for custom settings and older Compose.
+- **Implementation:** Normalize defaults to JSON for portable publication, then remove generated project/network/volume names so each user's folder gets its own resources. Published tags are preserved.
+- **Validation:** Isolated TLS registry publication and two-line loading pass; the loaded Bitmagnet network/database names follow the caller's project. Full runtime verification completes before public acceptance.
+- **Next step:** Verify both packaged setups, protected checks, public images/artifacts and anonymous pulls.
+- **Status file updated:** Final private checkpoint records the packaged setup.
+
 ## 2026-10-23 — codex — keep bundled-model containers stateless
 
 - **Branch:** codex/prebuilt-containers

@@ -131,3 +131,22 @@ jobs:
               docker buildx imagetools create --tag "$BASE" "$BASE-amd64"
             fi
           done
+          for SETUP in bitmagnet rats-search; do
+            STACK="ghcr.io/spencernorton/armiger-$SETUP-stack:$VERSION"
+            if docker buildx imagetools inspect --raw "$STACK" > /dev/null 2>&1; then
+              echo "$STACK already exists; leaving it unchanged."
+              continue
+            fi
+            docker compose -f "examples/$SETUP/docker-compose.yml" config --format json > "$RUNNER_TEMP/$SETUP-raw.json"
+            python3 - "$RUNNER_TEMP/$SETUP-raw.json" "$RUNNER_TEMP/$SETUP.json" <<'PYTHON'
+          import json, sys
+          from pathlib import Path
+          model = json.loads(Path(sys.argv[1]).read_text())
+          model.pop("name", None)
+          for kind in ("volumes", "networks"):
+              for resource in model.get(kind, {}).values():
+                  resource.pop("name", None)
+          Path(sys.argv[2]).write_text(json.dumps(model))
+          PYTHON
+            docker compose -f "$RUNNER_TEMP/$SETUP.json" publish --yes "$STACK"
+          done

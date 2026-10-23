@@ -8,7 +8,7 @@ Armiger helps Bitmagnet and Rats Search label torrents by type and language, usi
 2. **[Rats Search + Armiger Ultra](examples/rats-search/README.md)** — classify items in Rats Search.
 3. **[Standalone Armiger Ultra](docs/quickstart.md)** — run the ready-made Armiger container on its own.
 
-Choose one guide. The Docker setups include Armiger Ultra, so you do **not** need to install the standalone version first. Both integration guides start with a fresh, all-in-one installation. Download one ready-made Compose file and run `docker compose up -d`; no source build or Python installation is needed.
+Choose one guide. The Docker setups include Armiger Ultra, so you do **not** need to install the standalone version first. Both integration guides start with a fresh, all-in-one installation. Save the small Compose file from your guide and run `docker compose up -d`; no source build or Python installation is needed.
 
 ## What Armiger does
 
