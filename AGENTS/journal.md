@@ -1,3 +1,11 @@
+## 2026-10-23 — consistent README badges
+
+- **Branch:** codex/readme-badges
+- **What changed:** Centre the product title and add the NorviTech Armiger page, main CI, latest release, Hugging Face, Apache-2.0 licence and Stripe donation badges. Stripe remains last.
+- **Validation:** All six badge SVGs load, all external destinations return HTTP 200, the Armiger anchor exists, the licence target exists and Stripe is last. Required CI governs merging.
+- **Deployment:** Documentation only; the package and model versions remain unchanged.
+- **Status file updated:** Record the public pull request and validation in the private project handoff.
+
 ## 2026-10-23 — pin Torznab numeric file-count connector fix (3.2.1)
 
 - **Branch:** fix/pin-torznab-files-connector
