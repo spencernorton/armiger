@@ -650,7 +650,7 @@ class ArmigerUltraPipeline:
         model_name_or_path: Union[str, Path],
         **kwargs: Any,
     ) -> "ArmigerUltraPipeline":
-        """Hugging Face style loader supporting local directory paths or `huggingface_hub.snapshot_download`."""
+        """Load a local directory or the pinned, verified NorviTech/armiger-ultra bundle."""
         cand_path = Path(model_name_or_path)
         if cand_path.exists() and cand_path.is_dir():
             return cls.from_Directory(cand_path, **kwargs)
