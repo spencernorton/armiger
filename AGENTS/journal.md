@@ -1,3 +1,12 @@
+## 2026-10-23 — codex — packaged setup acceptance and release provenance
+
+- **Branch:** codex/prebuilt-containers
+- **Validation:** Both two-line OCI setups start healthy from an isolated registry and complete real Bitmagnet tag/Rats Search category writes. The loaded network/database names follow the caller's project; processor containers need no model mounts.
+- **Release:** Serialize main CI/publication without cancelling active releases. Native build tags bind the exact source SHA and architecture; release manifests combine only that SHA's builds and record its revision. Existing version tags stay unchanged.
+- **Why:** Prevent a superseding main run or partial retry from mixing architecture builds from different source commits.
+- **Next step:** Complete protected checks and public anonymous acceptance for the two images and two Compose packages.
+- **Status file updated:** Final private checkpoint records source, package digests and verification.
+
 ## 2026-10-23 — codex — two-line packaged integration setups
 
 - **Branch:** codex/prebuilt-containers

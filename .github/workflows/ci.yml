@@ -9,7 +9,7 @@ permissions:
   contents: read
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 jobs:
   verify:
     runs-on: ubuntu-24.04
@@ -92,7 +92,11 @@ jobs:
         run: |
           VERSION=$(python3 -c 'import tomllib; print(tomllib.load(open("pyproject.toml", "rb"))["project"]["version"])')
           printf '%s' "$REGISTRY_TOKEN" | docker login ghcr.io -u "$REGISTRY_USER" --password-stdin
-          TAG="$IMAGE:$VERSION-$ARCH"
+          if docker buildx imagetools inspect "$IMAGE:$VERSION" > /dev/null 2>&1; then
+            echo "$IMAGE:$VERSION is already released; leaving it unchanged."
+            exit 0
+          fi
+          TAG="$IMAGE:sha-$GITHUB_SHA-$ARCH"
           if docker buildx imagetools inspect "$TAG" > /dev/null 2>&1; then
             echo "$TAG already exists; leaving it unchanged."
           else
@@ -126,9 +130,9 @@ jobs:
             if docker buildx imagetools inspect "$BASE" > /dev/null 2>&1; then
               echo "$BASE already exists; leaving it unchanged."
             elif [ "$IMAGE" = armiger ]; then
-              docker buildx imagetools create --tag "$BASE" "$BASE-amd64" "$BASE-arm64"
+              docker buildx imagetools create --annotation "index:org.opencontainers.image.revision=$GITHUB_SHA" --tag "$BASE" "ghcr.io/spencernorton/$IMAGE:sha-$GITHUB_SHA-amd64" "ghcr.io/spencernorton/$IMAGE:sha-$GITHUB_SHA-arm64"
             else
-              docker buildx imagetools create --tag "$BASE" "$BASE-amd64"
+              docker buildx imagetools create --annotation "index:org.opencontainers.image.revision=$GITHUB_SHA" --tag "$BASE" "ghcr.io/spencernorton/$IMAGE:sha-$GITHUB_SHA-amd64"
             fi
           done
           for SETUP in bitmagnet rats-search; do
