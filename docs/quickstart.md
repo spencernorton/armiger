@@ -27,7 +27,7 @@ Open a terminal in that folder and run:
 docker compose up -d
 ```
 
-Docker downloads the container. Armiger downloads and checks its model once. Allow several minutes on the first start. You do not need Python, a GPU or an API key.
+Docker downloads the container, including the verified Ultra model. Allow several minutes for the first download. You do not need Python, a GPU or an API key.
 
 ## 3. Try it
 

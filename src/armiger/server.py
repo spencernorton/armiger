@@ -49,7 +49,7 @@ def serve(directory=None, *, host="127.0.0.1", port=8096, offline=False):
     from . import ArmigerUltraPipeline
     from .artifacts import download_model
 
-    print("Preparing Armiger Ultra; model files are downloaded once and cached.", flush=True)
+    print("Preparing Armiger Ultra and verifying model files.", flush=True)
     model_dir = download_model(directory, offline=offline)
     pipeline = ArmigerUltraPipeline.from_directory(model_dir, preload_catalog=True, rsi_mode="pull_only", opt_in_sharing=False)
     server = create_server(pipeline, host, port)

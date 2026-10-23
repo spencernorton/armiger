@@ -16,7 +16,7 @@ Open a terminal in that folder and run:
 docker compose up -d
 ```
 
-Docker downloads the ready-made containers. Armiger downloads and checks its model once. Allow several minutes on the first start.
+Docker downloads the ready-made containers, including Armiger’s verified model. Allow several minutes for the first download.
 
 ## 3. Open Bitmagnet
 

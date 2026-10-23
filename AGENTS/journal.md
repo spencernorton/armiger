@@ -1,3 +1,12 @@
+## 2026-10-23 — codex — bundle verified model in the image
+
+- **Branch:** codex/prebuilt-containers
+- **Decision:** Include the pinned, checksummed Ultra model in the image. Fresh Docker volumes are initialized from it, avoiding a second download provider during novice setup. Existing compatible model volumes remain reusable.
+- **Why:** A separate first-start Hugging Face download stalled during disposable setup verification. Docker should deliver the complete initial installation.
+- **Validation:** Rebuild and offline/fresh-stack verification in progress; prior source and installed-wheel checks remain green.
+- **Next step:** Verify the bundled image and complete publication.
+- **Status file updated:** Tracker will record final release results.
+
 ## 2026-10-23 — codex — container source verification
 
 - **Branch:** codex/prebuilt-containers

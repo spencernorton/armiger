@@ -2,7 +2,7 @@
 
 ## 3.2.0
 
-- Prebuilt Armiger images for x86-64 and ARM64, plus a pinned Rats Search backend image.
+- Prebuilt Armiger images with the verified Ultra model for x86-64 and ARM64, plus a pinned Rats Search backend image.
 - Ready-to-run fresh Compose setups without cloning, building or required environment files.
 - Standalone Ultra HTTP classification service.
 
