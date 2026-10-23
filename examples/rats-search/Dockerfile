@@ -27,6 +27,7 @@ WORKDIR /app
 COPY --from=builder /src/build/bin/RatsSearch ./
 COPY --from=builder /src/imports/linux/x64/searchd /src/imports/linux/x64/indexer /src/imports/linux/x64/indextool ./
 COPY --from=builder /src/LICENSE /usr/share/doc/rats-search/LICENSE
+COPY --from=builder /src/src/librats/LICENSE /usr/share/doc/librats/LICENSE
 # Corresponding source, build scripts and component licenses for bundled Manticore
 # 17.5.1 2c59803fe. This archive is also accessible without running the image.
 ADD --chmod=0444 --checksum=sha256:55526381c020ae6e8597dd01b086e3cb013a7bd9167727156f7e5eddbc9da5d5 https://codeload.github.com/manticoresoftware/manticoresearch/tar.gz/2c59803fefb5512dd868fbf42aa759d78e617e74 /usr/share/doc/manticore/source.tar.gz

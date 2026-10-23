@@ -1,3 +1,12 @@
+## 2026-10-23 — codex — bundled container acceptance
+
+- **Branch:** codex/prebuilt-containers
+- **Validation:** All three fresh pull-only Compose stacks reach healthy with the bundled model. Standalone HTTP classification works with networking disabled. Source suite: 272 passed, one internal-only skip; installed-wheel INT8/Ultra inference passed. The model is fetched by checksummed build inputs and verified offline against the package manifest during the build.
+- **Fix:** Pin merged Armiger-Connectors `8e808e481d2470420f5f0cd29fa02e39f4213180`, which fixes stock Bitmagnet's 30-character tag limit. Its 13 tests and protected check pass. Include the bundled librats license alongside Rats Search and Manticore source/notices.
+- **Deployment:** Local disposable stacks only. Protected GitHub merge and public image verification remain before release completion.
+- **Next step:** Publish tested native images and verify anonymous fresh pulls.
+- **Status file updated:** Tracker records the acceptance fix and remaining publication gate.
+
 ## 2026-10-23 — codex — bundle verified model in the image
 
 - **Branch:** codex/prebuilt-containers
