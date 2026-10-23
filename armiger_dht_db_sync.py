@@ -593,7 +593,7 @@ def decompress_payload(
         try:
             dobj = zlib.decompressobj()
             out = dobj.decompress(data, hard_cap + 1)
-            if dobj.unconsumed_tail or len(out) > hard_cap:
+            if dobj.unconsumed_tail or dobj.unused_data or not dobj.eof or len(out) > hard_cap:
                 return b""
             out += dobj.flush()
             if len(out) > hard_cap:

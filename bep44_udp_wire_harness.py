@@ -64,53 +64,54 @@ def bencode(value: Any) -> bytes:
     raise TypeError(f"Unsupported bencode type: {type(value)!r}")
 
 
-def _bdecode_at(data: bytes, idx: int) -> Tuple[Any, int]:
+def _bdecode_at(data: bytes, idx: int, depth: int = 0) -> Tuple[Any, int]:
+    if depth > 64:
+        raise ValueError("Bencode nesting limit exceeded")
     if idx >= len(data):
         raise ValueError("Unexpected EOF in bdecode")
     ch = data[idx:idx + 1]
     if ch == b"i":
         end = data.index(b"e", idx + 1)
-        num_bytes = data[idx + 1:end]
-        if not num_bytes or (num_bytes.startswith(b"0") and len(num_bytes) > 1) or num_bytes == b"-0":
+        num = data[idx + 1:end]
+        digits = num[1:] if num.startswith(b"-") else num
+        if (not digits or not digits.isdigit() or len(digits) > 20
+                or (digits.startswith(b"0") and len(digits) > 1) or num == b"-0"):
             raise ValueError("Invalid bencoded integer")
-        return int(num_bytes.decode("ascii")), end + 1
-    if ch == b"l":
+        return int(num), end + 1
+    if ch in (b"l", b"d"):
         idx += 1
-        arr: List[Any] = []
+        arr = []
+        out = {}
+        prev = None
         while data[idx:idx + 1] != b"e":
-            val, idx = _bdecode_at(data, idx)
-            arr.append(val)
-        return arr, idx + 1
-    if ch == b"d":
-        idx += 1
-        out: Dict[bytes, Any] = {}
-        prev_key: Optional[bytes] = None
-        while data[idx:idx + 1] != b"e":
-            key, idx = _bdecode_at(data, idx)
-            if not isinstance(key, bytes):
-                raise ValueError("Bencoded dictionary key must be bytes")
-            if prev_key is not None and key < prev_key:
-                raise ValueError("Non-canonical unsorted bencoded dictionary keys")
-            prev_key = key
-            val, idx = _bdecode_at(data, idx)
-            out[key] = val
-        return out, idx + 1
+            item, idx = _bdecode_at(data, idx, depth + 1)
+            if ch == b"l":
+                arr.append(item)
+            else:
+                if not isinstance(item, bytes) or (prev is not None and item <= prev):
+                    raise ValueError("Noncanonical or duplicate dictionary key")
+                prev = item
+                value, idx = _bdecode_at(data, idx, depth + 1)
+                out[item] = value
+        return (arr if ch == b"l" else out), idx + 1
     if b"0" <= ch <= b"9":
         colon = data.index(b":", idx)
-        length = int(data[idx:colon].decode("ascii"))
-        if length < 0:
-            raise ValueError("Negative byte string length")
+        raw_len = data[idx:colon]
+        if (not raw_len.isdigit() or len(raw_len) > 8
+                or (raw_len.startswith(b"0") and len(raw_len) > 1)):
+            raise ValueError("Invalid byte string length")
+        length = int(raw_len)
         start = colon + 1
         end = start + length
         if end > len(data):
             raise ValueError("Truncated bencoded byte string")
         return data[start:end], end
-    raise ValueError(f"Invalid bencode token at offset {idx}: {ch!r}")
+    raise ValueError("Invalid bencode token")
 
 
 def bdecode(data: bytes) -> Any:
     """Decode canonical bencoded bytes."""
-    if not isinstance(data, (bytes, bytearray)) or not data:
+    if not isinstance(data, (bytes, bytearray)) or not data or len(data) > 1048576:
         raise ValueError("Empty or non-bytes input to bdecode")
     val, idx = _bdecode_at(bytes(data), 0)
     if idx != len(data):
@@ -204,16 +205,11 @@ class BEP44UDPNode:
             pub = Ed25519PublicKey.from_public_bytes(pubkey)
         except Exception:
             return False
-        for candidate_buf in (
-            bep44_signing_buffer(v=v, seq=seq, salt=salt, cas=cas),
-            bep44_signing_buffer(v=v, seq=seq, salt=salt, cas=None),
-            bencode({k: val for k, val in a_dict.items() if k != b"sig"}),
-        ):
-            try:
-                pub.verify(sig, candidate_buf)
-                return True
-            except InvalidSignature:
-                continue
+        try:
+            pub.verify(sig, bep44_signing_buffer(v=v, seq=seq, salt=salt))
+            return True
+        except InvalidSignature:
+            pass
         return False
 
     def _send(self, payload: Dict[bytes, Any], addr: Tuple[str, int]) -> None:
@@ -237,6 +233,24 @@ class BEP44UDPNode:
         a = msg.get(b"a", {})
         if not isinstance(a, dict):
             self._send({b"t": t, b"y": b"e", b"e": 203}, addr)
+            return
+
+        # Validate query types before routing, dict indexing, and integer conversion.
+        valid = isinstance(t, bytes) and 0 < len(t) <= 16 and isinstance(q, bytes)
+        hash_key = b"info_hash" if q in (b"get_peers", b"announce_peer") else b"target"
+        if q in (b"find_node", b"get", b"get_peers", b"announce_peer"):
+            valid = valid and isinstance(a.get(hash_key), bytes) and len(a[hash_key]) == 20
+        if q in (b"put_bundle", b"get_bundle"):
+            idx = a.get(b"piece", 0)
+            valid = valid and isinstance(a.get(b"infohash"), bytes) and len(a[b"infohash"]) == 20
+            valid = valid and type(idx) is int and 0 <= idx < 4096
+            if q == b"put_bundle":
+                total = a.get(b"total", 1)
+                valid = valid and type(total) is int and 0 < total <= 4096 and idx < total
+        if q == b"announce_peer":
+            valid = valid and type(a.get(b"port")) is int and 0 < a[b"port"] <= 65535
+        if not valid:
+            self._send({b"t": t if isinstance(t, bytes) else b"0", b"y": b"e", b"e": 203}, addr)
             return
 
         if q == b"ping":
@@ -324,7 +338,8 @@ class BEP44UDPNode:
             not isinstance(pubkey, bytes)
             or not isinstance(salt, bytes)
             or not isinstance(v, bytes)
-            or not isinstance(seq, int)
+            or type(seq) is not int or not 0 <= seq <= 2**63 - 1
+            or (cas is not None and (type(cas) is not int or not 0 <= cas <= 2**63 - 1))
             or not isinstance(sig, bytes)
             or len(salt) > 64
         ):

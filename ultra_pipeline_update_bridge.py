@@ -478,7 +478,75 @@ def _canary_summary(report: CanaryRegressionReport) -> Dict[str, Any]:
         "adult_accuracy": round(float(report.adult_accuracy), 6),
         "category_accuracy": round(float(report.category_accuracy), 6),
         "owner_scope_accuracy": round(float(report.owner_scope_accuracy), 6),
+        "excluded_rejection_accuracy": round(float(getattr(report, "excluded_rejection_accuracy", 1.0)), 6),
+        "stratum_worst_group_accuracy": round(float(getattr(report, "stratum_worst_group_accuracy", 1.0)), 6),
+        "worst_stratum": str(getattr(report, "worst_stratum", "")),
+        "stratum_accuracy": {k: round(float(v), 6) for k, v in (getattr(report, "stratum_accuracy", None) or {}).items()},
+        "nonconformity_quantiles": dict(getattr(report, "nonconformity_quantiles", {})),
     }
+
+
+def _as_canary_summary(x: Any) -> Dict[str, Any]:
+    if isinstance(x, Mapping) and "report" in x:
+        return _canary_summary(x["report"])
+    if isinstance(x, CanaryRegressionReport):
+        return _canary_summary(x)
+    return dict(x)
+
+
+def mondrian_conformal_drift_guard(
+    baseline: Mapping[str, Any],
+    candidate: Mapping[str, Any],
+    *,
+    views: Optional[Sequence[str]] = None,
+    max_excluded_rejection_drop: float = 0.0,
+    max_stratum_drop: float = 0.0,
+    max_quantile_shift: float = 0.05,
+) -> List[str]:
+    """Mondrian Conformal Drift Guard for BEP-46 `calibration_delta` updates.
+
+    A federated temperature or Mondrian-threshold shift (adult / junk / owner_scope) can stay inside the
+    pipeline's 0.5 pp aggregate canary tolerance while silently flipping `excluded` categories
+    (course/ebook/audiobook/software/game/music/comic) to `allowed_type`, or wiping out one packaging stratum
+    (e.g. pure-`.mp3` audiobooks) behind a good average. This compares baseline vs candidate 500-item canary
+    results per view and returns regression strings (empty = no drift), in the same shape as
+    `ArmigerUltraPipeline._compare_canary`, which is where it belongs:
+    `regs.extend(mondrian_conformal_drift_guard(base, cand, views=self._dht_canary_views))`.
+
+    Accepts `run_dht_canary()` output ({view: {"report": ...}}), `CanaryRegressionReport`s, or
+    `_canary_summary` dicts (as stored in `DHTUpdateResult.baseline_canary / candidate_canary`).
+    """
+    if isinstance(max_quantile_shift, bool) or not math.isfinite(max_quantile_shift) or max_quantile_shift < 0:
+        raise ValueError("invalid_max_quantile_shift")
+    eps = 1e-12
+    regs: List[str] = []
+    for view in (list(views) if views is not None else sorted(set(baseline) & set(candidate))):
+        if view not in baseline or view not in candidate:
+            if view in baseline:
+                regs.append(f"{view}:missing_canary_view")
+            continue
+        rb, rc = _as_canary_summary(baseline[view]), _as_canary_summary(candidate[view])
+        bq, cq = rb.get("nonconformity_quantiles", {}), rc.get("nonconformity_quantiles", {})
+        for cat, before in bq.items():
+            after = cq.get(cat)
+            if (isinstance(before, bool) or not isinstance(before, (int, float)) or not math.isfinite(before)
+                    or not 0 <= before <= 1 or isinstance(after, bool) or not isinstance(after, (int, float))
+                    or not math.isfinite(after) or not 0 <= after <= 1
+                    or abs(after - before) > max_quantile_shift + eps):
+                regs.append(f"{view}:nonconformity_quantile_shift:{cat}:{before}->{after}")
+        b = float(rb.get("excluded_rejection_accuracy", 1.0))
+        c = float(rc.get("excluded_rejection_accuracy", 1.0))
+        if c < b - max_excluded_rejection_drop - eps:
+            regs.append(f"{view}:excluded_rejection_accuracy {b:.4f}->{c:.4f}")
+        b = float(rb.get("stratum_worst_group_accuracy", 1.0))
+        c = float(rc.get("stratum_worst_group_accuracy", 1.0))
+        if c < b - max_stratum_drop - eps:
+            regs.append(f"{view}:stratum_worst_group_accuracy {b:.4f}->{c:.4f}")
+        bs, cs = rb.get("stratum_accuracy") or {}, rc.get("stratum_accuracy") or {}
+        dropped = sorted(k for k, bv in bs.items() if float(cs.get(k, 0.0)) < float(bv) - max_stratum_drop - eps)
+        if dropped:
+            regs.append(f"{view}:stratum_accuracy_drops:{len(dropped)}:{dropped[:5]}")
+    return regs
 
 
 def _prediction_labels(pred: "ArmigerUltraPrediction") -> Dict[str, Any]:
@@ -488,6 +556,7 @@ def _prediction_labels(pred: "ArmigerUltraPrediction") -> Dict[str, Any]:
     junk_thr = float(junk_head.get("threshold", 0.5))
     return {
         "category": pred.category,
+        "category_probabilities": dict(pred.heads.get("category", {}).get("probs", {})),
         "adult": pred.adult == "adult",
         "junk": pred.junk == "junk",
         "neural_junk": neural_p >= junk_thr,

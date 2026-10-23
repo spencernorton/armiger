@@ -69,6 +69,21 @@ class MediaCategory(str, enum.Enum):
     UNKNOWN = "unknown"
 
 
+# v3 owner-scope policy: these categories are always `excluded`; the canary gate and the BEP-46
+# Mondrian drift guard measure "excluded rejection accuracy" over exactly this set.
+EXCLUDED_SCOPE_CATEGORIES: frozenset = frozenset({"course", "ebook", "audiobook", "software", "game", "music", "comic"})
+
+# Deterministic episode-structure cue (SxxEyy / 1x02 / Ep.03 / " - 02 "): structural, not neural, evidence that
+# a release is episodic. Used by the aggregator to block single-file Movie<->TV misclassifications.
+EPISODE_MARKER_RE = re.compile(
+    r"(?<![a-z0-9])s\d{1,2}[ ._-]?e\d{1,3}(?![a-z0-9])"
+    r"|(?<![a-z0-9])\d{1,2}x\d{2,3}(?![a-z0-9])"
+    r"|(?<![a-z0-9])(?:ep|episode)[ ._-]?\d{1,3}(?![a-z0-9])"
+    r"|\s-\s\d{2,3}(?=\s|\[|\(|$)",
+    re.IGNORECASE,
+)
+
+
 class BundleFormat(str, enum.Enum):
     """Permitted safe serialization formats (rejects pickle, pth, bin)."""
     SAFETENSORS = "safetensors"
@@ -467,6 +482,11 @@ class CanaryRegressionReport:
     category_accuracy: float
     owner_scope_accuracy: float
     regressions: List[Dict[str, Any]]
+    excluded_rejection_accuracy: float = 1.0  # owner_scope=="excluded" recall over EXCLUDED_SCOPE_CATEGORIES items
+    stratum_worst_group_accuracy: float = 1.0  # min over (category, packaging stratum) of category+scope accuracy
+    worst_stratum: str = ""
+    stratum_accuracy: Dict[str, float] = dataclasses.field(default_factory=dict)
+    nonconformity_quantiles: Dict[str, float] = dataclasses.field(default_factory=dict)
 
 
 # =====================================================================
@@ -799,6 +819,7 @@ class TelemetryAnonymizer:
             "audio_codec": acodec,
             "audio_channels": achannels,
             "catalog_type": cat_type,
+            "episode_marker": bool(EPISODE_MARKER_RE.search(str(observation.raw_title or ""))),
         }
 
         return AnonymizedTelemetryRecord(

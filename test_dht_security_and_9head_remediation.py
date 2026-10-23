@@ -253,6 +253,8 @@ class TestDHTSecurityAnd9HeadRemediation(unittest.TestCase):
         clf = ArmigerStandaloneONNX.__new__(ArmigerStandaloneONNX)
         clf.session = mock_sess
         clf.head_names = head_names
+        clf.mondrian_thresholds = {"adult": .5451, "junk": .101, "owner_scope": .477}
+        clf.mondrian_strata = {}
         res = clf.predict({"name": "[Judas] Kusuriya no Hitorigoto (Season 1) [1080p][HEVC x265 10bit][Dual-Audio][Multi-Subs]"})
         self.assertIn("span_bio", res)
         self.assertEqual(len(res["heads"]["span_bio"]), 256)
@@ -1000,7 +1002,7 @@ class TestDHTSecurityAnd9HeadRemediation(unittest.TestCase):
                 "title_language": "english_title",
                 "dp_size_mb": 1500.0,
                 "dp_duration_mins": 120.0,
-                "verified_features": {"has_video": True, "has_audio": True, "video_codec": "h264", "audio_codec": "aac", "audio_channels": 2},
+                "verified_features": {"has_video": True, "has_audio": True, "video_codec": "h264", "audio_codec": "aac", "audio_channels": 2, "catalog_type": "movie_catalog"},
             }
             enc_c = rsi.HybridPQCAEADEngine.encrypt_bundle(
                 json.dumps(rec_c).encode("utf-8"), cat_agg.aggregator_pubkey_bytes, seq=idx + 1

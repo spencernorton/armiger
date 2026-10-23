@@ -713,7 +713,9 @@ class ArmigerCalibrator:
                 for k_m, gk in (("adult", "adult"), ("junk", "junk"), ("owner_scope", "owner_scope")):
                     v_m = m_Legacy.get(k_m)
                     if isinstance(v_m, dict):
-                        t_v = v_m.get("threshold", v_m.get("threshold_G250", v_m.get("threshold_H350", self.DEFAULT_MONDRIAN[gk])))
+                        # accept `threshold`, `threshold_G250`, `threshold_r5clean`, ... (trainers suffix the key per run)
+                        t_keys = ["threshold"] + sorted(k for k in v_m if str(k).startswith("threshold_"))
+                        t_v = next((v_m[k] for k in t_keys if k in v_m and isinstance(v_m[k], (int, float))), self.DEFAULT_MONDRIAN[gk])
                         raw_m[gk] = float(t_v)
                     elif isinstance(v_m, (int, float)):
                         raw_m[gk] = float(v_m)
@@ -732,6 +734,29 @@ class ArmigerCalibrator:
             "scope": scope_t,
             "owner_scope": scope_t,
         }
+
+        # Mondrian per-stratum gate thresholds (written by recalibrate_mondrian_stratum_weighted.py):
+        # {"owner_scope": {"stratum_key": "category", "strata": {"movie": 0.21, ...}}}
+        self.mondrian_strata: dict[str, dict[str, float]] = {}
+        self.mondrian_stratum_key: dict[str, str] = {}
+        raw_strat = active_block.get("mondrian_stratified_thresholds")
+        if raw_strat is None:
+            raw_strat = raw_cfg.get("mondrian_stratified_thresholds")
+        if isinstance(raw_strat, dict):
+            for gate, block in raw_strat.items():
+                if gate not in ("adult", "junk", "owner_scope", "scope") or not isinstance(block, dict):
+                    raise ValueError(f"invalid mondrian_stratified_thresholds block for {gate!r}")
+                strata = block.get("strata")
+                if not isinstance(strata, dict):
+                    raise ValueError(f"mondrian_stratified_thresholds[{gate!r}].strata must be an object")
+                clean: dict[str, float] = {}
+                for k, v in strata.items():
+                    if isinstance(v, bool) or not isinstance(v, (int, float)) or not math.isfinite(float(v)) or not (0.0 < float(v) < 1.0):
+                        raise ValueError(f"invalid stratified mondrian threshold {gate}.{k}={v!r}")
+                    clean[str(k)] = float(v)
+                g_key = "owner_scope" if gate == "scope" else gate
+                self.mondrian_strata[g_key] = clean
+                self.mondrian_stratum_key[g_key] = str(block.get("stratum_key", "category"))
 
         raw_overrides = (
             active_block.get("plugin_overrides")
@@ -779,11 +804,24 @@ class ArmigerCalibrator:
                 out[head_name] = rounded
         return out
 
+    def gate_threshold(self, gate: str, stratum: str | None = None) -> float:
+        """Threshold for `gate` (`adult` / `junk` / `owner_scope`): the Mondrian per-stratum value when
+        `stratum` (e.g. the predicted category) is known and fitted, else the global value.
+        """
+        g_key = "owner_scope" if gate == "scope" else gate
+        if stratum is not None:
+            per = self.mondrian_strata.get(g_key, {})
+            if str(stratum) in per:
+                return float(per[str(stratum)])
+        return float(self.mondrian[g_key])
+
     def evaluate_safety_gates(
         self,
         p_adult: float,
         p_junk: float,
         p_excluded_scope: float,
+        *,
+        stratum: str | None = None,
     ) -> dict[str, bool]:
         def _flag(val: float, thresh: float) -> bool:
             if isinstance(val, bool) or not isinstance(val, (int, float)) or not math.isfinite(val) or val < 0.0 or val > 1.0:
@@ -791,9 +829,9 @@ class ArmigerCalibrator:
             return bool(val >= thresh)
 
         return {
-            "adult_flagged": _flag(p_adult, float(self.mondrian["adult"])),
-            "junk_flagged": _flag(p_junk, float(self.mondrian["junk"])),
-            "scope_excluded": _flag(p_excluded_scope, float(self.mondrian["owner_scope"])),
+            "adult_flagged": _flag(p_adult, self.gate_threshold("adult", stratum)),
+            "junk_flagged": _flag(p_junk, self.gate_threshold("junk", stratum)),
+            "scope_excluded": _flag(p_excluded_scope, self.gate_threshold("owner_scope", stratum)),
         }
 
 

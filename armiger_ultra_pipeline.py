@@ -281,6 +281,24 @@ from armiger_inference import (
 )
 
 
+_ANIME_RELEASE_OR_FRANCHISE_RE = re.compile(
+    r"(?i)(?:(?<![a-z0-9])(?:anime|animesuge|gatsunime|animax|funidub|crunchyroll|hidive|subsplease|erai-raws|horriblesubs|"
+    r"precure|pretty[\s._-]*cure|gundam|digimon|doraemon|evangelion|neongenesisevangelion|"
+    r"fullmetal[\s._-]*alchemist|fullmetalalchemist|osomatsu|space[\s._-]*battleship[\s._-]*yamato|"
+    r"space[\s._-]*dandy|future[\s._-]*boy[\s._-]*conan|dragon[\s._-]*ball|dragonball|dbgt|dbz|cowboy[\s._-]*bebop|"
+    r"bleach[\s._-]+temporada|persona[\s._-]*trinity[\s._-]*soul|kabaneri|lyrical[\s._-]*nanoha|"
+    r"blue[\s._-]*gender|bluegender|transformers[\s._-]*victory|omni[\s._-]*dub|amv[\s._-]+hero|"
+    r"shippuden|shingeki|kyojin|kimetsu|yaiba|jujutsu[\s._-]*kaisen|mushoku[\s._-]*tensei|konosuba|"
+    r"haikyuu|gintama|monogatari|frieren|kusuriya|hitorigoto|one[\s._-]*piece|naruto|inuyasha|"
+    r"sailor[\s._-]*moon|yu[\s._-]*yu[\s._-]*hakusho|hunter[\s._-]*x[\s._-]*hunter|steins[\s._-]*gate|"
+    r"code[\s._-]*geass|death[\s._-]*note|fairy[\s._-]*tail|black[\s._-]*clover|chainsaw[\s._-]*man|"
+    r"spy[\s._-]*x[\s._-]*family|boku[\s._-]*no[\s._-]*hero|my[\s._-]*hero[\s._-]*academia|attack[\s._-]*on[\s._-]*titan|"
+    r"pokemon|pokémon|grendizer|mazinger|wonder[\s._-]*egg[\s._-]*priority|dallos|samurai[\s._-]*champloo|"
+    r"isekai|mononoke|ghibli|totoro|plastic[\s._-]*memories|tenshi[\s._-]*no[\s._-]*tamago|yatterman|"
+    r"eagle[\s._-]*sam|harmony[\s._-]*gold|blue[\s._-]*dragon)(?![a-z0-9])|"
+    r"animatedanime|kirakiraprecure|healinprecure|dbgtspecial|dragonballadultswim|アニメ)"
+)
+
 _EPISODE_FILE_RE = re.compile(r"(?i)(?:\bS\d{1,2}E\d{1,3}\b|\bS\d{1,2}\b|\bSeason\s*\d+\b)")
 _GAME_FILE_TREE_RE = re.compile(
     r"(?i)(?:supertux|super-tux-kart|org\.supertuxkart|\bfreeciv|\bopenttd|\b0ad[-_\b]|\bminetest|\bfreedoom|"
@@ -505,6 +523,7 @@ from ultra_pipeline_update_bridge import (
     decode_safetensors,
     encode_safetensors,
     generate_federation_signer,
+    mondrian_conformal_drift_guard,
     parse_dht_update_payload,
 )
 
@@ -594,6 +613,9 @@ class ArmigerUltraPipeline:
         # 6. Plugin #5: CalibrationAndDHT + ArmigerDHTRSIEngine (`calibration_and_dht.py` + `armiger_dht_rsi.py`)
         cal_path = self.model_dir / "calibration.json"
         self.calibrator = calibrator or ArmigerCalibrator(cal_path if cal_path.exists() else None)
+        if scope_threshold is not None:  # explicit override beats calibration.json (global and per-stratum)
+            self.calibrator.mondrian["scope"] = self.calibrator.mondrian["owner_scope"] = float(scope_threshold)
+            getattr(self.calibrator, "mondrian_strata", {}).pop("owner_scope", None)
         root_key_hex = (
             list(trusted_root_pubkeys_hex)[0]
             if trusted_root_pubkeys_hex
@@ -613,7 +635,7 @@ class ArmigerUltraPipeline:
         self.safety_gate = safety_gate or ArmigerSafetyGate(
             adult_threshold=float(adult_threshold if adult_threshold is not None else mondrian.get("adult", 0.5451)),
             junk_threshold=float(junk_threshold if junk_threshold is not None else mondrian.get("junk", 0.1010)),
-            scope_threshold=float(scope_threshold if scope_threshold is not None else mondrian.get("owner_scope", 0.4770)),
+            scope_threshold=self.owner_scope_threshold(),
         )
         self.dht_db_sync = dht_db_sync or ArmigerDHTDatabaseSync(
             subscription=dht_sync_subscription or SubscriptionConfig(
@@ -795,6 +817,13 @@ class ArmigerUltraPipeline:
             ingest_to_dht_db=ingest_to_dht_db,
         )[0]
 
+    def owner_scope_threshold(self, category: Optional[str] = None) -> float:
+        """Stratified Mondrian `owner_scope` threshold from `calibration.json` for the predicted `category`
+        (`mondrian_stratified_thresholds.owner_scope.strata[category]`), else the global `mondrian_thresholds` value.
+        """
+        fn = getattr(self.calibrator, "gate_threshold", None)  # ponytail: attic dirs ship a pre-stratum calibrator
+        return float(fn("owner_scope", stratum=category) if fn else self.calibrator.mondrian["owner_scope"])
+
     def classify_batch(
         self,
         rows: Sequence[Mapping[str, Any]],
@@ -907,6 +936,27 @@ class ArmigerUltraPipeline:
                     cat_probs[c_idx] = max(float(cat_probs[c_idx]), 0.92)
                     cat_probs /= cat_probs.sum()
 
+            # Step 3b: Anime Franchise & 257K Anime Catalog Calibration (Video Releases Only)
+            if pred_category in ("tv_show", "movie", "unknown"):
+                files_list = row_dict.get("files") if isinstance(row_dict.get("files"), (list, tuple)) else []
+                files_head_str = " ".join(
+                    (f.get("path", "") if isinstance(f, Mapping) else str(f or ""))
+                    for f in files_list[:4]
+                )
+                if _ANIME_RELEASE_OR_FRANCHISE_RE.search(raw_title) or _ANIME_RELEASE_OR_FRANCHISE_RE.search(files_head_str):
+                    p_an_boost = max(float(anime_probs[1]), 0.88)
+                    anime_probs = np.array([1.0 - p_an_boost, p_an_boost], dtype=np.float64)
+                elif use_zero_cue_catalog and float(anime_probs[1]) >= 0.08:
+                    anime_map = self.zero_cue_catalog.catalog.get("anime_map", {})
+                    if anime_map:
+                        from zero_cue_plugin import parse_clean_candidates
+                        cands_an, _ = parse_clean_candidates(raw_title, extra_spans=extra_spans)
+                        for ct_an, _ in cands_an:
+                            if len(ct_an) >= 10 and anime_map.get(hash_catalog_key(ct_an)) is not None:
+                                p_an_boost = max(float(anime_probs[1]), 0.85)
+                                anime_probs = np.array([1.0 - p_an_boost, p_an_boost], dtype=np.float64)
+                                break
+
             # Step 4: Plugin #4 (`AudioLanguageGuard`) — Cross-Head Audio, Title Language, & Subtitle Guard
             pred_lang, lang_probs, _ = self.audio_guard.apply(row_dict, lang_probs, title_lang_probs)
             title_lang_probs = np.asarray(
@@ -992,7 +1042,13 @@ class ArmigerUltraPipeline:
                 p_junk = max(p_junk, 0.92)
                 junk_probs = np.array([1.0 - p_junk, p_junk], dtype=np.float64)
 
-            gate_passed, gate_reason, gate_violation = self.safety_gate.evaluate(
+            # Stratified Mondrian owner_scope gate: calibration.json per-category threshold (global when unfitted)
+            scope_thr = self.owner_scope_threshold(pred_category)
+            gate_passed, gate_reason, gate_violation = ArmigerSafetyGate(
+                adult_threshold=self.safety_gate.adult_threshold,
+                junk_threshold=self.safety_gate.junk_threshold,
+                scope_threshold=scope_thr,
+            ).evaluate(
                 p_adult=p_adult,
                 p_junk=p_junk,
                 p_excluded_scope=p_excluded,
@@ -1004,7 +1060,7 @@ class ArmigerUltraPipeline:
                 p_junk >= self.safety_gate.junk_threshold
                 or (not csam_result.is_safe and csam_result.violation_type != CSAMViolationType.MALWARE_PAYLOAD)
             ) else "clean"
-            pred_scope = "excluded" if p_excluded >= self.safety_gate.scope_threshold else "allowed_type"
+            pred_scope = "excluded" if p_excluded >= scope_thr else "allowed_type"
             pred_anime = NEURAL_HEAD_CLASSES["anime"][int(np.argmax(anime_probs))]
             pred_eng_subs = NEURAL_HEAD_CLASSES["english_subs"][int(np.argmax(eng_subs_probs))]
             pred_title_lang = NEURAL_HEAD_CLASSES["title_language"][int(np.argmax(title_lang_probs))]
@@ -1083,7 +1139,8 @@ class ArmigerUltraPipeline:
                     "label": pred_scope,
                     "confidence": float(p_excluded if pred_scope == "excluded" else 1.0 - p_excluded),
                     "probs": {"allowed_type": float(round(1.0 - p_excluded, 6)), "excluded": float(round(p_excluded, 6))},
-                    "threshold": float(self.safety_gate.scope_threshold),
+                    "threshold": scope_thr,
+                    "stratum": pred_category,
                 },
                 "title_language": {
                     "label": pred_title_lang,
@@ -1110,8 +1167,9 @@ class ArmigerUltraPipeline:
                 "thresholds": {
                     "adult": float(self.safety_gate.adult_threshold),
                     "junk": float(self.safety_gate.junk_threshold),
-                    "owner_scope": float(self.safety_gate.scope_threshold),
+                    "owner_scope": scope_thr,
                 },
+                "owner_scope_stratum": pred_category,
             }
 
             dht_ingest_status = "not_requested"
@@ -1785,6 +1843,12 @@ class ArmigerUltraPipeline:
         if self._dht_baseline_cache is not None and self._dht_baseline_cache[0] == key:
             return self._dht_baseline_cache[1]
         base = self.run_dht_canary()
+        if getattr(self, "_dht_quantile_reference", None) is None:
+            # Freeze the first trusted baseline across successive in-process updates.
+            self._dht_quantile_reference = {
+                view: {"nonconformity_quantiles": dict(data["report"].nonconformity_quantiles)}
+                for view, data in base.items() if "report" in data
+            }
         self._dht_baseline_cache = (key, base)
         return base
 
@@ -1843,6 +1907,20 @@ class ArmigerUltraPipeline:
                         flips.append(f"ledger[{i}]:{head}")
             if flips:
                 regs.append(f"local_verified_ledger:flips:{len(flips)}:{flips[:5]}")
+        # BEP-46 Mondrian conformal drift guard: excluded-category rejection recall + worst packaging stratum
+        for reg in mondrian_conformal_drift_guard(base, cand, views=getattr(self, "_dht_canary_views", None)):
+            if reg not in regs:
+                regs.append(reg)
+        reference = getattr(self, "_dht_quantile_reference", None)
+        if reference:
+            quantiles = {
+                view: {"nonconformity_quantiles": dict(data["report"].nonconformity_quantiles)}
+                for view, data in cand.items() if "report" in data
+            }
+            for reg in mondrian_conformal_drift_guard(reference, quantiles, views=self._dht_canary_views):
+                if reg not in regs:
+                    regs.append(reg)
+
         return regs
 
     def _stage_and_evaluate(
