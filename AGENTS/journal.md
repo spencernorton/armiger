@@ -1,3 +1,11 @@
+## 2026-10-23 — codex — container source verification
+
+- **Branch:** codex/prebuilt-containers
+- **Validation:** 272 tests passed, one internal-only integration skipped. Wheel built and classified with INT8 and Ultra outside the checkout. ARM64 standalone container completed cold model download and real HTTP classification. Fresh Bitmagnet stack wrote a movie tag and retained it after recreation; the pinned AMD64 Rats backend built successfully.
+- **Decision:** Use native AMD64/ARM64 GitHub runners and the repository's existing GitHub-owned action policy; no action allowlist expansion or emulation is required for publishing.
+- **Next step:** Finish Rats persistence and protected checks, then publish and verify anonymous pulls.
+- **Status file updated:** Tracker records source verification.
+
 ## 2026-10-23 — codex — ready-made containers
 
 - **Branch:** codex/prebuilt-containers
