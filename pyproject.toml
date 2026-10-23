@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "armiger"
-version = "3.1.0"
+version = "3.2.0"
 description = "Local ONNX classification of torrent and media metadata with optional enrichment"
 readme = "README.md"
 license = {text = "Apache-2.0"}
@@ -42,7 +42,7 @@ Homepage = "https://norvitech.com/ai-models/#armiger"
 Repository = "https://github.com/spencernorton/armiger"
 Issues = "https://github.com/spencernorton/armiger/issues"
 Security = "https://github.com/spencernorton/armiger/blob/main/.github/SECURITY.md"
-Legal = "https://github.com/spencernorton/armiger/blob/main/LEGAL.md"
+Legal = "https://github.com/spencernorton/armiger/blob/main/.github/LEGAL.md"
 
 [tool.setuptools.packages.find]
 where = ["src"]

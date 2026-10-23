@@ -2,36 +2,15 @@ services:
   rats-search:
     # Upstream bundles an x86-64 Manticore binary; Docker Desktop uses emulation on ARM.
     platform: linux/amd64
-    build: https://github.com/librats/rats-search.git#8415a208025d3827f2f380f3bfe530557a10eaba
-    image: armiger-rats-search-local:2.3.5
+    image: ghcr.io/spencernorton/armiger-rats-search:3.2.0
     restart: unless-stopped
-    environment:
-      QT_QPA_PLATFORM: offscreen
-      RATS_INDEXER: ${RATS_INDEXER:-true}
-    command:
-      - /bin/sh
-      - -ec
-      - |
-        if [ ! -f /data/rats.json ]; then
-          printf '{"restApi":true,"httpPort":8095,"indexer":%s,"upnp":false}' "$$RATS_INDEXER" > /data/rats.json
-        fi
-        exec /app/RatsSearch --console --max-peers 30 --data-dir /data
     ports:
       - '127.0.0.1:${RATS_HTTP_PORT:-8095}:8095'
       - '127.0.0.1:${ARMIGER_HTTP_PORT:-8098}:8097'
     volumes:
       - rats_data:/data
-    healthcheck:
-      test: [CMD, bash, -c, 'echo > /dev/tcp/127.0.0.1/8095']
-      interval: 10s
-      timeout: 5s
-      retries: 30
-      start_period: 60s
   armiger-ultra:
-    build:
-      context: ../..
-      dockerfile: examples/Dockerfile
-    image: armiger-ultra-local:3.1.0
+    image: ghcr.io/spencernorton/armiger:3.2.0
     restart: unless-stopped
     # Manticore binds loopback inside Rats Search. Share that container's network,
     # not the host network, so both native Linux and Docker Desktop work.
@@ -51,14 +30,5 @@ services:
       ARMIGER_PRUNE_MALWARE: ${ARMIGER_PRUNE_MALWARE:-false}
       ARMIGER_PRUNE_DEAD_SWARMS: 'false'
       ARMIGER_PRUNE_ADULT: 'false'
-    volumes:
-      - armiger_models:/models
-    healthcheck:
-      test: [CMD, python, -c, "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8097/healthz', timeout=5)"]
-      interval: 15s
-      timeout: 10s
-      retries: 20
-      start_period: 180s
 volumes:
   rats_data:
-  armiger_models:

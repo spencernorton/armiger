@@ -1,57 +1,38 @@
 # Bitmagnet + Armiger Ultra
 
-Armiger adds content-type and language tags to items in Bitmagnet. This example starts a **new Bitmagnet installation**, its database and Armiger Ultra together.
+Start a new Bitmagnet installation with Armiger Ultra already connected. You need [Docker](https://docs.docker.com/get-started/get-docker/) running, with **Docker Compose 2.34 or newer** (included in current Docker Desktop).
 
-## 1. Get the files
+## 1. Save the setup
 
-Install [Docker](https://docs.docker.com/get-started/get-docker/) and [Git](https://git-scm.com/downloads), and make sure Docker is running. Docker Desktop includes Docker Compose; Linux users also need the [Compose plugin](https://docs.docker.com/compose/install/linux/).
+Create a folder called `armiger-bitmagnet`. Save this as **`compose.yaml`** inside it:
 
-If you already downloaded Armiger, use its `examples/bitmagnet` folder and skip the first two commands below. Keep an existing `.env` instead of copying over it.
-
-For a new download, open a terminal and run:
-
-```bash
-git clone https://github.com/spencernorton/armiger.git
-cd armiger/examples/bitmagnet
-cp .env.example .env
+```yaml
+include:
+  - oci://ghcr.io/spencernorton/armiger-bitmagnet-stack:3.2.0
 ```
 
-## 2. Start
+This loads the complete setup from our versioned package. All connections are already configured.
 
-Open `.env` in a text editor. Replace `replace-with-a-password` with a password of your choice, save it, then run:
+## 2. Start it
 
-```bash
-docker compose up -d --build
-```
-
-The first start builds Armiger and downloads its model. Allow several minutes. You do not need Python, a GPU or a separate Armiger install. A TMDB API key is optional; you can leave it blank.
-
-## 3. Check it works
+Open a terminal in that folder and run:
 
 ```bash
-docker compose ps
+docker compose up -d
 ```
 
-`postgres` and `armiger-ultra` should say `healthy`; `bitmagnet` should be running. While the model downloads, Armiger may show `starting`.
+Docker downloads the ready-made containers, including Armiger’s verified model. Allow several minutes for the first download. If Docker asks whether you trust this setup, answer `y`.
 
-On the computer running Docker, open:
+## 3. Open Bitmagnet
 
-- **[Bitmagnet](http://localhost:3333)** — your index and search page.
-- **[Armiger status](http://localhost:8096/healthz)** — should show `"status": "ok"`.
+Open **[localhost:3333](http://localhost:3333)** on the computer running Docker. Armiger automatically labels newly indexed items; look for tags such as `armiger-movie`. A new index starts empty and needs time to find items.
 
-Armiger labels newly indexed items automatically. Look for `armiger-movie`, `armiger-tv-show` and language tags in Bitmagnet. A new index starts empty; no results yet does not mean Armiger failed.
+To check Armiger itself, open [its status page](http://localhost:8096/healthz). When ready, it shows `"status": "ok"`. If it is still starting, run `docker compose logs --tail=50 armiger-ultra`.
 
-## Everyday use
+## Stop and start
 
-Run these from the same folder:
+From the same folder, run `docker compose down` to stop or `docker compose up -d` to start again. Your index stays saved. Adding `-v` to the stop command erases that saved data.
 
-| Task | Command |
-| --- | --- |
-| See Armiger's logs | `docker compose logs --tail=50 armiger-ultra` |
-| Stop | `docker compose down` |
-| Start again | `docker compose up -d` |
-| Update | `git pull --ff-only`, then `docker compose up -d --build` |
+The setup contains Bitmagnet, its private database and Armiger. Their connection settings are already filled in. Automatic deletion of flagged items is off.
 
-Stopping keeps the database and downloaded model. Keep the same database password when starting again. Do not add `-v` to the stop command unless you intend to erase this example's saved data.
-
-If a port is already in use, change its value in `.env` and start again; use that new port in your browser. For a remote server, use the [remote access instructions](../../docs/reference.md#remote-docker-server) to open these links from your own computer. Automatic removal of flagged items is off; normal setup only adds labels.
+[Custom settings, older Docker versions and updates](../../docs/reference.md#docker-settings-and-updates) · [Using a remote server](../../docs/reference.md#remote-docker-server)

@@ -1,69 +1,44 @@
 # Standalone Armiger Ultra
 
-Use this guide to run Armiger on its own or call it from Python. If you followed the [Bitmagnet](../examples/bitmagnet/README.md) or [Rats Search](../examples/rats-search/README.md) Docker guide, you already have Armiger Ultra and can skip this page.
+Run Armiger Ultra as a local classification service. The [Bitmagnet](../examples/bitmagnet/README.md) and [Rats Search](../examples/rats-search/README.md) setups already include it; use this guide when you want Armiger on its own.
 
-You need [Python 3.12](https://www.python.org/downloads/), [Git](https://git-scm.com/downloads), and internet access for the initial install and model download. No Docker, GPU, account or API key is required.
+## 1. Save the setup
 
-## 1. Get the files
+With [Docker](https://docs.docker.com/get-started/get-docker/) running and Docker Compose available, create a folder called `armiger`. Save this as **`compose.yaml`** inside it:
 
-If you already downloaded Armiger for a Docker guide, open a terminal in that repository folder and continue to step 2. Otherwise:
+```yaml
+services:
+  armiger-ultra:
+    image: ghcr.io/spencernorton/armiger:3.2.0
+    restart: unless-stopped
+    ports:
+      - '127.0.0.1:8096:8096'
+```
+
+## 2. Start it
+
+Open a terminal in that folder and run:
 
 ```bash
-git clone https://github.com/spencernorton/armiger.git
-cd armiger
+docker compose up -d
 ```
 
-## 2. Install
-
-On **macOS or Linux**:
-
-```bash
-python3.12 -m venv .venv
-source .venv/bin/activate
-```
-
-On **Windows PowerShell**:
-
-```powershell
-py -3.12 -m venv .venv
-.venv\Scripts\Activate.ps1
-```
-
-If PowerShell blocks activation, open Command Prompt in the same folder and use `.venv\Scripts\activate.bat` instead.
-
-On Linux, install CPU-only PyTorch first to avoid downloading unnecessary GPU libraries:
-
-```bash
-python -m pip install torch --index-url https://download.pytorch.org/whl/cpu
-```
-
-Then, on any platform:
-
-```bash
-python -m pip install '.[ultra]'
-python -m armiger download
-```
-
-Allow several minutes for dependencies. The model download itself is about 59 MB. Armiger checks the downloaded files and saves them for reuse.
+Docker downloads the container, including the verified Ultra model. Allow several minutes for the first download. You do not need Python, a GPU or an API key.
 
 ## 3. Try it
 
+Open **[localhost:8096](http://localhost:8096)**. When ready, it shows `"status": "ok"`. This is a service for other software to call, not a search interface.
+
+To classify a name, run this in a terminal on macOS or Linux:
+
 ```bash
-python examples/classify.py
+curl -H 'Content-Type: application/json' -d '{"name":"Tears.of.Steel.2012.1080p.BluRay.x264-OPEN"}' http://localhost:8096/v1/classify
 ```
 
-You should see:
+The JSON response includes `"category": "movie"`. This classifies metadata; it does not download the film. Other software can send the same JSON to `/v1/classify`; see [input and output](reference.md#input-and-output) for more fields.
 
-```text
-Content type: movie
-```
+## Stop and start
 
-The example classifies the name and file information for *Tears of Steel*, an openly licensed film. It does not download the film. Open [the example](../examples/classify.py) to see the Python call and replace its input with your own metadata.
+From the same folder, run `docker compose down` to stop or `docker compose up -d` to start again. The model is part of the image; you do not need a separate model folder. For startup errors, run `docker compose logs --tail=50`.
 
-## Next time
-
-Open a terminal in the repository folder, activate `.venv` using the command above, and run your script. You do not need to reinstall or download the model each time. Once installed, local classification works offline.
-
-The default model folder is `~/.cache/armiger/` under your user account. To choose a different folder or use the smaller ONNX-only model, see the [Python reference](reference.md).
-
-If a command says Python 3.12 is missing, install that version first. If model loading fails, activate `.venv` and run `python -m armiger download` again. For more help, [report the error](https://github.com/spencernorton/armiger/issues/new/choose).
+[Python installation](reference.md#python-installation) · [Updates](reference.md#docker-settings-and-updates) · [Remote server](reference.md#remote-docker-server)

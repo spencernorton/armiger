@@ -5,7 +5,7 @@ services:
     environment:
       POSTGRES_DB: bitmagnet
       POSTGRES_USER: bitmagnet
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Copy .env.example to .env and set POSTGRES_PASSWORD}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-armiger-local}
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -27,15 +27,13 @@ services:
       POSTGRES_HOST: postgres
       POSTGRES_NAME: bitmagnet
       POSTGRES_USER: bitmagnet
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-armiger-local}
       TMDB_API_KEY: ${TMDB_API_KEY:-}
     command: [worker, run, --keys=http_server, --keys=queue_server, --keys=dht_crawler]
   armiger-ultra:
-    build:
-      context: ../..
-      dockerfile: examples/Dockerfile
-    image: armiger-ultra-local:3.1.0
+    image: ghcr.io/spencernorton/armiger:3.2.0
     restart: unless-stopped
+    command: [python, /opt/connectors/bitmagnet/bitmagnet_connector.py]
     depends_on:
       bitmagnet:
         condition: service_started
@@ -52,14 +50,5 @@ services:
       ARMIGER_PRUNE_MALWARE: ${ARMIGER_PRUNE_MALWARE:-false}
       ARMIGER_PRUNE_DEAD_SWARMS: 'false'
       ARMIGER_REJECT_DEAD_SWARMS: 'false'
-    volumes:
-      - armiger_models:/models
-    healthcheck:
-      test: [CMD, python, -c, "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8096/healthz', timeout=5)"]
-      interval: 15s
-      timeout: 10s
-      retries: 20
-      start_period: 180s
 volumes:
   postgres_data:
-  armiger_models:

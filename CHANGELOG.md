@@ -1,5 +1,11 @@
 # Changelog
 
+## 3.2.0
+
+- Prebuilt Armiger images with the verified Ultra model for x86-64 and ARM64, plus a pinned Rats Search backend image.
+- Ready-to-run fresh Compose setups without cloning, building or required environment files.
+- Standalone Ultra HTTP classification service.
+
 ## 3.1.0
 
 - Installable Python package with verified, pinned model downloads and offline loading.
