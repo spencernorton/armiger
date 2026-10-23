@@ -42,7 +42,7 @@ Homepage = "https://norvitech.com/ai-models/#armiger"
 Repository = "https://github.com/spencernorton/armiger"
 Issues = "https://github.com/spencernorton/armiger/issues"
 Security = "https://github.com/spencernorton/armiger/blob/main/.github/SECURITY.md"
-Legal = "https://github.com/spencernorton/armiger/blob/main/LEGAL.md"
+Legal = "https://github.com/spencernorton/armiger/blob/main/.github/LEGAL.md"
 
 [tool.setuptools.packages.find]
 where = ["src"]
