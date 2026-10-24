@@ -93,7 +93,9 @@ Model weights, vocabulary, calibration, adapter and catalog must be from a compa
 
 ## Docker settings and updates
 
-The two-line integration setups use packaged defaults and require Docker Compose 2.34 or newer. To customize settings or use an older Compose version, save the full [Bitmagnet file](https://raw.githubusercontent.com/spencernorton/armiger/main/examples/bitmagnet/docker-compose.yml) or [Rats Search file](https://raw.githubusercontent.com/spencernorton/armiger/main/examples/rats-search/docker-compose.yml) as `compose.yaml` **in place of** the two-line file. These also pull ready-made images; no build is needed.
+The two-line integration setups use packaged defaults and require Docker Compose 2.34 or newer. For Bitmagnet, keep the two-line file and use a local `compose.override.yaml` to configure Armiger. See the [complete Armiger Ultra environment-variable reference](bitmagnet-configuration.md) for defaults, examples and the effects of each setting.
+
+For older Compose versions, host-port changes through `.env`, or other full-file customisation, save the full [Bitmagnet file](https://raw.githubusercontent.com/spencernorton/armiger/main/examples/bitmagnet/docker-compose.yml) or [Rats Search file](https://raw.githubusercontent.com/spencernorton/armiger/main/examples/rats-search/docker-compose.yml) as `compose.yaml` **in place of** the two-line file. These also pull ready-made images; no build is needed. Armiger's connector variables can be added under `services.armiger-ultra.environment`.
 
 The full files work without a `.env` file. If a port is already in use, create `.env` beside the full `compose.yaml` and put only the setting you need in it, for example `BITMAGNET_HTTP_PORT=3335`. Start again and use that port in your browser.
 

@@ -1,3 +1,12 @@
+## 2026-10-24 — Bitmagnet Ultra configuration reference
+
+- **Branch:** codex/readme-ultra-configuration
+- **What changed:** Add a complete reference for the shipped Bitmagnet connector environment settings, a copyable Compose override and configuration links from the setup guide, README and Python reference. Remove the measured-results caption below the overview.
+- **Evidence:** The connector source matches the image's pinned fd5c3fa checksum. Document effective Compose defaults, filtering versus index removal, lazy catalog loading, listener scopes and compatibility settings that do not apply to the prebuilt image.
+- **Validation:** All 22 environment names read by the pinned connector are covered. The actual published OCI setup accepts the documented automatic override and `.env` interpolation; default-off pruning/dead-swarm rejection remain intact. Local links and patch whitespace checked.
+- **Deployment:** Documentation and an optional example only; package, model, runtime and production settings are unchanged.
+- **Status file updated:** Record the public PR and remaining sample-size clarification in the private project handoff.
+
 ## 2026-10-23 — plain-language comparison overview
 
 - **Branch:** codex/readme-comparison-overview
