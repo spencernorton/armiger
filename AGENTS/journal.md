@@ -1,3 +1,12 @@
+## 2026-10-24 — Show the shared-learning feedback loop
+
+- **Branch:** codex/distributed-learning-loop
+- **What changed:** Replace the delivery-focused diagram with the contribution, aggregation, peer review, publication and receiver feedback loop. Explain that verified feedback and candidate changes can contribute without an instance winning an accuracy ranking.
+- **Evidence:** Check RSI feedback export, catalog consensus, calibration fitting, adapter training, continuous-delta aggregation and peer/receiver evaluation. Link the multi-instance knowledge-transfer tests. Distinguish encrypted individual feedback from the guarded aggregate export format.
+- **Validation:** Twelve local links/anchors, the JSON example, code fences and patch whitespace pass. The four-stage Mermaid loop renders and has been visually inspected. Runtime and build verification remain required CI gates.
+- **Deployment:** Documentation only; no model, runtime or production settings changed.
+- **Status file updated:** Record the correction and publication evidence in the private project handoff.
+
 ## 2026-10-24 — Distributed updates explained
 
 - **Branch:** codex/distributed-updates-guide
