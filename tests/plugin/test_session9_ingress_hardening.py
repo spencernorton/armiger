@@ -19,64 +19,38 @@ import urllib.request
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 
 ROOT = Path(__file__).resolve().parents[2]
-SRC = ROOT / "src"
 OCI = ROOT / "deploy" / "oci-dht"
-for p_dir in (SRC, OCI, ROOT):
-    if p_dir.exists() and str(p_dir) not in sys.path:
-        sys.path.insert(0, str(p_dir))
+ARMIGER = ROOT / "armiger"
+for p in (OCI, ARMIGER, ROOT):
+    if str(p) not in sys.path:
+        sys.path.insert(0, str(p))
 
-try:
-    from armiger.oci_vpn_guard import (  # noqa: E402
-        AnonymityGuard,
-        _sign_bep44,
-        bdecode,
-        bdecode_krpc,
-        bencode,
-        bep44_signing_buffer,
-        compute_bep44_target,
-        generate_bep42_node_id,
-        verify_bep42_node_id,
-    )
-    from armiger.oci_dht_seeder import BitTorrentPeerWireSeeder, GatedBEP44UDPNode  # noqa: E402
-    from armiger.oci_sqlite_catalog import (  # noqa: E402
-        BT_EXT_HANDSHAKE_ID,
-        BT_MSG_EXTENDED,
-        BT_PROTOCOL_HEADER,
-        BT_RESERVED_BEP10,
-        BT_UT_METADATA_ID,
-        _CatalogJSONStream,
-        build_sqlite_zero_cue_catalog,
-        build_torrent_bundle,
-        fetch_bundle_via_bep19_webseed,
-        fetch_bundle_via_peer_wire,
-        verify_torrent_payload,
-    )
-except ImportError:
-    from oci_vpn_guard import (  # noqa: E402
-        AnonymityGuard,
-        _sign_bep44,
-        bdecode,
-        bdecode_krpc,
-        bencode,
-        bep44_signing_buffer,
-        compute_bep44_target,
-        generate_bep42_node_id,
-        verify_bep42_node_id,
-    )
-    from oci_dht_seeder import BitTorrentPeerWireSeeder, GatedBEP44UDPNode  # noqa: E402
-    from oci_sqlite_catalog import (  # noqa: E402
-        BT_EXT_HANDSHAKE_ID,
-        BT_MSG_EXTENDED,
-        BT_PROTOCOL_HEADER,
-        BT_RESERVED_BEP10,
-        BT_UT_METADATA_ID,
-        _CatalogJSONStream,
-        build_sqlite_zero_cue_catalog,
-        build_torrent_bundle,
-        fetch_bundle_via_bep19_webseed,
-        fetch_bundle_via_peer_wire,
-        verify_torrent_payload,
-    )
+from oci_vpn_guard import (  # noqa: E402
+    AnonymityGuard,
+    _sign_bep44,
+    bdecode,
+    bdecode_krpc,
+    bencode,
+    bep44_signing_buffer,
+    compute_bep44_target,
+    generate_bep42_node_id,
+    verify_bep42_node_id,
+)
+from oci_dht_seeder import BitTorrentPeerWireSeeder, GatedBEP44UDPNode  # noqa: E402
+from oci_sqlite_catalog import (  # noqa: E402
+    BT_EXT_HANDSHAKE_ID,
+    BT_MSG_EXTENDED,
+    BT_PROTOCOL_HEADER,
+    BT_RESERVED_BEP10,
+    BT_UT_METADATA_ID,
+    _CatalogJSONStream,
+    build_sqlite_zero_cue_catalog,
+    build_torrent_bundle,
+    fetch_bundle_via_bep19_webseed,
+    fetch_bundle_via_peer_wire,
+    verify_info_and_payload,
+    verify_torrent_payload,
+)
 from armiger.armiger_dht_rsi import (  # noqa: E402
     AcyclicProvenanceVerifier,
     AcyclicReleaseEnvelope,
@@ -755,8 +729,8 @@ class TestSession9IngressAndBEP46Hardening(unittest.TestCase):
 
                 # 6. ArmigerDHTRSIEngine.verify_and_stage_update rejects authenticated_baseline with mismatched parent or suite hash,
                 #    and enforces AcyclicReleaseEnvelope verification before staging updates.
-                from armiger.armiger_dht_rsi import ArmigerDHTRSIEngine
-                from armiger.dht_rsi_models_and_privacy import PeerAttestation
+                from armiger_dht_rsi import ArmigerDHTRSIEngine
+                from dht_rsi_models_and_privacy import PeerAttestation
                 eng = ArmigerDHTRSIEngine(
                     trusted_signers=trusted_rel,
                     trusted_evaluator_signers=trusted_eval,
@@ -1076,6 +1050,36 @@ class TestSession9IngressAndBEP46Hardening(unittest.TestCase):
                 )
                 self.assertFalse(ok_lc)
                 self.assertEqual(reason_lc, "attestation_mondrian_coverage_below_threshold")
+
+                # 11. Distinct contributor and release/evaluator keys mapped to the same principal identity must fail
+                trusted_rel_alias = dict(trusted_rel)
+                trusted_rel_alias[contrib_pub] = "release-signer-0"
+                ok_ca, reason_ca = AcyclicProvenanceVerifier.verify_envelope(
+                    envelope,
+                    trusted_release_signers=trusted_rel_alias,
+                    trusted_evaluator_signers=trusted_eval,
+                    threshold_m=2,
+                    min_evaluator_asns=3,
+                    current_seq=0,
+                    bootstrap_checkpoint_seq=1000,
+                    asn_verifier=asn_verifier,
+                )
+                self.assertFalse(ok_ca)
+                self.assertEqual(reason_ca, "cyclic_provenance_violation:contributor_identity_in_release_signers:release-signer-0")
+
+                ok_ce, reason_ce = AcyclicProvenanceVerifier.verify_envelope(
+                    envelope,
+                    trusted_release_signers=trusted_rel,
+                    trusted_evaluator_signers=trusted_eval,
+                    trusted_contributor_signers={contrib_pub: "evaluator-0"},
+                    threshold_m=2,
+                    min_evaluator_asns=3,
+                    current_seq=0,
+                    bootstrap_checkpoint_seq=1000,
+                    asn_verifier=asn_verifier,
+                )
+                self.assertFalse(ok_ce)
+                self.assertEqual(reason_ce, "cyclic_provenance_violation:contributor_identity_in_evaluators:evaluator-0")
             finally:
                 WOTSPlusSHAKE256.set_state_dir(None, seal_dir=None)
 
@@ -1434,6 +1438,31 @@ class TestSession9IngressAndBEP46Hardening(unittest.TestCase):
                 )
                 self.assertEqual(sp_res["files"], special_files)
                 self.assertIn("weights%20%231%3F.json", seen_urls[0])
+
+                # Tiny-piece metadata on webseed and verify_info_and_payload rejected before fetching or chunk allocation
+                tiny_ws_info = bencode({
+                    b"files": [{b"length": 67108864, b"path": [b"big.bin"], b"sha256": b"S" * 32}],
+                    b"merkle_root": b"M" * 32,
+                    b"name": b"tiny-pieces",
+                    b"piece length": 1,
+                    b"pieces": b"",
+                })
+                tiny_ws_ih = hashlib.sha1(tiny_ws_info).digest()
+                fetcher_called = False
+                def _never_called_fetcher(url: str, max_b: int = 0) -> bytes:
+                    nonlocal fetcher_called
+                    fetcher_called = True
+                    return b"x"
+                with self.assertRaisesRegex(ValueError, "invalid_piece_length"):
+                    fetch_bundle_via_bep19_webseed(
+                        tiny_ws_info,
+                        "https://example.org/seed",
+                        expected_infohash_20=tiny_ws_ih,
+                        fetcher=_never_called_fetcher,
+                    )
+                self.assertFalse(fetcher_called)
+                with self.assertRaisesRegex(ValueError, "invalid_piece_length"):
+                    verify_info_and_payload(tiny_ws_info, b"", expected_infohash_20=tiny_ws_ih)
             finally:
                 dht.close()
 

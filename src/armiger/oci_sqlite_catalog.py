@@ -16,7 +16,7 @@ import os
 import struct
 from typing import Any, Callable, Dict, List, Mapping, Optional, Sequence, Set, Tuple
 
-from armiger.oci_vpn_guard import VPNEgressGuard, bencode, compute_bep44_target
+from oci_vpn_guard import VPNEgressGuard, bencode, compute_bep44_target
 
 # ---------------------------------------------------------------------------
 # 2. Low-Memory SQLite Zero-Cue Catalog (`<=4 MiB` cache for Tier B 1-CPU nodes)
@@ -470,7 +470,7 @@ class BitTorrentPeerWireSeeder:
                     writer.write(struct.pack("!IB", 1, BT_MSG_UNCHOKE))
                     await writer.drain()
                 elif msg_id == BT_MSG_EXTENDED and len(body) >= 2:
-                    from armiger.oci_vpn_guard import _bdecode_at, bdecode_krpc
+                    from oci_vpn_guard import _bdecode_at, bdecode_krpc
                     ext_id = body[1]
                     if ext_id == BT_EXT_HANDSHAKE_ID:
                         try:
@@ -549,34 +549,82 @@ class BitTorrentPeerWireSeeder:
                 pass
 
 
+MIN_TORRENT_PIECE_LENGTH = 16384
+
+
+def _validate_torrent_info_geometry(
+    info: Any,
+    max_payload_bytes: int = 67108864,
+    min_piece_length: int = MIN_TORRENT_PIECE_LENGTH,
+) -> Tuple[int, int, int, bytes, bytes]:
+    """Validate untrusted torrent `info` dictionary piece geometry and hash-vector bounds
+    before downloading webseed data or allocating per-piece buffers.
+    """
+    if not isinstance(info, dict) or not isinstance(info.get(b"files"), list) or not info[b"files"]:
+        raise ValueError("invalid_info_dict")
+    raw_plen = info.get(b"piece length")
+    if type(raw_plen) is not int or raw_plen < min_piece_length or raw_plen > max_payload_bytes:
+        raise ValueError("invalid_piece_length")
+    piece_length = int(raw_plen)
+    total_bytes = 0
+    for f in info[b"files"]:
+        flen = f.get(b"length") if isinstance(f, dict) else None
+        if type(flen) is not int or flen < 0 or flen > max_payload_bytes:
+            raise ValueError("invalid_file_length")
+        total_bytes += int(flen)
+    if total_bytes < 0 or total_bytes > max_payload_bytes:
+        raise ValueError("payload_size_exceeds_limit")
+    num_pieces = max(1, (total_bytes + piece_length - 1) // piece_length) if total_bytes > 0 else 0
+    max_pieces = max(1, (max_payload_bytes + min_piece_length - 1) // min_piece_length)
+    if num_pieces > max_pieces:
+        raise ValueError("invalid_piece_length")
+    raw_pieces = info.get(b"pieces")
+    if not isinstance(raw_pieces, (bytes, bytearray)) or len(raw_pieces) != num_pieces * 20:
+        raise ValueError("invalid_pieces_hash_vector")
+    raw_merkle = info.get(b"merkle_root")
+    if not isinstance(raw_merkle, (bytes, bytearray)) or len(raw_merkle) != 32:
+        raise ValueError("invalid_merkle_root")
+    return piece_length, total_bytes, num_pieces, bytes(raw_pieces), bytes(raw_merkle)
+
+
 def verify_info_and_payload(
     info_bytes: bytes,
     payload: bytes,
     expected_infohash_20: Optional[bytes] = None,
+    max_payload_bytes: int = 67108864,
 ) -> Dict[str, Any]:
     """Verify raw `info` dictionary bytes against `expected_infohash_20`, every SHA-1 piece,
-    the SHA-256 Merkle root, and each file's SHA-256 digest.
+    the SHA-256 Merkle root, and each file's SHA-256 digest without materializing chunk copies.
     """
-    from armiger.oci_vpn_guard import bdecode
+    from oci_vpn_guard import bdecode
     computed_ih = hashlib.sha1(info_bytes).digest()
     if expected_infohash_20 is not None and computed_ih != expected_infohash_20:
         raise ValueError("infohash_mismatch")
     info = bdecode(info_bytes)
-    if not isinstance(info, dict):
-        raise ValueError("invalid_info_dict")
-    piece_length = info[b"piece length"]
-    if isinstance(piece_length, bool) or not isinstance(piece_length, int) or piece_length <= 0:
-        raise ValueError("invalid_piece_length")
-    files = info[b"files"]
-    if any(not isinstance(f[b"length"], int) or isinstance(f[b"length"], bool) or f[b"length"] < 0 for f in files):
-        raise ValueError("invalid_file_length")
-    if sum(f[b"length"] for f in files) != len(payload):
+    piece_length, total_bytes, num_pieces, raw_pieces, raw_merkle = _validate_torrent_info_geometry(
+        info, max_payload_bytes=max_payload_bytes
+    )
+    if len(payload) != total_bytes:
         raise ValueError("payload_length_mismatch")
-    chunks = [payload[i:i + piece_length] for i in range(0, max(1, len(payload)), piece_length)]
-    if b"".join(hashlib.sha1(c).digest() for c in chunks) != info[b"pieces"]:
-        raise ValueError("piece_hash_mismatch")
-    root = _compute_piece_merkle_root([hashlib.sha256(c).digest() for c in chunks])
-    if root != info[b"merkle_root"].hex():
+    files = info[b"files"]
+    mv = memoryview(payload)
+    piece_sha256_digests: List[bytes] = []
+    if num_pieces == 0:
+        pass
+    elif total_bytes == 0:
+        if hashlib.sha1(b"").digest() != raw_pieces[:20]:
+            raise ValueError("piece_hash_mismatch")
+        piece_sha256_digests.append(hashlib.sha256(b"").digest())
+    else:
+        for p_idx in range(num_pieces):
+            start_off = p_idx * piece_length
+            end_off = min(total_bytes, start_off + piece_length)
+            piece_view = mv[start_off:end_off]
+            if hashlib.sha1(piece_view).digest() != raw_pieces[p_idx * 20 : (p_idx + 1) * 20]:
+                raise ValueError("piece_hash_mismatch")
+            piece_sha256_digests.append(hashlib.sha256(piece_view).digest())
+    root = _compute_piece_merkle_root(piece_sha256_digests)
+    if root != raw_merkle.hex():
         raise ValueError("merkle_root_mismatch")
     offset = 0
     extracted_files: Dict[str, bytes] = {}
@@ -591,7 +639,7 @@ def verify_info_and_payload(
     return {
         "infohash_hex": computed_ih.hex(),
         "bytes_verified": len(payload),
-        "pieces_verified": len(chunks),
+        "pieces_verified": num_pieces,
         "merkle_root": root,
         "merkle_root_sha256": root,
         "files": extracted_files,
@@ -607,7 +655,7 @@ def verify_torrent_payload(
 
     The caller must pin metainfo to the authenticated pointer's infohash before using this check.
     """
-    from armiger.oci_vpn_guard import bdecode
+    from oci_vpn_guard import bdecode
     meta = bdecode(torrent_bytes)
     info = meta[b"info"]
     raw_info = bencode(info)
@@ -628,7 +676,7 @@ async def fetch_bundle_via_peer_wire(
     BEP-10 + BEP-9 (`ut_metadata`) to fetch and authenticate `info_bytes`, followed by
     BEP-3 piece requests and full SHA-1 / SHA-256 Merkle verification.
     """
-    from armiger.oci_vpn_guard import _bdecode_at, bdecode, bdecode_krpc
+    from oci_vpn_guard import _bdecode_at, bdecode, bdecode_krpc
     if not isinstance(infohash_20, (bytes, bytearray)) or len(infohash_20) != 20:
         raise ValueError("infohash_20 must be 20 bytes")
     loop = asyncio.get_running_loop()
@@ -860,7 +908,7 @@ async def fetch_bundle_via_peer_wire(
                     continue
             _mark_non_progress()
 
-        verified = verify_info_and_payload(info_bytes, bytes(payload_buf), expected_infohash_20=bytes(infohash_20))
+        verified = verify_info_and_payload(info_bytes, bytes(payload_buf), expected_infohash_20=bytes(infohash_20), max_payload_bytes=max_payload_bytes)
         verified["info_bytes"] = info_bytes
         verified["payload_bytes"] = bytes(payload_buf)
         return verified
@@ -890,14 +938,14 @@ def fetch_bundle_via_bep19_webseed(
     import time
     import urllib.parse
     import urllib.request
-    from armiger.oci_vpn_guard import bdecode
+    from oci_vpn_guard import bdecode
     if max_payload_bytes <= 0:
         raise ValueError("invalid_max_payload_bytes")
     computed_ih = hashlib.sha1(info_bytes).digest()
     if expected_infohash_20 is not None and computed_ih != expected_infohash_20:
         raise ValueError("infohash_mismatch")
     info = bdecode(info_bytes)
-    if not isinstance(info, dict) or not isinstance(info.get(b"files"), list):
+    if not isinstance(info, dict) or not isinstance(info.get(b"files"), list) or not info[b"files"]:
         raise ValueError("invalid_info_dict")
     total_expected = 0
     for f in info[b"files"]:
@@ -907,6 +955,7 @@ def fetch_bundle_via_bep19_webseed(
         total_expected += flen
     if total_expected > max_payload_bytes:
         raise ValueError("webseed_payload_size_exceeds_limit")
+    _validate_torrent_info_geometry(info, max_payload_bytes=max_payload_bytes)
     bundle_name = info[b"name"].decode("utf-8")
     enc_bundle_name = urllib.parse.quote(bundle_name, safe="")
     base = webseed_base_url.rstrip("/")
@@ -1016,7 +1065,7 @@ def fetch_bundle_via_bep19_webseed(
             raise ValueError("webseed_payload_size_exceeds_limit")
         concat.extend(fbytes)
 
-    verified = verify_info_and_payload(info_bytes, bytes(concat), expected_infohash_20=computed_ih)
+    verified = verify_info_and_payload(info_bytes, bytes(concat), expected_infohash_20=computed_ih, max_payload_bytes=max_payload_bytes)
     verified["info_bytes"] = info_bytes
     verified["payload_bytes"] = bytes(concat)
     return verified

@@ -24,8 +24,11 @@ from cryptography.hazmat.primitives.asymmetric import ed25519, x25519
 from cryptography.hazmat.primitives.ciphers.aead import ChaCha20Poly1305
 from cryptography.hazmat.primitives.kdf.hkdf import HKDF
 
+_THIS_DIR = pathlib.Path(__file__).resolve().parent
+if str(_THIS_DIR) not in sys.path:
+    sys.path.insert(0, str(_THIS_DIR))
 
-from .dht_rsi_models_and_privacy import (
+from dht_rsi_models_and_privacy import (
     AcyclicReleaseEnvelope,
     AuthenticatedConformalBaseline,
     BenchmarkAttestationPredicate,
@@ -41,7 +44,7 @@ from .dht_rsi_models_and_privacy import (
     VerifiedObservation,
     dsse_pae,
 )
-from .dht_rsi_crypto_and_adapters import (
+from dht_rsi_crypto_and_adapters import (
     MediaStreamVerifier,
     WOTSPlusSHAKE256,
 )
@@ -270,7 +273,10 @@ class PhysicalGroundTruthVerifier:
         if cat_type == "anime_catalog":
             if ffprobe_checked and not has_video:
                 return "unknown", False, "contradicted_catalog_video_missing"
-            return "anime", True, "independent_reference:anime_catalog"
+            ref_cat = str(ref.get("category") or ref.get("media_category") or "").strip().lower()
+            if ref_cat in ("movie", "tv_show"):
+                return ref_cat, True, f"independent_reference:anime_catalog:{ref_cat}"
+            return "unknown", False, "anime_catalog_category_unspecified"
         if cat_type == "audio_catalog":
             if ffprobe_checked and (has_video or not has_audio):
                 return "unknown", False, "contradicted_catalog_audio_mismatch"
@@ -673,10 +679,7 @@ class AuthoritativeASNVerifier:
             elif req_auth and not has_verified_pin:
                 return False, f"unrouted_ip_for_asn:{ip_address}->asn={claimed_asn}"
 
-        if require_pinned_key and not has_verified_pin:
-            return False, f"unverified_authoritative_asn_binding:asn={claimed_asn}"
-
-        if req_auth and not (has_verified_pin or has_verified_route):
+        if (req_auth or require_pinned_key) and not has_verified_pin:
             return False, f"unverified_authoritative_asn_binding:asn={claimed_asn}"
 
         return True, "authoritative_asn_verified"
@@ -704,10 +707,10 @@ class ThresholdSignatureVerifier:
         threshold_m: int,
         current_seq: int,
         trusted_pq_signers: Optional[Dict[str, str]] = None,  # pq_pubkey_hex -> name/identity
-        bootstrap_checkpoint_seq: Optional[int] = None,
         require_pq: bool = True,
         asn_verifier: Optional[AuthoritativeASNVerifier] = None,
-        verified_asn_quorum: Optional[Set[int]] = None,
+        verified_asn_quorum: Optional[Sequence[int] | Set[int]] = None,
+        bootstrap_checkpoint_seq: Optional[int] = None,
     ) -> Tuple[bool, str]:
         """Verify monotonic sequence number, strict signer uniqueness, and M-of-N Hybrid threshold signatures."""
         # 0. Strict type & policy bounds
@@ -717,6 +720,12 @@ class ThresholdSignatureVerifier:
             return False, f"invalid_timestamp_type:{type(manifest.timestamp).__name__}"
         if isinstance(threshold_m, bool) or not isinstance(threshold_m, int) or threshold_m <= 0:
             return False, f"invalid_threshold_m:{threshold_m}"
+        if (
+            isinstance(manifest.min_asn_quorum, bool)
+            or not isinstance(manifest.min_asn_quorum, int)
+            or manifest.min_asn_quorum <= 0
+        ):
+            return False, f"invalid_min_asn_quorum:{manifest.min_asn_quorum}"
         if not trusted_signers:
             return False, "empty_trusted_signers"
         if manifest.seq <= 0:
@@ -737,7 +746,7 @@ class ThresholdSignatureVerifier:
         if (
             manifest.timestamp <= 0
             or (manifest.timestamp - now_ts) > 300
-            or (manifest.timestamp > 1792400000 and (now_ts - manifest.timestamp) > 86400 * 14)
+            or (now_ts - manifest.timestamp) > 86400 * 14
         ):
             return False, f"manifest_timestamp_out_of_bounds:{manifest.timestamp}"
 
@@ -760,12 +769,14 @@ class ThresholdSignatureVerifier:
             if raw_pq_pk != raw_pq_pk.lower() or raw_pq_sig != raw_pq_sig.lower():
                 return False, "non_canonical_uppercase_hex_in_pq_signatures"
 
-        # Optional signer attestation ASN uniqueness & binding check
+        required_asn_quorum = max(threshold_m, int(manifest.min_asn_quorum))
+
+        # Signer attestation ASN uniqueness & binding check (honor declared min_asn_quorum)
         if manifest.signer_attestations is not None:
             q_ok, q_reason, _ = SybilQuorumVerifier.verify_quorum(
                 attestations=manifest.signer_attestations,
                 target_hash=manifest.bundle_sha256,
-                min_distinct_asns=min(threshold_m, manifest.min_asn_quorum),
+                min_distinct_asns=required_asn_quorum,
                 require_pq=require_pq,
                 asn_verifier=asn_verifier,
                 reject_duplicate_pubkeys=True,
@@ -775,6 +786,7 @@ class ThresholdSignatureVerifier:
 
         # 4. Canonical payload derivation
         payload_bytes = manifest.canonical_payload()
+        payload_sha256 = hashlib.sha256(payload_bytes).hexdigest()
         norm_trusted = {
             ThresholdDHTManifest._normalize_pubkey_id(k): v for k, v in trusted_signers.items()
         }
@@ -806,14 +818,17 @@ class ThresholdSignatureVerifier:
         if len(valid_signatures) < threshold_m:
             return False, f"insufficient_threshold_signatures:{len(valid_signatures)}<{threshold_m}"
 
+        verified_ed_pks_for_quorum: Set[str] = set(valid_signatures)
+        staged_leaves: Dict[str, Any] = {}
+        pq_checked = bool(require_pq or manifest.pq_signatures or trusted_pq_signers)
+
         # 6. Check Post-Quantum WOTS+-SHAKE256 signatures (fail-closed: never trust unpinned self-supplied PQ keys)
-        if require_pq or manifest.pq_signatures or trusted_pq_signers:
+        if pq_checked:
             if not trusted_pq_signers:
                 return False, "untrusted_pq_signers_when_pq_trust_store_unset"
             valid_pq_signatures: Set[str] = set()
             seen_pq_identities: Set[str] = set()
             pq_root_by_identity: Dict[str, str] = {}
-            staged_leaves: Dict[str, Tuple[int, str]] = {}
             norm_trusted_pq = {
                 ThresholdDHTManifest._normalize_pubkey_id(k): v for k, v in trusted_pq_signers.items()
             }
@@ -824,6 +839,7 @@ class ThresholdSignatureVerifier:
                     continue
                 root_pq_pk = str(meta["root_pq_pub_hex"]).lower()
                 leaf_pq_pk = str(meta["leaf_pub_hex"]).lower()
+                otk_id = str(meta["one_time_key_id"])
                 if norm_pq_pk not in (root_pq_pk, leaf_pq_pk):
                     continue
                 matched_trust_pk = root_pq_pk if root_pq_pk in norm_trusted_pq else (
@@ -834,10 +850,11 @@ class ThresholdSignatureVerifier:
                 pq_id = norm_trusted_pq[matched_trust_pk]
                 if pq_id in seen_pq_identities:
                     return False, f"duplicate_pq_signer_identity:{pq_id}"
-                prev_use = ThresholdSignatureVerifier._USED_PQ_LEAVES.get(leaf_pq_pk)
-                curr_use = (int(manifest.seq), manifest.bundle_sha256.lower())
-                if prev_use is not None and prev_use != curr_use:
-                    return False, f"wots_one_time_leaf_reused:{leaf_pq_pk[:16]}"
+                with WOTSPlusSHAKE256._LOCK:
+                    for track_key in (leaf_pq_pk, otk_id):
+                        prev_use = ThresholdSignatureVerifier._USED_PQ_LEAVES.get(track_key)
+                        if prev_use is not None and prev_use != payload_sha256:
+                            return False, f"wots_one_time_leaf_reused:{leaf_pq_pk[:16]}"
                 try:
                     pq_pk_bytes = bytes.fromhex(norm_pq_pk)
                     pq_sig_bytes = bytes.fromhex(pq_sig_hex.strip())
@@ -845,7 +862,15 @@ class ThresholdSignatureVerifier:
                         valid_pq_signatures.add(matched_trust_pk)
                         seen_pq_identities.add(pq_id)
                         pq_root_by_identity[pq_id] = matched_trust_pk
-                        staged_leaves[leaf_pq_pk] = curr_use
+                        staged_leaves[leaf_pq_pk] = payload_sha256
+                        staged_leaves[otk_id] = payload_sha256
+                    else:
+                        with WOTSPlusSHAKE256._LOCK:
+                            if any(
+                                ThresholdSignatureVerifier._USED_PQ_LEAVES.get(k) not in (None, payload_sha256)
+                                for k in (leaf_pq_pk, otk_id)
+                            ):
+                                return False, f"wots_one_time_leaf_reused:{leaf_pq_pk[:16]}"
                 except ValueError:
                     continue
 
@@ -861,6 +886,7 @@ class ThresholdSignatureVerifier:
                 _base_signer_id(ed_id): (ed_id, ed_pk) for ed_id, ed_pk in ed_pk_by_identity.items()
             }
             paired_identities: Set[str] = set()
+            paired_ed_pks: Set[str] = set()
             for pq_id, matched_pq_pk in pq_root_by_identity.items():
                 base_id = _base_signer_id(pq_id)
                 ed_match = (
@@ -879,11 +905,50 @@ class ThresholdSignatureVerifier:
                     if matched_pq_pk != pinned_pq.strip().lower():
                         continue
                 paired_identities.add(base_id)
+                paired_ed_pks.add(ed_pk)
 
             if len(paired_identities) < threshold_m:
                 return False, f"insufficient_paired_hybrid_threshold_signatures:{len(paired_identities)}<{threshold_m}"
+            verified_ed_pks_for_quorum = paired_ed_pks
 
-            ThresholdSignatureVerifier._USED_PQ_LEAVES.update(staged_leaves)
+        # 7. Enforce declared min_asn_quorum even when manifest.signer_attestations is None
+        if manifest.signer_attestations is None:
+            if verified_asn_quorum is not None:
+                valid_q_asns = {
+                    int(a)
+                    for a in verified_asn_quorum
+                    if not isinstance(a, bool) and isinstance(a, int) and int(a) > 0
+                }
+                if len(valid_q_asns) < required_asn_quorum:
+                    return (
+                        False,
+                        f"manifest_signer_attestation_failed:insufficient_verified_asn_quorum:{len(valid_q_asns)}<{required_asn_quorum}",
+                    )
+            else:
+                pinned_signer_asns: Set[int] = set()
+                for ed_pk in verified_ed_pks_for_quorum:
+                    pinned_asn = (
+                        asn_verifier.pinned_pubkey_asn.get(ed_pk)
+                        if asn_verifier is not None
+                        else None
+                    )
+                    if pinned_asn is None:
+                        pinned_asn = AuthoritativeASNVerifier._GLOBAL_PINNED_PUBKEY_ASN.get(ed_pk)
+                    if pinned_asn is not None and int(pinned_asn) > 0:
+                        pinned_signer_asns.add(int(pinned_asn))
+                if len(pinned_signer_asns) < required_asn_quorum:
+                    return (
+                        False,
+                        f"manifest_signer_attestation_failed:missing_signer_attestations_for_min_asn_quorum:{len(pinned_signer_asns)}<{required_asn_quorum}",
+                    )
+
+        if pq_checked and staged_leaves:
+            with WOTSPlusSHAKE256._LOCK:
+                for track_key, exp_sha in staged_leaves.items():
+                    prev_use = ThresholdSignatureVerifier._USED_PQ_LEAVES.get(track_key)
+                    if prev_use is not None and prev_use != exp_sha:
+                        return False, f"wots_one_time_leaf_reused:{track_key[:16]}"
+                ThresholdSignatureVerifier._USED_PQ_LEAVES.update(staged_leaves)
 
         return True, f"threshold_verified:{len(valid_signatures)}_of_{len(trusted_signers)}"
 
@@ -923,9 +988,9 @@ class SybilQuorumVerifier:
         eff_req_auth = (
             bool(asn_verifier.require_authoritative_binding)
             if (require_authoritative_asn is None and asn_verifier is not None)
-            else bool(require_authoritative_asn)
+            else (True if require_authoritative_asn is None else bool(require_authoritative_asn))
         )
-        req_pinned = bool(require_authoritative_asn is True)
+        req_pinned = bool(eff_req_auth)
         active_verifier = asn_verifier or AuthoritativeASNVerifier(
             require_authoritative_binding=eff_req_auth
         )
@@ -1019,13 +1084,23 @@ class SybilQuorumVerifier:
                     if not first_rejection_reason:
                         first_rejection_reason = f"invalid_attestation_ip:{att.ip_address}"
                     continue
-                if subnet in seen_subnet_asn and seen_subnet_asn[subnet] != claimed_asn:
-                    return (
-                        False,
-                        f"sybil_spoof_rejected:subnet_claimed_multiple_asns:{subnet}:{seen_subnet_asn[subnet]}!={claimed_asn}",
-                        set(),
-                    )
-                seen_subnet_asn[subnet] = claimed_asn
+
+            pinned_for_pk = (
+                active_verifier.pinned_pubkey_asn.get(norm_pk)
+                if norm_pk in active_verifier.pinned_pubkey_asn
+                else AuthoritativeASNVerifier._GLOBAL_PINNED_PUBKEY_ASN.get(norm_pk)
+            )
+            if (
+                subnet is not None
+                and (not eff_req_auth or pinned_for_pk == claimed_asn)
+                and subnet in seen_subnet_asn
+                and seen_subnet_asn[subnet] != claimed_asn
+            ):
+                return (
+                    False,
+                    f"sybil_spoof_rejected:subnet_claimed_multiple_asns:{subnet}:{seen_subnet_asn[subnet]}!={claimed_asn}",
+                    set(),
+                )
 
             if asn_verifier is not None or eff_req_auth or att.ip_address is not None:
                 bind_ok, bind_reason = active_verifier.verify_binding(
@@ -1152,20 +1227,7 @@ class SafeFormatValidator:
             if bundle_bytes[:2] in (b"\x80\x01", b"\x80\x02", b"\x80\x03", b"\x80\x04", b"\x80\x05"):
                 return False, "poison_detected:prohibited_bytecode_pattern"
         elif fmt == "safetensors":
-            if bundle_bytes[:2] in (b"\x80\x01", b"\x80\x02", b"\x80\x03", b"\x80\x04", b"\x80\x05"):
-                return False, "poison_detected:prohibited_bytecode_pattern"
-            for ascii_pat in (
-                b"csubprocess\n",
-                b"c__builtin__",
-                b"cbuiltins\n",
-                b"cposix\n",
-                b"__reduce__",
-                b"__import__",
-                b"\x80\x04evil",
-                b"\x80\x04\x95",
-            ):
-                if ascii_pat in bundle_bytes:
-                    return False, "poison_detected:prohibited_bytecode_pattern"
+            pass
         else:
             for pattern in cls.PROHIBITED_BYTE_PATTERNS:
                 if pattern in bundle_bytes:
@@ -1186,9 +1248,16 @@ class SafeFormatValidator:
     @classmethod
     def _validate_safetensors(cls, data: bytes) -> Tuple[bool, str]:
         if len(data) < 8:
+            if data[:2] in (b"\x80\x01", b"\x80\x02", b"\x80\x03", b"\x80\x04", b"\x80\x05"):
+                return False, "poison_detected:prohibited_bytecode_pattern"
             return False, "safetensors_too_short"
         header_len = int.from_bytes(data[:8], "little")
         if header_len <= 0 or header_len > 10 * 1024 * 1024 or 8 + header_len > len(data):
+            if (
+                data[:2] in (b"\x80\x01", b"\x80\x02", b"\x80\x03", b"\x80\x04", b"\x80\x05")
+                or cls.RE_PICKLE_PROTO0_GLOBAL.search(data[:128])
+            ):
+                return False, "poison_detected:prohibited_bytecode_pattern"
             return False, "safetensors_invalid_header_length"
 
         header_bytes = data[8:8 + header_len]
@@ -1280,57 +1349,144 @@ class SafeFormatValidator:
             def _check_tensor(t: Any) -> Optional[str]:
                 if int(getattr(t, "data_location", 0)) != 0 or len(getattr(t, "external_data", ())) > 0:
                     return f"onnx_external_data_forbidden:{getattr(t, 'name', '')}"
+                if hasattr(t, "HasField"):
+                    try:
+                        if t.HasField("segment"):
+                            return f"onnx_segmented_tensor_forbidden:{getattr(t, 'name', '')}"
+                    except ValueError:
+                        pass
+                return None
+
+            def _check_sparse_tensor(sp: Any) -> Optional[str]:
+                for sub_t in (getattr(sp, "values", None), getattr(sp, "indices", None)):
+                    if sub_t is not None:
+                        err = _check_tensor(sub_t)
+                        if err:
+                            return err
+                return None
+
+            def _check_attr(attr: Any, depth: int = 0) -> Optional[str]:
+                if depth > 16:
+                    return "onnx_subgraph_nesting_exceeded"
+                if hasattr(attr, "HasField"):
+                    try:
+                        if attr.HasField("t"):
+                            err = _check_tensor(attr.t)
+                            if err:
+                                return err
+                    except ValueError:
+                        pass
+                for sub_t in getattr(attr, "tensors", ()):
+                    err = _check_tensor(sub_t)
+                    if err:
+                        return err
+                if hasattr(attr, "sparse_tensor") and hasattr(attr, "HasField"):
+                    try:
+                        if attr.HasField("sparse_tensor"):
+                            err = _check_sparse_tensor(attr.sparse_tensor)
+                            if err:
+                                return err
+                    except ValueError:
+                        pass
+                for sp in getattr(attr, "sparse_tensors", ()):
+                    err = _check_sparse_tensor(sp)
+                    if err:
+                        return err
+                if hasattr(attr, "HasField"):
+                    try:
+                        if attr.HasField("g"):
+                            err = _check_graph(attr.g, depth + 1)
+                            if err:
+                                return err
+                    except ValueError:
+                        pass
+                for sub_g in getattr(attr, "graphs", ()):
+                    err = _check_graph(sub_g, depth + 1)
+                    if err:
+                        return err
+                return None
+
+            def _check_node(node: Any, depth: int = 0) -> Optional[str]:
+                if node.domain not in ("", "ai.onnx", "ai.onnx.ml"):
+                    return f"onnx_custom_operator_domain_forbidden:{node.domain}"
+                for attr in getattr(node, "attribute", ()):
+                    err = _check_attr(attr, depth)
+                    if err:
+                        return err
                 return None
 
             def _check_graph(g: Any, depth: int = 0) -> Optional[str]:
                 if depth > 16:
                     return "onnx_subgraph_nesting_exceeded"
-                for init in g.initializer:
+                for init in getattr(g, "initializer", ()):
                     err = _check_tensor(init)
                     if err:
                         return err
                 for sp in getattr(g, "sparse_initializer", ()):
-                    for sub_t in (getattr(sp, "values", None), getattr(sp, "indices", None)):
-                        if sub_t is not None:
-                            err = _check_tensor(sub_t)
+                    err = _check_sparse_tensor(sp)
+                    if err:
+                        return err
+                for node in getattr(g, "node", ()):
+                    err = _check_node(node, depth)
+                    if err:
+                        return err
+                return None
+
+            def _walk_protobuf_tensors(msg: Any, depth: int = 0) -> Optional[str]:
+                if depth > 32 or not hasattr(msg, "ListFields"):
+                    return None
+                desc = getattr(msg, "DESCRIPTOR", None)
+                desc_name = getattr(desc, "name", "")
+                if desc_name == "TensorProto":
+                    return _check_tensor(msg)
+                if desc_name == "SparseTensorProto":
+                    return _check_sparse_tensor(msg)
+                for fd, val in msg.ListFields():
+                    if getattr(fd, "message_type", None) is None:
+                        continue
+                    if getattr(fd, "label", None) == fd.LABEL_REPEATED:
+                        if hasattr(val, "items"):
+                            iter_vals = val.values()
+                        else:
+                            iter_vals = val
+                        for item in iter_vals:
+                            err = _walk_protobuf_tensors(item, depth + 1)
                             if err:
                                 return err
-                for node in g.node:
-                    if node.domain not in ("", "ai.onnx", "ai.onnx.ml"):
-                        return f"onnx_custom_operator_domain_forbidden:{node.domain}"
-                    for attr in node.attribute:
-                        if attr.HasField("t"):
-                            err = _check_tensor(attr.t)
-                            if err:
-                                return err
-                        for sub_t in getattr(attr, "tensors", ()):
-                            err = _check_tensor(sub_t)
-                            if err:
-                                return err
-                        if hasattr(attr, "sparse_tensor") and attr.HasField("sparse_tensor"):
-                            for sub_t in (attr.sparse_tensor.values, attr.sparse_tensor.indices):
-                                err = _check_tensor(sub_t)
-                                if err:
-                                    return err
-                        for sp in getattr(attr, "sparse_tensors", ()):
-                            for sub_t in (getattr(sp, "values", None), getattr(sp, "indices", None)):
-                                if sub_t is not None:
-                                    err = _check_tensor(sub_t)
-                                    if err:
-                                        return err
-                        if attr.HasField("g"):
-                            err = _check_graph(attr.g, depth + 1)
-                            if err:
-                                return err
-                        for sub_g in getattr(attr, "graphs", ()):
-                            err = _check_graph(sub_g, depth + 1)
-                            if err:
-                                return err
+                    else:
+                        err = _walk_protobuf_tensors(val, depth + 1)
+                        if err:
+                            return err
                 return None
 
             graph_err = _check_graph(model.graph)
             if graph_err:
                 return False, graph_err
+            for fn in getattr(model, "functions", ()):
+                for attr_p in getattr(fn, "attribute_proto", ()):
+                    err = _check_attr(attr_p, 0)
+                    if err:
+                        return False, err
+                for fn_node in getattr(fn, "node", ()):
+                    err = _check_node(fn_node, 0)
+                    if err:
+                        return False, err
+                fn_domain = getattr(fn, "domain", "")
+                if fn_domain not in ("", "ai.onnx", "ai.onnx.ml"):
+                    return False, f"onnx_custom_function_domain_forbidden:{fn_domain}"
+            for ti in getattr(model, "training_info", ()):
+                if hasattr(ti, "HasField"):
+                    if ti.HasField("initialization"):
+                        err = _check_graph(ti.initialization, 0)
+                        if err:
+                            return False, err
+                    if ti.HasField("algorithm"):
+                        err = _check_graph(ti.algorithm, 0)
+                        if err:
+                            return False, err
+            proto_err = _walk_protobuf_tensors(model)
+            if proto_err:
+                return False, proto_err
         except Exception as exc:
             return False, f"onnx_protobuf_parse_error:{type(exc).__name__}"
         return True, "onnx_valid"
@@ -1462,6 +1618,7 @@ class AcyclicProvenanceVerifier:
         enforce_evaluator_release_disjoint: bool = True,
         trusted_release_pq_signers: Optional[Mapping[str, str]] = None,
         trusted_evaluator_pq_signers: Optional[Mapping[str, str]] = None,
+        trusted_contributor_signers: Optional[Mapping[str, str]] = None,
     ) -> Tuple[bool, str]:
         """Verify disjoint contributor / evaluator / release-quorum roles, evaluator ASN bindings, and DSSE PAE release signatures."""
         if not trusted_release_signers:
@@ -1508,6 +1665,8 @@ class AcyclicProvenanceVerifier:
         if envelope.authenticated_baseline.canary_suite_sha256 != envelope.canary_suite_sha256.strip().lower():
             return False, "baseline_canary_suite_mismatch"
 
+        eff_asn_verifier = asn_verifier if asn_verifier is not None else AuthoritativeASNVerifier(require_authoritative_binding=True)
+
         norm_eval_trust: Dict[str, str] = {}
         eval_pq_by_ed: Dict[str, Set[str]] = {}
         eval_id_by_pq: Dict[str, str] = {}
@@ -1531,7 +1690,52 @@ class AcyclicProvenanceVerifier:
         if not norm_eval_trust:
             return False, "empty_trusted_evaluator_signers"
 
-        eff_asn_verifier = asn_verifier if asn_verifier is not None else AuthoritativeASNVerifier(require_authoritative_binding=True)
+        eff_pq_signers: Dict[str, str] = {}
+        if trusted_release_pq_signers:
+            for pq_k, pq_id in trusted_release_pq_signers.items():
+                norm_pq_k = ThresholdDHTManifest._normalize_pubkey_id(pq_k)
+                if len(norm_pq_k) == 64:
+                    eff_pq_signers[norm_pq_k] = str(pq_id)
+        norm_rel_trust: Dict[str, str] = {}
+        for ed_pk_hex, identity in trusted_release_signers.items():
+            norm_ed = ThresholdDHTManifest._normalize_pubkey_id(ed_pk_hex)
+            norm_rel_trust[norm_ed] = identity
+            raw_ed_str = str(ed_pk_hex).strip().lower()
+            if ":" in raw_ed_str:
+                _, pq_part = raw_ed_str.split(":", 1)
+                norm_pq_part = ThresholdDHTManifest._normalize_pubkey_id(pq_part)
+                if len(norm_pq_part) == 64:
+                    eff_pq_signers[norm_pq_part] = identity
+            pinned_rel_pq = (
+                eff_asn_verifier.pinned_pubkey_pq_root.get(norm_ed)
+                or AuthoritativeASNVerifier._GLOBAL_PINNED_PUBKEY_PQ_ROOT.get(norm_ed)
+                or WOTSPlusSHAKE256.get_root_wots_pub(norm_ed)
+            )
+            if pinned_rel_pq and len(ThresholdDHTManifest._normalize_pubkey_id(pinned_rel_pq)) == 64:
+                eff_pq_signers[ThresholdDHTManifest._normalize_pubkey_id(pinned_rel_pq)] = identity
+            for wots_pk_hex in WOTSPlusSHAKE256._ED25519_TO_WOTS_PUBS.get(norm_ed, ()):
+                eff_pq_signers[wots_pk_hex] = identity
+
+        norm_contrib_trust: Dict[str, str] = {}
+        if trusted_contributor_signers:
+            for c_k, c_id in trusted_contributor_signers.items():
+                norm_ck = ThresholdDHTManifest._normalize_pubkey_id(c_k)
+                if len(norm_ck) == 64:
+                    norm_contrib_trust[norm_ck] = str(c_id)
+                raw_ck = str(c_k).strip().lower()
+                if ":" in raw_ck:
+                    _, pq_part = raw_ck.split(":", 1)
+                    norm_pq_part = ThresholdDHTManifest._normalize_pubkey_id(pq_part)
+                    if len(norm_pq_part) == 64:
+                        norm_contrib_trust[norm_pq_part] = str(c_id)
+
+        contributor_ids: Set[str] = set()
+        for c_pk in contributors:
+            for mapping in (norm_contrib_trust, norm_eval_trust, eval_id_by_pq, norm_rel_trust, eff_pq_signers):
+                mapped_id = mapping.get(c_pk)
+                if mapped_id is not None:
+                    contributor_ids.add(str(mapped_id))
+
         verified_eval_asns: Set[int] = set()
         seen_eval_pks: Set[str] = set()
         seen_eval_ids: Set[str] = set()
@@ -1545,6 +1749,8 @@ class AcyclicProvenanceVerifier:
             if norm_pk not in norm_eval_trust:
                 return False, f"untrusted_evaluator_pubkey:{norm_pk[:16]}"
             eval_id = norm_eval_trust[norm_pk]
+            if eval_id in contributor_ids:
+                return False, f"cyclic_provenance_violation:contributor_identity_in_evaluators:{eval_id}"
             if eval_id in seen_eval_ids:
                 return False, f"duplicate_evaluator_identity:{eval_id}"
             seen_eval_ids.add(eval_id)
@@ -1658,43 +1864,22 @@ class AcyclicProvenanceVerifier:
         if len(verified_eval_asns) < int(min_evaluator_asns):
             return False, f"insufficient_evaluator_asns:{len(verified_eval_asns)}<{min_evaluator_asns}"
 
-        eff_pq_signers: Dict[str, str] = {}
-        if trusted_release_pq_signers:
-            for pq_k, pq_id in trusted_release_pq_signers.items():
-                norm_pq_k = ThresholdDHTManifest._normalize_pubkey_id(pq_k)
-                if len(norm_pq_k) == 64:
-                    eff_pq_signers[norm_pq_k] = str(pq_id)
-        norm_rel_trust: Dict[str, str] = {}
-        for ed_pk_hex, identity in trusted_release_signers.items():
-            norm_ed = ThresholdDHTManifest._normalize_pubkey_id(ed_pk_hex)
-            norm_rel_trust[norm_ed] = identity
-            raw_ed_str = str(ed_pk_hex).strip().lower()
-            if ":" in raw_ed_str:
-                _, pq_part = raw_ed_str.split(":", 1)
-                norm_pq_part = ThresholdDHTManifest._normalize_pubkey_id(pq_part)
-                if len(norm_pq_part) == 64:
-                    eff_pq_signers[norm_pq_part] = identity
-            pinned_rel_pq = (
-                eff_asn_verifier.pinned_pubkey_pq_root.get(norm_ed)
-                or AuthoritativeASNVerifier._GLOBAL_PINNED_PUBKEY_PQ_ROOT.get(norm_ed)
-                or WOTSPlusSHAKE256.get_root_wots_pub(norm_ed)
-            )
-            if pinned_rel_pq and len(ThresholdDHTManifest._normalize_pubkey_id(pinned_rel_pq)) == 64:
-                eff_pq_signers[ThresholdDHTManifest._normalize_pubkey_id(pinned_rel_pq)] = identity
-            for wots_pk_hex in WOTSPlusSHAKE256._ED25519_TO_WOTS_PUBS.get(norm_ed, ()):
-                eff_pq_signers[wots_pk_hex] = identity
-
-        if enforce_evaluator_release_disjoint:
-            for raw_m_pk, _ in envelope.manifest.iter_ed25519_signatures():
-                norm_m_pk = ThresholdDHTManifest._normalize_pubkey_id(raw_m_pk)
-                m_rel_id = norm_rel_trust.get(norm_m_pk)
-                if m_rel_id is not None and m_rel_id in seen_eval_ids:
-                    return False, f"cyclic_provenance_violation:evaluator_identity_in_release_signers:{m_rel_id}"
-            for raw_m_pq, _ in envelope.manifest.iter_pq_signatures():
-                norm_m_pq = ThresholdDHTManifest._normalize_pubkey_id(raw_m_pq)
-                m_pq_id = eff_pq_signers.get(norm_m_pq)
-                if m_pq_id is not None and m_pq_id in seen_eval_ids:
-                    return False, f"cyclic_provenance_violation:evaluator_identity_in_release_signers:{m_pq_id}"
+        for raw_m_pk, _ in envelope.manifest.iter_ed25519_signatures():
+            norm_m_pk = ThresholdDHTManifest._normalize_pubkey_id(raw_m_pk)
+            m_rel_id = norm_rel_trust.get(norm_m_pk)
+            if m_rel_id is not None and m_rel_id in contributor_ids:
+                return False, f"cyclic_provenance_violation:contributor_identity_in_release_signers:{m_rel_id}"
+            if enforce_evaluator_release_disjoint and m_rel_id is not None and m_rel_id in seen_eval_ids:
+                return False, f"cyclic_provenance_violation:evaluator_identity_in_release_signers:{m_rel_id}"
+        for raw_m_pq, raw_m_pq_sig in envelope.manifest.iter_pq_signatures():
+            norm_m_pq = ThresholdDHTManifest._normalize_pubkey_id(raw_m_pq)
+            meta_m_pq = WOTSPlusSHAKE256.extract_signature_metadata(norm_m_pq, str(raw_m_pq_sig).strip())
+            root_m_pq = str(meta_m_pq.get("root_pq_pub_hex", "")).lower() if meta_m_pq else ""
+            m_pq_id = eff_pq_signers.get(norm_m_pq) or (eff_pq_signers.get(root_m_pq) if root_m_pq else None)
+            if m_pq_id is not None and m_pq_id in contributor_ids:
+                return False, f"cyclic_provenance_violation:contributor_identity_in_release_signers:{m_pq_id}"
+            if enforce_evaluator_release_disjoint and m_pq_id is not None and m_pq_id in seen_eval_ids:
+                return False, f"cyclic_provenance_violation:evaluator_identity_in_release_signers:{m_pq_id}"
 
         m_ok, m_reason = ThresholdSignatureVerifier.verify(
             manifest=envelope.manifest,
@@ -1724,6 +1909,8 @@ class AcyclicProvenanceVerifier:
             if norm_pk not in norm_rel_trust:
                 continue
             rel_id = norm_rel_trust[norm_pk]
+            if rel_id in contributor_ids:
+                return False, f"cyclic_provenance_violation:contributor_identity_in_release_signers:{rel_id}"
             if enforce_evaluator_release_disjoint and rel_id in seen_eval_ids:
                 return False, f"cyclic_provenance_violation:evaluator_identity_in_release_signers:{rel_id}"
             if rel_id in valid_env_rel_ids:
@@ -1748,6 +1935,10 @@ class AcyclicProvenanceVerifier:
                 pq_id = eff_pq_signers.get(norm_pq) or (eff_pq_signers.get(root_env_pq) if root_env_pq else None)
                 if pq_id is None:
                     continue
+                if pq_id in contributor_ids:
+                    return False, f"cyclic_provenance_violation:contributor_identity_in_release_signers:{pq_id}"
+                if enforce_evaluator_release_disjoint and pq_id in seen_eval_ids:
+                    return False, f"cyclic_provenance_violation:evaluator_identity_in_release_signers:{pq_id}"
                 if pq_id not in valid_env_rel_ids or pq_id in valid_env_pq_ids:
                     continue
                 try:
