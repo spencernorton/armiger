@@ -1,82 +1,101 @@
 # Distributed updates and sharing
 
-This is an optional advanced subsystem. Local classification does not require DHT setup. Sharing is disabled by default (`opt_in_sharing=False`); use the [quickstart](quickstart.md) for local inference.
+> [!NOTE]
+> **Shared knowledge, local classification.** Armiger has an optional peer-to-peer system for receiving signed updates to its model adapters, confidence calibration and catalog. Your installation checks an update before using it locally. Contributing back is a separate choice and is **off by default**.
 
-Updates use signed manifests and explicit trusted authorities. The v3 model release establishes seq=3006 as its new trust root; earlier deterministic test authorities are retired. Do not copy test keys into a deployment. The constructor's placeholder root key does not establish a trusted publisher. A valid signed update and a passed canary check do not establish model accuracy; see [release-gate limitations](evaluation.md#limits).
+You can use Armiger without setting up this system. Start with the [quickstart](quickstart.md) for ordinary local classification.
 
+## Why it helps
 
-This document specifies the cryptographic, differential-privacy, and wire-level firewall architecture governing distributed weight, calibration, and catalog metadata sharing in **Armiger** and **Armiger Ultra** (`armiger_dht_rsi.py`, `armiger_dht_db_sync.py`, `armiger_ultra_pipeline.py`), along with the local unit/integration test harness (`benchmarks/proof_anonymous_opt_in_sharing.py` and `test_anonymous_opt_in_dht_sharing.py`) that verifies default opt-out behavior and wire-level PII scrubbing.
+- **Reuse verified work.** Participating installations can contribute aggregated observations, so useful evidence can be shared across the community.
+- **Update more than the model.** Supported updates can carry catalog corrections, confidence adjustments and small model-adapter changes, without retraining the base model on each device.
+- **Keep control of your installation.** Choose trusted publishers, receive updates without contributing, and retain the previous state when an update fails verification or local regression checks.
 
----
+The goal is to make shared improvements available locally. An update's effect on accuracy still needs to be measured; a signature or a passed regression check does not prove that it improves real-world results.
 
-## 1. Strict Opt-In Zero-Egress Guarantee
+## How it works
 
-Every Armiger node, pipeline (`ArmigerUltraPipeline`, `ArmigerPipeline`), adapter (`SeriesWebhookAdapter`, `MovieWebhookAdapter`, `AudioWebhookAdapter`, `PublicationWebhookAdapter`, `QBittorrentAdapter`, `TransmissionAdapter`), `ArmigerDHTRSIEngine`, `ArmigerDHTDBSync` (`ArmigerDHTDatabaseSync`), and integration bridge (`ArmigerWaypointAdapter`, `BitmagnetArmigerBridge`, `ArmigerArrWebhookService`) **strictly defaults to outbound sharing DISABLED**:
+The **DHT** (distributed hash table) is the peer network used to exchange update data. Your device decides whether to accept what it receives.
 
-- **Default Constructor State:** `opt_in_sharing: bool = False`
-- **Environment Variable Override:** Outbound sharing is enabled only when `opt_in_sharing=True` is explicitly passed or `ARMIGER_DHT_SHARE_OPT_IN` is set to `"1"`, `"true"`, or `"yes"` (defaults to `"0"`).
-- **Zero-Egress Enforcement When `opt_in_sharing=False`:**
-  - `export_signed_bundle()`, `export_signed_delta_bundle()`, `export_rsi_telemetry_bundle()`, `get_pending_telemetry_batch()`, `publish_to_dht()`, and `broadcast_weights()` are hard-blocked (`None` / `[]` / `(False, "opt_in_sharing_disabled", 0)`), emitting **`0` outbound bundles** and **`0` UDP `put` packets**.
-  - Inbound read-only verification (`ingest_signed_bundle()`, `ingest_signed_delta_bundle()`, `verify_and_stage_update()`, `receive_and_apply_shard()`) remains available for verifying and applying trusted community updates locally without transmitting any packet from the local node.
-- **Runtime Audit Telemetry (`sharing_status()`):**
-  Every component exposes `sharing_status()` returning:
-  ```json
-  {
-    "opt_in_sharing_enabled": false,
-    "outbound_bundles_shared": 0,
-    "outbound_packets_blocked_opt_out": 2600,
-    "outbound_bytes_shared": 0,
-    "ephemeral_pubkey_hex": null
-  }
-  ```
-
----
-
-## 2. Five-Layer `AnonymityGuard` Defense-in-Depth (When Opted In)
-
-Whenever an operator explicitly opts in (`opt_in_sharing=True` or `ARMIGER_DHT_SHARE_OPT_IN=1`), `AnonymityGuard` unconditionally enforces five layers of cryptographic and mathematical privacy before any payload is signed or transmitted over UDP:
-
-1. **Ephemeral Unlinkable Ed25519 Key Rotation (`ephemeral_identity=True`):**
-   - Each contribution session or epoch rotates to a fresh in-memory `Ed25519PrivateKey` via `rotate_ephemeral_identity()`.
-   - Zero hardware, MAC, local IP, hostname, or filesystem metadata is ever derived into or attached to the signing key, preventing cross-epoch sender tracking.
-2. **Coarse Epoch Timestamp Bucketing (`bucket_seconds = 3600`):**
-   - All wire timestamps (`epoch`, `ts_utc`, `updated_utc`, `t`) are quantized to coarse UTC hour boundaries:
-     $$t_{\text{wire}} = \lfloor t / 3600 \rfloor \times 3600$$
-   - Any high-resolution timestamp with $t \bmod 3600 \neq 0$ is rejected by the wire firewall (`AnonymityViolationError`), eliminating clock-skew fingerprinting and webhook timing correlation.
-3. **L2-Clipped + Differentially Private Weight & Calibration Aggregation (`min_k_samples >= 25`):**
-   - **Minimum Sample $k$-Anonymity:** Any weight delta, reliability bin, or catalog observation with sample count $n < 25$ is rejected (`AnonymityViolationError`).
-   - **L2 Norm Clipping:** Adapter weight and bias deltas $(\Delta w, \Delta b)$ are clipped to L2 norm $\|\Delta\|_2 \le C$ ($C = 1.0$).
-   - **Calibrated Gaussian DP + Int8 Quantization:** Independent CSPRNG Gaussian noise $\mathcal{N}(0, (\sigma C)^2 I)$ ($\sigma = 0.05$) is added before symmetric int8 quantization (`delta_w_q8`, `delta_b_q8`, `scale`) and sample count bucketing (`n_bucket`).
-4. **One-Way Domain-Separated Catalog Hashing (`armiger-catalog-v2`):**
-   - Catalog record keys (`h`) are strictly 16-hex-character truncated `BLAKE2b-64` digests with domain separation:
-     $$h = \text{BLAKE2b-64}_{\text{person}=\texttt{armiger-cat-v2}}(\texttt{"armiger-catalog-v2:"} \mathbin{\|} \text{normalize}(k))$$
-   - Raw strings, titles, filenames, release names, IMDb/TMDB/TVDB IDs, 40-hex infohashes, URLs, passkeys, and paths are stripped or rejected (`AnonymityViolationError`).
-5. **Deep Wire-Payload PII / Canary Firewall (`inspect_wire_payload`):**
-   - Every serialized wire payload (`v`) is inspected before Ed25519 signing and before UDP transmission.
-   - Immediately raises `AnonymityViolationError` on any:
-     - IPv4/IPv6 literal or CIDR block
-     - `.local`, `.lan`, `.internal`, `.tailnet`, `ts-net`, or FQDN hostname
-     - Filesystem path (`/Users/`, `/home/`, `/srv/`, `/var/`, `C:\`, `\\`) or media/torrent file extension (`.mkv`, `.mp4`, `.torrent`, `.nzb`, `.exe`, `.scr`)
-     - URL (`http://`, `https://`, `udp://`) or `magnet:?` URI
-     - Tracker passkey, API key, or bearer token
-     - Raw 40-hex BitTorrent infohash or external catalog ID (`tt\d+`, `tmdb:`, `tvdb:`)
-     - Unexpected JSON schema key outside the strict mathematical whitelist:
-       - Top-level keys: `{"v", "epoch", "seq", "model_tier", "delta_w_q8", "delta_b_q8", "scale", "reliability_bins", "n_bucket", "records", "ts_utc", "updated_utc"}`
-       - Catalog `records` elements: strict 8-field tuple/dict `[h, c, r, s, a, v, n, t]` where `h` matches `^[0-9a-f]{16}$`, `c, r, s, a, v, n, t` are numeric, $n \ge 25$, and $t \bmod 3600 = 0$.
-
----
-
-## 3. 12-Node Local UDP BEP-44 & Synthetic DP Convergence Verification Summary
-
-Reproduce all three proofs locally with:
-
-```bash
-python3 benchmarks/proof_anonymous_opt_in_sharing.py
-pytest test_anonymous_opt_in_dht_sharing.py
+```mermaid
+flowchart LR
+    publisher["Trusted publisher<br/>signs an update"] --> network["Peer network<br/>(DHT)"]
+    network --> checks{"Verify<br/>and test"}
+    checks -->|Pass| apply["Apply update<br/>locally"]
+    checks -->|Fail| keep["Keep previous<br/>state"]
+    outcomes["Verified local<br/>outcomes"] -. "Opt in: aggregate,<br/>scrub and sign" .-> network
 ```
 
-| Proof | Target Invariant | Measured Result | Status |
-| :--- | :--- | :--- | :--- |
-| **Proof 1: Default Zero-Egress** | 9 default components, 100 synthetic webhook/catalog events | `opt_in_sharing=False` on 9/9; `0` bundles & `0` UDP `put` packets emitted (`2,600` outbound attempts blocked) | **PASS** |
-| **Proof 2: Wire Canary Firewall** | 500 adversarial PII/canary payloads across 10 categories on 12-node UDP swarm | `500 / 500` (`100.0%`) blocked before wire; `0 / 500` (`0.0%`) canary substrings in raw UDP datagrams | **PASS** |
-| **Proof 3: Unlinkability & Synthetic DP Convergence** | 12-node local UDP swarm over 5 epochs (60 publications, synthetic adapter + temperature convergence) | `60 / 60` unique ephemeral Ed25519 keys (`8.33%` random linkability); `100%` hour-bucketed timestamps; MIA empirical accuracy `0.590`; ECE `0.08094 -> 0.01368` (`-83.10%`); Ultra F1 `0.93427 -> 0.98004` | **PASS** |
+The solid arrows show **receiving an update**. The dotted arrow shows **contributing evidence**, only when sharing is enabled. Contributions do not automatically become trusted updates.
+
+1. **Publish and discover.** A publisher signs an update; a configured installation obtains the manifest and payload through its update transport.
+2. **Verify and test locally.** Armiger checks trusted signatures, payload hashes, version order, peer attestations and supported formats. Ultra stages the candidate and compares it with the current state on local regression checks.
+3. **Apply or restore.** A candidate that passes can be committed locally. A rejected update leaves the current state in place; a staged candidate that regresses is rolled back.
+
+## What can be shared
+
+The subsystem supports three kinds of update:
+
+- **Model-adapter changes:** small numerical adjustments to the adapter used alongside the base model.
+- **Confidence calibration:** aggregate reliability information used to adjust confidence estimates and thresholds.
+- **Catalog observations:** compact records with hashed keys and numerical fields, rather than raw release names or files.
+
+When contributing, local outcomes must pass the relevant evidence checks. An unverified model prediction is not treated as ground truth. Outbound bundles pass through aggregation and payload filtering before signing and publication.
+
+## Your sharing choices
+
+**Receiving does not require contributing.** With `opt_in_sharing=False`, contribution exports and DHT publications are blocked. Local verification of supplied inbound bundles remains available. Receiving live updates still requires configured trust and a transport; the sharing flag alone does not set these up.
+
+With no override, sharing resolves to `False`. To enable contributions, explicitly pass `opt_in_sharing=True`, or leave the argument unset and set `ARMIGER_DHT_SHARE_OPT_IN` to `1`, `true` or `yes`. An explicit `False` overrides the environment. Components also enforce their configured mode, such as `pull_only` or `off`.
+
+Use `sharing_status()` to inspect the effective setting and outbound counters. For example, a fresh instance with sharing disabled includes these fields:
+
+```json
+{
+  "opt_in_sharing_enabled": false,
+  "outbound_bundles_shared": 0,
+  "outbound_bytes_shared": 0,
+  "ephemeral_pubkey_hex": null
+}
+```
+
+**These are contribution controls.** DHT queries and downloads still involve network traffic. Payload filtering does not hide a participant's network address from peers, and the sharing setting does not govern other network features such as model downloads or provider lookups.
+
+## Trust and limitations
+
+Configure explicit trusted update authorities. A contributor's temporary signing key is not a trusted publisher key, and the constructor's placeholder root key does not establish trust. The v3 model release establishes `seq=3006` as its new trust root; earlier deterministic test authorities are retired. See the [signed release manifest](../benchmarks/receipts/dht_seq3006/signed_dht_manifest_seq3006.json). Do not copy test keys into a deployment.
+
+Ultra's update path uses **baseline-relative regression checks**: it compares the candidate with the current installation and restores the previous state if the candidate gets worse on those checks. The shipped models do not pass the canary suite's absolute thresholds. These checks are not an absolute safety or accuracy qualification; see [evaluation limits](evaluation.md#limits).
+
+<details>
+<summary>Technical details and verification</summary>
+
+### Default contribution protections
+
+`AnonymityGuard` applies the following protections to exported weight, calibration and catalog bundles:
+
+1. **Temporary signing identities.** By default, contribution sessions or epochs use fresh in-memory Ed25519 keys without embedding host metadata.
+2. **Coarse timestamps.** Wire timestamps are rounded to hour boundaries, reducing timing detail in the payload.
+3. **Aggregation and noise.** Exports require at least 25 samples. Weight deltas are clipped, receive Gaussian noise and are quantized to int8 under the default configuration.
+4. **Hashed catalog keys.** Catalog keys use domain-separated, keyed BLAKE2b digests, represented as 16 hexadecimal characters.
+5. **Payload inspection.** A strict schema and identifying-data filters reject raw titles, paths, URLs, passkeys, addresses, external IDs and other disallowed values before signing or transmission.
+
+These protections reduce information in the shared payload. Rotating a key, rounding timestamps or hashing a record does not by itself establish sender anonymity or a formal privacy guarantee for an entire deployment.
+
+### Code and checks
+
+- [Update and contribution engine](../src/armiger/armiger_dht_rsi.py)
+- [Catalog synchronization](../src/armiger/armiger_dht_db_sync.py)
+- [Ultra update application and rollback](../src/armiger/armiger_ultra_pipeline.py)
+- [Payload privacy guard](../src/armiger/dht_rsi_models_and_privacy.py)
+- [Local UDP proof harness](../benchmarks/proof_anonymous_opt_in_sharing.py) and [sharing tests](../tests/test_anonymous_opt_in_dht_sharing.py)
+
+From a development installation with the model bundle available, run:
+
+```bash
+python -m pytest -q tests/test_anonymous_opt_in_dht_sharing.py
+```
+
+The tests exercise default-disabled contributions, 500 adversarial payloads and a 12-node local UDP swarm. The convergence experiment uses synthetic data; its scores are not production accuracy results, and the local network test does not prove Internet-wide anonymity.
+
+</details>

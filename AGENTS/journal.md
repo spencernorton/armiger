@@ -1,3 +1,12 @@
+## 2026-10-24 — Distributed updates explained
+
+- **Branch:** codex/distributed-updates-guide
+- **What changed:** Lead the distributed update guide with a plain-language callout, practical benefits and a compact flow diagram. Explain receiving updates separately from optional contributions; move implementation detail into an expandable reference.
+- **Evidence:** Check the sharing resolver, signed update verification, Ultra staging and rollback, and the keyed catalog guard against current source. Distinguish contribution blocking from network silence, payload protections from sender anonymity, and regression checks from accuracy qualification.
+- **Validation:** Local links, anchors, JSON, code fences and patch whitespace pass. The six-node Mermaid diagram renders and has been visually checked. Required package tests and builds run through protected CI.
+- **Deployment:** Documentation only; package, model, runtime and production settings are unchanged.
+- **Status file updated:** Record the public PR and verification in the private project handoff; the separate benchmark objective remains active.
+
 ## 2026-10-24 — Bitmagnet Ultra configuration reference
 
 - **Branch:** codex/readme-ultra-configuration
