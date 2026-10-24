@@ -1815,6 +1815,49 @@ class TestSession9IngressAndBEP46Hardening(unittest.TestCase):
                 self.assertNotIn(50001, routed_ports)
                 self.assertIn(50002, routed_ports)
                 self.assertIn(50003, routed_ports)
+
+                # (g) Repeatedly timed-out DNS resolutions are bounded by _MAX_INFLIGHT_DNS_WORKERS and fail fast when saturated
+                from armiger.oci_sqlite_catalog import _MAX_INFLIGHT_DNS_WORKERS, get_inflight_dns_worker_count
+                release_dns_ev = threading.Event()
+                peak_inflight = 0
+                saturated_seen = 0
+
+                def _pinned_stalled_resolver(host: str, port: int):
+                    release_dns_ev.wait(timeout=1.5)
+                    return [(_sock_mod.AF_INET, _sock_mod.SOCK_STREAM, 6, "", ("127.0.0.1", 443))]
+
+                try:
+                    for _ in range(_MAX_INFLIGHT_DNS_WORKERS + 4):
+                        try:
+                            fetch_bundle_via_bep19_webseed(
+                                strict_bundle.info_bytes,
+                                "https://saturated.example.org/seed",
+                                expected_infohash_20=strict_bundle.infohash_20,
+                                timeout=0.02,
+                                max_total_seconds=0.5,
+                                resolver_fn=_pinned_stalled_resolver,
+                            )
+                        except TimeoutError as exc:
+                            if "webseed_dns_pool_saturated" in str(exc):
+                                saturated_seen += 1
+                        peak_inflight = max(peak_inflight, get_inflight_dns_worker_count())
+                    self.assertLessEqual(peak_inflight, _MAX_INFLIGHT_DNS_WORKERS)
+                    self.assertGreaterEqual(saturated_seen, 4)
+                finally:
+                    release_dns_ev.set()
+                    for _ in range(30):
+                        if get_inflight_dns_worker_count() == 0:
+                            break
+                        time.sleep(0.01)
+                    self.assertEqual(get_inflight_dns_worker_count(), 0)
+
+                # (h) GatedBEP44UDPNode.rpc_call bounds DNS resolution within `timeout`
+                slow_rpc_node = GatedBEP44UDPNode(vpn, anonymity_guard=AnonymityGuard(True))
+                slow_rpc_node._resolver_fn = lambda h: (time.sleep(0.25), "127.0.0.1")[1]  # type: ignore[attr-defined]
+                t0_rpc = time.monotonic()
+                with self.assertRaises(asyncio.TimeoutError):
+                    await slow_rpc_node.rpc_call(("slow-referral.example.org", dht_port), b"ping", {}, timeout=0.04)
+                self.assertLess(time.monotonic() - t0_rpc, 0.20)
             finally:
                 dht.close()
 

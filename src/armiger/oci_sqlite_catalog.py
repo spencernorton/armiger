@@ -920,6 +920,17 @@ async def fetch_bundle_via_peer_wire(
             pass
 
 
+_MAX_INFLIGHT_DNS_WORKERS = 4
+_DNS_ADMISSION_SEMAPHORE = threading.BoundedSemaphore(_MAX_INFLIGHT_DNS_WORKERS)
+_DNS_INFLIGHT_LOCK = threading.Lock()
+_DNS_INFLIGHT_COUNT = 0
+
+
+def get_inflight_dns_worker_count() -> int:
+    with _DNS_INFLIGHT_LOCK:
+        return _DNS_INFLIGHT_COUNT
+
+
 def _https_get_with_deadline(
     url: str,
     max_bytes: int,
@@ -996,21 +1007,46 @@ def _https_get_with_deadline(
         return min(float(timeout), rem)
 
     def _resolve_with_deadline(host: str, port: int) -> Sequence[Any]:
+        global _DNS_INFLIGHT_COUNT
         rem_dns = _rem_timeout()
+        if resolver_fn is None:
+            import ipaddress
+            try:
+                ip_obj = ipaddress.ip_address(host)
+                af = socket.AF_INET6 if ip_obj.version == 6 else socket.AF_INET
+                sa = (host, int(port), 0, 0) if ip_obj.version == 6 else (host, int(port))
+                return [(af, socket.SOCK_STREAM, socket.IPPROTO_TCP, "", sa)]
+            except ValueError:
+                pass
+        if not _DNS_ADMISSION_SEMAPHORE.acquire(blocking=False):
+            raise TimeoutError("webseed_dns_pool_saturated")
+        with _DNS_INFLIGHT_LOCK:
+            _DNS_INFLIGHT_COUNT += 1
         eff_resolver = resolver_fn or (
             lambda h, p: socket.getaddrinfo(h, p, socket.AF_UNSPEC, socket.SOCK_STREAM)
         )
         res_q: "queue.Queue[Tuple[bool, Any]]" = queue.Queue(maxsize=1)
 
         def _dns_worker() -> None:
+            global _DNS_INFLIGHT_COUNT
             try:
                 infos = eff_resolver(host, port)
                 res_q.put((True, infos))
             except Exception as exc:
                 res_q.put((False, exc))
+            finally:
+                with _DNS_INFLIGHT_LOCK:
+                    _DNS_INFLIGHT_COUNT -= 1
+                _DNS_ADMISSION_SEMAPHORE.release()
 
-        t_dns = threading.Thread(target=_dns_worker, daemon=True)
-        t_dns.start()
+        try:
+            t_dns = threading.Thread(target=_dns_worker, daemon=True)
+            t_dns.start()
+        except BaseException:
+            with _DNS_INFLIGHT_LOCK:
+                _DNS_INFLIGHT_COUNT -= 1
+            _DNS_ADMISSION_SEMAPHORE.release()
+            raise
         try:
             ok, payload = res_q.get(timeout=rem_dns)
         except queue.Empty as exc:
@@ -1143,7 +1179,7 @@ def _https_get_with_deadline(
     except TimeoutError as exc:
         if timed_out[0] or time.monotonic() >= deadline or str(exc) == "webseed_total_deadline_exceeded":
             raise TimeoutError("webseed_total_deadline_exceeded") from exc
-        if str(exc) in ("webseed_dns_timeout", "webseed_socket_timeout"):
+        if str(exc) in ("webseed_dns_timeout", "webseed_socket_timeout", "webseed_dns_pool_saturated"):
             raise
         raise TimeoutError("webseed_socket_timeout") from exc
     except ValueError:

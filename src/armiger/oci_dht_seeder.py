@@ -7,6 +7,7 @@ import hmac
 import os
 import socket
 import struct
+import threading
 import time
 from typing import Any, Dict, List, Mapping, Optional, Sequence, Set, Tuple, Union
 
@@ -95,6 +96,9 @@ def _parse_compact_nodes(compact_bytes: Any) -> List[Tuple[bytes, str, int]]:
 
 def _xor_distance(a: bytes, b: bytes) -> int:
     return int.from_bytes(a[:20].ljust(20, b"\x00"), "big") ^ int.from_bytes(b[:20].ljust(20, b"\x00"), "big")
+
+
+_KRPC_DNS_SEMAPHORE = threading.BoundedSemaphore(4)
 
 
 class GatedBEP44UDPNode:
@@ -320,6 +324,14 @@ class GatedBEP44UDPNode:
         if not self.vpn_guard.require_for_packet():
             raise RuntimeError("VPN egress unverified; blocking outbound DHT RPC")
         loop = asyncio.get_running_loop()
+        rpc_deadline = loop.time() + max(0.001, float(timeout))
+
+        def _rem_rpc_timeout() -> float:
+            rem = rpc_deadline - loop.time()
+            if rem <= 0:
+                raise asyncio.TimeoutError("krpc_timeout")
+            return rem
+
         tx_id = os.urandom(4)
         args = dict(a)
         args.setdefault(b"id", self.node_id)
@@ -331,7 +343,20 @@ class GatedBEP44UDPNode:
             socket.inet_aton(host_str)
             resolved_ip = host_str
         except OSError:
-            resolved_ip = await loop.run_in_executor(None, socket.gethostbyname, host_str)
+            resolver_cb = getattr(self, "_resolver_fn", None) or socket.gethostbyname
+            if not _KRPC_DNS_SEMAPHORE.acquire(blocking=False):
+                raise asyncio.TimeoutError("krpc_dns_pool_saturated")
+
+            def _bounded_resolve() -> str:
+                try:
+                    return str(resolver_cb(host_str))
+                finally:
+                    _KRPC_DNS_SEMAPHORE.release()
+
+            resolved_ip = await asyncio.wait_for(
+                loop.run_in_executor(None, _bounded_resolve),
+                timeout=_rem_rpc_timeout(),
+            )
         target_addr = (resolved_ip, port_int)
 
         if self.transport is not None and len(self._pending_rpcs) < 128:
@@ -340,7 +365,7 @@ class GatedBEP44UDPNode:
             self._pending_rpcs[key] = fut
             try:
                 self.transport.sendto(bencode(req), target_addr)
-                raw = await asyncio.wait_for(fut, timeout=timeout)
+                raw = await asyncio.wait_for(fut, timeout=_rem_rpc_timeout())
                 resp = bdecode_krpc(raw)
                 if not isinstance(resp, dict):
                     raise RuntimeError("Invalid non-dict KRPC response")
@@ -362,16 +387,19 @@ class GatedBEP44UDPNode:
                 if not fut_eph.done():
                     fut_eph.set_exception(exc)
 
-        transport, _ = await loop.create_datagram_endpoint(_ClientProto, remote_addr=peer_addr)
+        transport, _ = await asyncio.wait_for(
+            loop.create_datagram_endpoint(_ClientProto, remote_addr=target_addr),
+            timeout=_rem_rpc_timeout(),
+        )
         try:
             transport.sendto(bencode(req))
-            raw = await asyncio.wait_for(fut_eph, timeout=timeout)
+            raw = await asyncio.wait_for(fut_eph, timeout=_rem_rpc_timeout())
             resp = bdecode_krpc(raw)
             if not isinstance(resp, dict):
                 raise RuntimeError("Invalid non-dict KRPC response")
             r_dict = resp.get(b"r")
             if isinstance(r_dict, dict) and isinstance(r_dict.get(b"id"), bytes) and len(r_dict[b"id"]) == 20:
-                self.add_routing_node(r_dict[b"id"], peer_addr[0], peer_addr[1])
+                self.add_routing_node(r_dict[b"id"], resolved_ip, port_int)
             return resp
         finally:
             transport.close()
