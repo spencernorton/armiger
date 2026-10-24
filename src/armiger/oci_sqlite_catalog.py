@@ -767,11 +767,24 @@ async def fetch_bundle_via_peer_wire(
             raise ValueError("ut_metadata_infohash_mismatch")
 
         info_dict = bdecode(info_bytes)
-        piece_length = int(info_dict[b"piece length"])
-        total_bytes = sum(int(f[b"length"]) for f in info_dict[b"files"])
+        if not isinstance(info_dict, dict) or not isinstance(info_dict.get(b"files"), list) or not info_dict[b"files"]:
+            raise ValueError("invalid_info_dict")
+        raw_plen = info_dict.get(b"piece length")
+        if type(raw_plen) is not int or raw_plen < 16384 or raw_plen > max_payload_bytes:
+            raise ValueError("invalid_piece_length")
+        piece_length = int(raw_plen)
+        total_bytes = 0
+        for f_entry in info_dict[b"files"]:
+            flen = f_entry.get(b"length") if isinstance(f_entry, dict) else None
+            if type(flen) is not int or flen < 0 or flen > max_payload_bytes:
+                raise ValueError("invalid_file_length")
+            total_bytes += int(flen)
         if total_bytes < 0 or total_bytes > max_payload_bytes:
             raise ValueError("payload_size_exceeds_limit")
         num_pieces = max(1, (total_bytes + piece_length - 1) // piece_length) if total_bytes > 0 else 0
+        raw_pieces = info_dict.get(b"pieces")
+        if not isinstance(raw_pieces, (bytes, bytearray)) or len(raw_pieces) != num_pieces * 20:
+            raise ValueError("invalid_pieces_hash_vector")
 
         writer.write(struct.pack("!IB", 1, BT_MSG_INTERESTED))
         await writer.drain()
@@ -865,12 +878,17 @@ def fetch_bundle_via_bep19_webseed(
     expected_infohash_20: Optional[bytes] = None,
     fetcher: Optional[Callable[..., bytes]] = None,
     max_payload_bytes: int = 67108864,
+    timeout: float = 10.0,
+    max_total_seconds: Optional[float] = None,
 ) -> Dict[str, Any]:
     """Download bundle files via BEP-19 HTTP/HTTPS webseed (`<base>/<bundle_name>/<file_path>`
-    or flat root fallback) with strict per-file and aggregate byte limits, then verify every
-    SHA-1 piece, SHA-256 Merkle root, and file SHA-256.
+    or flat root fallback) with strict per-file, aggregate byte, and overall transfer deadline limits,
+    then verify every SHA-1 piece, SHA-256 Merkle root, and file SHA-256.
     """
     import inspect
+    import socket
+    import time
+    import urllib.parse
     import urllib.request
     from armiger.oci_vpn_guard import bdecode
     if max_payload_bytes <= 0:
@@ -890,27 +908,73 @@ def fetch_bundle_via_bep19_webseed(
     if total_expected > max_payload_bytes:
         raise ValueError("webseed_payload_size_exceeds_limit")
     bundle_name = info[b"name"].decode("utf-8")
+    enc_bundle_name = urllib.parse.quote(bundle_name, safe="")
     base = webseed_base_url.rstrip("/")
+    ws_budget = float(max_total_seconds) if max_total_seconds is not None else max(float(timeout) * 3.0, 15.0)
+    ws_deadline = time.monotonic() + ws_budget
+
+    def _rem_ws_timeout() -> float:
+        rem = ws_deadline - time.monotonic()
+        if rem <= 0:
+            raise TimeoutError("webseed_total_deadline_exceeded")
+        return min(float(timeout), rem)
+
+    class _HTTPSOnlyRedirectHandler(urllib.request.HTTPRedirectHandler):
+        def redirect_request(self, req, fp, code, msg, headers, newurl):
+            resolved_url = urllib.parse.urljoin(req.full_url, str(newurl))
+            if not resolved_url.lower().startswith("https://"):
+                raise ValueError("bep19_webseed_redirect_requires_https")
+            return super().redirect_request(req, fp, code, msg, headers, resolved_url)
+
+    opener = urllib.request.build_opener(_HTTPSOnlyRedirectHandler())
 
     def _default_get(url: str, max_bytes: int) -> bytes:
-        if not url.startswith("https://"):
+        if not url.lower().startswith("https://"):
             raise ValueError("bep19_webseed_requires_https")
         req = urllib.request.Request(url, headers={"User-Agent": "armiger-bep19-verifier/2.1.0"})
-        with urllib.request.urlopen(req, timeout=30.0) as resp:
-            cl = resp.headers.get("Content-Length") if hasattr(resp, "headers") and resp.headers else None
-            if cl is not None:
-                try:
-                    if int(cl) > max_bytes:
-                        raise ValueError("bep19_content_length_exceeds_expected")
-                except ValueError as exc:
-                    if "bep19_content_length_exceeds_expected" in str(exc):
-                        raise
-            data = resp.read(max_bytes + 1)
-            if len(data) > max_bytes:
-                raise ValueError("bep19_response_exceeds_expected_length")
-            return data
+        try:
+            with opener.open(req, timeout=_rem_ws_timeout()) as resp:
+                final_url = resp.geturl() if hasattr(resp, "geturl") else url
+                if not str(final_url).lower().startswith("https://"):
+                    raise ValueError("bep19_webseed_redirect_requires_https")
+                cl = resp.headers.get("Content-Length") if hasattr(resp, "headers") and resp.headers else None
+                if cl is not None:
+                    try:
+                        if int(cl) > max_bytes:
+                            raise ValueError("bep19_content_length_exceeds_expected")
+                    except ValueError as exc:
+                        if "bep19_content_length_exceeds_expected" in str(exc):
+                            raise
+                chunks = bytearray()
+                while True:
+                    rem = _rem_ws_timeout()
+                    try:
+                        raw_sock = getattr(getattr(getattr(resp, "fp", None), "raw", None), "_sock", None)
+                        if raw_sock is not None:
+                            raw_sock.settimeout(rem)
+                    except Exception:
+                        pass
+                    read_limit = min(16384, max_bytes + 1 - len(chunks))
+                    if hasattr(resp, "read1"):
+                        chunk = resp.read1(read_limit)
+                    elif hasattr(getattr(resp, "fp", None), "read1"):
+                        chunk = resp.fp.read1(read_limit)
+                    else:
+                        chunk = resp.read(min(4096, read_limit))
+                    if not chunk:
+                        break
+                    chunks.extend(chunk)
+                    if len(chunks) > max_bytes:
+                        raise ValueError("bep19_response_exceeds_expected_length")
+                _rem_ws_timeout()
+                return bytes(chunks)
+        except socket.timeout as exc:
+            if time.monotonic() >= ws_deadline:
+                raise TimeoutError("webseed_total_deadline_exceeded") from exc
+            raise TimeoutError("webseed_socket_timeout") from exc
 
     def _call_fetcher(url: str, exp_len: int) -> bytes:
+        _rem_ws_timeout()
         if fetcher is None:
             return _default_get(url, exp_len)
         try:
@@ -919,8 +983,11 @@ def fetch_bundle_via_bep19_webseed(
                 data = fetcher(url, exp_len)
             else:
                 data = fetcher(url)
-        except (ValueError, TypeError):
+        except (ValueError, TypeError) as exc:
+            if "bep19_" in str(exc) or "exceeds_expected" in str(exc):
+                raise
             data = fetcher(url)
+        _rem_ws_timeout()
         if len(data) > exp_len:
             raise ValueError("bep19_response_exceeds_expected_length")
         return data
@@ -929,16 +996,19 @@ def fetch_bundle_via_bep19_webseed(
     for f in info[b"files"]:
         exp_len = int(f[b"length"])
         rel_path = "/".join(p.decode("utf-8") for p in f[b"path"])
-        bep19_url = f"{base}/{bundle_name}/{rel_path}"
+        enc_rel_path = "/".join(urllib.parse.quote(p.decode("utf-8"), safe="") for p in f[b"path"])
+        bep19_url = f"{base}/{enc_bundle_name}/{enc_rel_path}"
         try:
             fbytes = _call_fetcher(bep19_url, exp_len)
+        except TimeoutError:
+            raise
         except ValueError as exc:
-            if "exceeds_expected" in str(exc):
+            if "exceeds_expected" in str(exc) or "redirect_requires_https" in str(exc):
                 raise
-            flat_url = f"{base}/{rel_path}"
+            flat_url = f"{base}/{enc_rel_path}"
             fbytes = _call_fetcher(flat_url, exp_len)
         except Exception:
-            flat_url = f"{base}/{rel_path}"
+            flat_url = f"{base}/{enc_rel_path}"
             fbytes = _call_fetcher(flat_url, exp_len)
         if len(fbytes) != exp_len:
             raise ValueError(f"bep19_file_length_mismatch:{rel_path}")

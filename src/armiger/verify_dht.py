@@ -213,8 +213,14 @@ def _fetch_webseed_metadata(
             else:
                 if not candidate_url.startswith("https://"):
                     continue
+                class _MetaHTTPSRedirect(urllib.request.HTTPRedirectHandler):
+                    def redirect_request(self, req, fp, code, msg, headers, newurl):
+                        if not str(newurl).lower().startswith("https://"):
+                            raise ValueError("bep19_webseed_redirect_requires_https")
+                        return super().redirect_request(req, fp, code, msg, headers, newurl)
+                opener = urllib.request.build_opener(_MetaHTTPSRedirect())
                 req = urllib.request.Request(candidate_url, headers={"User-Agent": "armiger-bep19-verifier/2.1.0"})
-                with urllib.request.urlopen(req, timeout=10.0) as resp:
+                with opener.open(req, timeout=10.0) as resp:
                     raw = resp.read(MAX_TORRENT_META_BYTES + 1)
             if len(raw) > MAX_TORRENT_META_BYTES:
                 continue

@@ -986,10 +986,17 @@ class TestSession9IngressAndBEP46Hardening(unittest.TestCase):
                 self.assertFalse(ok_fp)
                 self.assertEqual(reason_fp, "attestation_canary_marked_failed")
 
-                # Stripping or flipping "passed" post-signature invalidates the evaluator Ed25519 signature
+                # Flipping "passed" to True post-signature invalidates the evaluator Ed25519 signature
                 stripped_pass_pred = dataclasses.replace(
                     failed_pass_pred,
-                    canary_metrics={"accuracy": 0.97, "ece": 0.018, "macro_f1": 0.96},
+                    canary_metrics={
+                        "accuracy": 0.97,
+                        "ece": 0.018,
+                        "macro_f1": 0.96,
+                        "mondrian_coverage": 0.96,
+                        "max_false_accept_rate": 0.0,
+                        "passed": True,
+                    },
                 )
                 env_sp = AcyclicProvenanceVerifier.sign_release_envelope(
                     dataclasses.replace(unsigned_envelope, benchmark_attestations=(stripped_pass_pred, eval_preds[1], eval_preds[2])),
@@ -1038,6 +1045,37 @@ class TestSession9IngressAndBEP46Hardening(unittest.TestCase):
                 )
                 self.assertFalse(ok_ne)
                 self.assertEqual(reason_ne, "attestation_missing_ece")
+
+                # 10. Failing mondrian_coverage or max_false_accept_rate must be rejected
+                low_cov_pred = AcyclicProvenanceVerifier.sign_benchmark_attestation(
+                    peer_id="eval-0",
+                    asn=eval_asns[0],
+                    parent_bundle_sha256=parent_sha,
+                    candidate_bundle_sha256=cand_sha,
+                    canary_suite_sha256=suite_sha,
+                    canary_metrics={"accuracy": 0.97, "ece": 0.018, "macro_f1": 0.96, "mondrian_coverage": 0.80},
+                    evaluator_version="2.12.3",
+                    timestamp=now_ts,
+                    ed25519_priv=eval_signers[0][0],
+                    wots_priv_seed=eval_signers[0][2],
+                    ip_address=eval_ips[0],
+                )
+                env_low_cov = AcyclicProvenanceVerifier.sign_release_envelope(
+                    dataclasses.replace(unsigned_envelope, benchmark_attestations=(low_cov_pred, eval_preds[1], eval_preds[2])),
+                    rel_signers,
+                )
+                ok_lc, reason_lc = AcyclicProvenanceVerifier.verify_envelope(
+                    env_low_cov,
+                    trusted_release_signers=trusted_rel,
+                    trusted_evaluator_signers=trusted_eval,
+                    threshold_m=2,
+                    min_evaluator_asns=3,
+                    current_seq=0,
+                    bootstrap_checkpoint_seq=1000,
+                    asn_verifier=asn_verifier,
+                )
+                self.assertFalse(ok_lc)
+                self.assertEqual(reason_lc, "attestation_mondrian_coverage_below_threshold")
             finally:
                 WOTSPlusSHAKE256.set_state_dir(None, seal_dir=None)
 
@@ -1324,6 +1362,78 @@ class TestSession9IngressAndBEP46Hardening(unittest.TestCase):
                 )
                 self.assertFalse(cap_res["verified"])
                 self.assertEqual(len(cap_res["p2p_errors"]), 3)
+
+                # Malformed metadata with piece length = 1 is rejected before allocating block list
+                bad_geom_info = bencode({
+                    b"files": [{b"length": 65536, b"path": [b"x.bin"]}],
+                    b"name": b"bad-geom",
+                    b"piece length": 1,
+                    b"pieces": b"A" * 20,
+                })
+                bad_geom_ih = hashlib.sha1(bad_geom_info).digest()
+
+                async def _bad_geom_peer(reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
+                    try:
+                        await reader.readexactly(68)
+                        writer.write(b"\x13BitTorrent protocol" + b"\x00\x00\x00\x00\x00\x10\x00\x00" + bad_geom_ih + (b"-BG0001-" + b"1" * 12))
+                        ext_hs = bencode({b"m": {b"ut_metadata": 2}, b"metadata_size": len(bad_geom_info)})
+                        writer.write(struct.pack("!IBB", 2 + len(ext_hs), 20, 0) + ext_hs)
+                        await writer.drain()
+                        while True:
+                            hdr = await reader.readexactly(4)
+                            (mlen,) = struct.unpack("!I", hdr)
+                            if mlen == 0:
+                                continue
+                            body = await reader.readexactly(mlen)
+                            if body[0] == 20 and body[1] == 2:
+                                mhdr = bencode({b"msg_type": 1, b"piece": 0, b"total_size": len(bad_geom_info)})
+                                writer.write(struct.pack("!IBB", 2 + len(mhdr) + len(bad_geom_info), 20, 1) + mhdr + bad_geom_info)
+                                await writer.drain()
+                                break
+                    except Exception:
+                        pass
+                    finally:
+                        writer.close()
+
+                bg_srv = await asyncio.start_server(_bad_geom_peer, "127.0.0.1", 0)
+                bg_port = bg_srv.sockets[0].getsockname()[1]
+                try:
+                    with self.assertRaisesRegex(ValueError, "invalid_piece_length"):
+                        await fetch_bundle_via_peer_wire("127.0.0.1", bg_port, bad_geom_ih, timeout=2.0)
+                finally:
+                    bg_srv.close()
+                    await bg_srv.wait_closed()
+
+                # Trickling webseed exceeding max_total_seconds raises TimeoutError("webseed_total_deadline_exceeded")
+                def _slow_fetcher(url: str, max_b: int = 0) -> bytes:
+                    time.sleep(0.15)
+                    return b"0123456789abcdef" * 2500
+
+                with self.assertRaisesRegex(TimeoutError, "webseed_total_deadline_exceeded"):
+                    fetch_bundle_via_bep19_webseed(
+                        strict_bundle.info_bytes,
+                        "https://example.org/seed",
+                        expected_infohash_20=strict_bundle.infohash_20,
+                        fetcher=_slow_fetcher,
+                        timeout=1.0,
+                        max_total_seconds=0.05,
+                    )
+
+                # URL-encoding of special characters (#, ?, space) in bundle and file names
+                special_files = {"weights #1?.json": b'{"ok":true}'}
+                special_bundle = build_torrent_bundle("int8", special_files, pub_32, salt, seq=15)
+                seen_urls = []
+                def _encoding_fetcher(url: str, max_b: int = 0) -> bytes:
+                    seen_urls.append(url)
+                    return b'{"ok":true}'
+                sp_res = fetch_bundle_via_bep19_webseed(
+                    special_bundle.info_bytes,
+                    "https://example.org/seed",
+                    expected_infohash_20=special_bundle.infohash_20,
+                    fetcher=_encoding_fetcher,
+                )
+                self.assertEqual(sp_res["files"], special_files)
+                self.assertIn("weights%20%231%3F.json", seen_urls[0])
             finally:
                 dht.close()
 

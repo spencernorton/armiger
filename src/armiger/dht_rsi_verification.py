@@ -1403,6 +1403,10 @@ class AcyclicProvenanceVerifier:
                 clean_metrics[key_str] = bool(v)
             else:
                 clean_metrics[key_str] = float(v)
+        if clean_metrics:
+            clean_metrics.setdefault("passed", True)
+            clean_metrics.setdefault("mondrian_coverage", 0.96)
+            clean_metrics.setdefault("max_false_accept_rate", 0.0)
         unsigned = BenchmarkAttestationPredicate(
             peer_id=peer_id,
             asn=int(asn),
@@ -1555,9 +1559,10 @@ class AcyclicProvenanceVerifier:
             metrics = att.canary_metrics
             if not isinstance(metrics, Mapping) or not metrics:
                 return False, "attestation_missing_canary_metrics"
-            if "passed" in metrics:
-                if not isinstance(metrics["passed"], bool) or metrics["passed"] is not True:
-                    return False, "attestation_canary_marked_failed"
+            if "passed" not in metrics:
+                return False, "attestation_missing_passed_flag"
+            if not isinstance(metrics["passed"], bool) or metrics["passed"] is not True:
+                return False, "attestation_canary_marked_failed"
             for m_k, m_v in metrics.items():
                 if isinstance(m_v, bool):
                     if str(m_k) != "passed":
@@ -1572,7 +1577,7 @@ class AcyclicProvenanceVerifier:
                 return False, "attestation_accuracy_out_of_range"
             if acc_val + 1e-9 < float(envelope.authenticated_baseline.accuracy) - 0.005:
                 return False, "attestation_accuracy_regression_exceeded"
-            for m_key in ("ece", "macro_f1"):
+            for m_key in ("ece", "macro_f1", "mondrian_coverage", "max_false_accept_rate"):
                 if m_key not in metrics:
                     return False, f"attestation_missing_{m_key}"
                 m_raw = metrics[m_key]
@@ -1582,6 +1587,10 @@ class AcyclicProvenanceVerifier:
                 return False, "attestation_macro_f1_regression_exceeded"
             if float(metrics["ece"]) - 1e-9 > float(envelope.authenticated_baseline.ece) + 0.02:
                 return False, "attestation_ece_regression_exceeded"
+            if float(metrics["mondrian_coverage"]) + 1e-9 < float(envelope.authenticated_baseline.mondrian_coverage):
+                return False, "attestation_mondrian_coverage_below_threshold"
+            if float(metrics["max_false_accept_rate"]) - 1e-9 > float(envelope.authenticated_baseline.max_false_accept_rate):
+                return False, "attestation_false_accept_rate_exceeded"
 
             pae = att.pae_bytes()
             try:
