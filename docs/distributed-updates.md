@@ -19,11 +19,11 @@ The **DHT** (distributed hash table) is the peer network used to exchange update
 
 ```mermaid
 flowchart LR
-    publisher["Trusted publisher<br/>signs an update"] --> network["Peer network<br/>(DHT)"]
-    network --> checks{"Verify<br/>and test"}
+    publisher["Trusted<br/>publisher"] -->|Signed update| network["Peer network<br/>(DHT)"]
+    outcomes["Verified local<br/>outcomes"] -. "Opt in" .-> network
+    network --> checks["Verify and test<br/>on your device"]
     checks -->|Pass| apply["Apply update<br/>locally"]
     checks -->|Fail| keep["Keep previous<br/>state"]
-    outcomes["Verified local<br/>outcomes"] -. "Opt in: aggregate,<br/>scrub and sign" .-> network
 ```
 
 The solid arrows show **receiving an update**. The dotted arrow shows **contributing evidence**, only when sharing is enabled. Contributions do not automatically become trusted updates.
