@@ -1,0 +1,18 @@
+# Save as compose.override.yaml beside the two-line compose.yaml.
+# Apply with: docker compose config --quiet && docker compose up -d
+# Complete reference: ../../docs/bitmagnet-configuration.md
+services:
+  armiger-ultra:
+    environment:
+      # Polling: the shipped defaults are 5 seconds and 100 items.
+      BITMAGNET_POLL_SECONDS: "10"
+      BITMAGNET_BATCH_SIZE: "50"
+      # Preload the catalog. False defers loading until first use.
+      ARMIGER_USE_ZERO_CUE_CATALOG: "true"
+      # These two settings filter requests made through Armiger's Torznab proxy.
+      ARMIGER_REQUIRE_ENGLISH_AUDIO: "false"
+      ARMIGER_ALLOW_ENGLISH_SUBS: "true"
+      ARMIGER_REJECT_DEAD_SWARMS: "false"
+      # True removes matching entries from Bitmagnet's index.
+      ARMIGER_PRUNE_MALWARE: "false"
+      ARMIGER_PRUNE_DEAD_SWARMS: "false"

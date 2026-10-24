@@ -29,6 +29,24 @@ Open **[localhost:3333](http://localhost:3333)** on the computer running Docker.
 
 To check Armiger itself, open [its status page](http://localhost:8096/healthz). When ready, it shows `"status": "ok"`. If it is still starting, run `docker compose logs --tail=50 armiger-ultra`.
 
+## Configure Armiger Ultra
+
+Save a second file called **`compose.override.yaml`** beside `compose.yaml`. Docker Compose loads it automatically. For example, this checks for new items every ten seconds in batches of fifty:
+
+```yaml
+services:
+  armiger-ultra:
+    environment:
+      BITMAGNET_POLL_SECONDS: "10"
+      BITMAGNET_BATCH_SIZE: "50"
+      ARMIGER_REQUIRE_ENGLISH_AUDIO: "false"
+      ARMIGER_ALLOW_ENGLISH_SUBS: "true"
+```
+
+Run `docker compose config --quiet` to check the files, then `docker compose up -d` to apply the change. Keep boolean values quoted as `"true"` or `"false"`.
+
+The [complete environment-variable reference](../../docs/bitmagnet-configuration.md) covers model loading, polling, audio and dead-swarm filters, index pruning, endpoints and ports. For more common settings, save the [commented override example](compose.override.example.yaml) as `compose.override.yaml`; it preserves the default-off pruning flags. A `.env` file only supplies values referenced by your Compose files; adding an arbitrary variable there does not automatically pass it into Armiger.
+
 ## Stop and start
 
 From the same folder, run `docker compose down` to stop or `docker compose up -d` to start again. Your index stays saved. Adding `-v` to the stop command erases that saved data.

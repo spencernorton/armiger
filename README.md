@@ -13,8 +13,6 @@ Armiger helps Bitmagnet and Rats Search label torrents by type and language, usi
 
 ![Armiger Ultra compared with MIMMO and Bitmagnet by content category, with title matching, audio language, junk checks and seed availability](docs/assets/armiger_overview.png)
 
-*Measured model v3.0.0 results, rounded for readability. [Full results and limitations](docs/evaluation.md).*
-
 ## Choose your setup
 
 1. **[Bitmagnet + Armiger Ultra](examples/bitmagnet/README.md)** — classify items and add searchable tags in Bitmagnet.
@@ -32,6 +30,7 @@ It does not inspect media payloads. Metadata predictions can be wrong and do not
 ## More information
 
 - [Armiger on NorviTech](https://norvitech.com/ai-models/#armiger)
+- [Armiger Ultra settings for Bitmagnet](docs/bitmagnet-configuration.md)
 - [Python API and component reference](docs/reference.md)
 - [Optional distributed updates](docs/distributed-updates.md)
 - [Other integrations](https://github.com/spencernorton/Armiger-Connectors) — DH-Waypoint, Torznab and Arr.
