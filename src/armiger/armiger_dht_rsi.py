@@ -47,9 +47,12 @@ from cryptography.hazmat.primitives.kdf.hkdf import HKDF
 import sys
 
 from .dht_rsi_models_and_privacy import (
+    AcyclicReleaseEnvelope,
     AnonymityGuard,
     AnonymityViolationError,
     AnonymizedTelemetryRecord,
+    AuthenticatedConformalBaseline,
+    BenchmarkAttestationPredicate,
     BlindedTitleStem,
     BundleFormat,
     CanaryItem,
@@ -59,6 +62,9 @@ from .dht_rsi_models_and_privacy import (
     ContinuousAggregationResult,
     ContinuousDeltaSubmission,
     DHTRSIMode,
+    DSSE_TYPE_ATTESTATION_V2,
+    DSSE_TYPE_BASELINE_V1,
+    DSSE_TYPE_RELEASE_V2,
     EncryptedTelemetryBundle,
     MediaCategory,
     PeerAttestation,
@@ -70,6 +76,7 @@ from .dht_rsi_models_and_privacy import (
     VerifiedObservation,
     ZeroCueCatalogDelta,
     _bep44_canonical_sign_buffer,
+    dsse_pae,
     pure_laplace_noise,
     resolve_opt_in_sharing,
 )
@@ -88,6 +95,7 @@ from .dht_rsi_crypto_and_adapters import (
     _OptInAdapterBase,
 )
 from .dht_rsi_verification import (
+    AcyclicProvenanceVerifier,
     AuthoritativeASNVerifier,
     PhysicalGroundTruthVerifier,
     SafeFormatValidator,
@@ -148,6 +156,7 @@ class ArmigerDHTRSIEngine:
 
         self.mode = DHTRSIMode(resolved_mode)
         self.current_seq = int(current_seq)
+        self.current_bundle_sha256: Optional[str] = None
         self._telemetry_seq = int(current_seq)
         self.trusted_signers = trusted_signers or {}
         self.trusted_pq_signers = trusted_pq_signers or {}
@@ -605,6 +614,10 @@ class ArmigerDHTRSIEngine:
         require_pq: Optional[bool] = None,
         require_authoritative_asn: Optional[bool] = None,
         asn_verifier: Optional[AuthoritativeASNVerifier] = None,
+        bootstrap_checkpoint_seq: Optional[int] = None,
+        authenticated_baseline: Optional[AuthenticatedConformalBaseline] = None,
+        expected_parent_bundle_sha256: Optional[str] = None,
+        expected_canary_suite_sha256: Optional[str] = None,
     ) -> Tuple[bool, str, Optional[CanaryRegressionReport]]:
         """Verify signed DHT update manifest, check ASN quorum, validate safe formats, and run 500-canary gate."""
         if self.mode == DHTRSIMode.OFF:
@@ -612,6 +625,20 @@ class ArmigerDHTRSIEngine:
 
         if candidate_predictor_fn is None:
             return False, "missing_candidate_predictor_fn", None
+
+        if authenticated_baseline is not None:
+            b_ok, b_reason = authenticated_baseline.verify_signature(self.trusted_signers)
+            if not b_ok:
+                return False, f"authenticated_baseline_failed:{b_reason}", None
+            eff_parent_sha = (expected_parent_bundle_sha256 or self.current_bundle_sha256 or "").strip().lower()
+            if not eff_parent_sha:
+                return False, "authenticated_baseline_missing_expected_parent_bundle_sha256", None
+            if authenticated_baseline.parent_bundle_sha256.strip().lower() != eff_parent_sha:
+                return False, "authenticated_baseline_parent_bundle_mismatch", None
+            eff_suite_sha = (expected_canary_suite_sha256 or self.canary_gate.suite_sha256()).strip().lower()
+            if authenticated_baseline.canary_suite_sha256.strip().lower() != eff_suite_sha:
+                return False, "authenticated_baseline_canary_suite_mismatch", None
+            baseline_metrics = authenticated_baseline.to_metrics_dict()
 
         # 1. Verify BEP-44 monotonic sequence and Hybrid Ed25519 + WOTS+-SHAKE256 PQ threshold signatures
         eff_pq_signers = dict(self.trusted_pq_signers)
@@ -628,6 +655,7 @@ class ArmigerDHTRSIEngine:
             current_seq=self.current_seq,
             trusted_pq_signers=eff_pq_signers,
             require_pq=require_pq_flag,
+            bootstrap_checkpoint_seq=bootstrap_checkpoint_seq,
         )
         if not ok:
             return False, f"manifest_threshold_failed:{reason}", None
@@ -661,6 +689,7 @@ class ArmigerDHTRSIEngine:
         if not canary_report.passed:
             return False, f"golden_canary_gate_rejected:{canary_report.reason}", canary_report
 
-        # All checks passed! Advance monotonic sequence
+        # All checks passed! Advance monotonic sequence and active bundle digest
         self.current_seq = manifest.seq
+        self.current_bundle_sha256 = actual_sha.lower()
         return True, "update_staged_and_verified", canary_report

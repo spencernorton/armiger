@@ -82,6 +82,7 @@ result = model.predict({"name": "Sintel.2010.1080p.WEBM", "files": []})
 | Audio guard | `armiger.audio_language_guard` | Audio/title/subtitle rules and anime dub interpretation |
 | Calibration | `armiger.calibration_and_dht` | Per-head calibration and conformal gates |
 | Distributed sync | `armiger.armiger_dht_db_sync` | Optional signed metadata updates and pre-ingest filtering |
+| DHT verifier CLI | `armiger.verify_dht` | Standalone BEP 44/46 + BEP 9/10/19 peer-wire and webseed bundle verification (`python -m armiger.verify_dht`) |
 
 The complete pipeline composes these components. Most callers need only `ArmigerUltraPipeline`, not separate component installs. Swarm counters do not change content-category probabilities.
 
