@@ -25,7 +25,7 @@ from cryptography.hazmat.primitives.ciphers.aead import ChaCha20Poly1305
 from cryptography.hazmat.primitives.kdf.hkdf import HKDF
 
 
-from .dht_rsi_models_and_privacy import (
+from armiger.dht_rsi_models_and_privacy import (
     AcyclicReleaseEnvelope,
     AuthenticatedConformalBaseline,
     BenchmarkAttestationPredicate,
@@ -41,7 +41,7 @@ from .dht_rsi_models_and_privacy import (
     VerifiedObservation,
     dsse_pae,
 )
-from .dht_rsi_crypto_and_adapters import (
+from armiger.dht_rsi_crypto_and_adapters import (
     MediaStreamVerifier,
     WOTSPlusSHAKE256,
 )

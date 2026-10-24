@@ -221,14 +221,21 @@ def _udp_krpc_query(
         msg = bdecode_krpc(data)
         if not isinstance(msg, dict):
             return None
-        if sender_state is not None and isinstance(query_dict.get(b"a"), dict):
+        if (
+            sender_state is not None
+            and not sender_state.get("explicit_public_ip")
+            and isinstance(query_dict.get(b"a"), dict)
+        ):
             obs_ip = _extract_bep42_observed_ip(msg)
             if obs_ip:
-                sender_state["public_ip"] = obs_ip
                 id_map = sender_state.setdefault("id_by_ip", {})
                 if obs_ip not in id_map:
                     id_map[obs_ip] = generate_bep42_node_id(obs_ip)
-                sender_state["last_sender_id"] = id_map[obs_ip]
+                votes = sender_state.setdefault("ip_votes", {}).setdefault(obs_ip, set())
+                votes.add((resolved_ip, int(addr[1])))
+                if len(votes) >= 2:
+                    sender_state["public_ip"] = obs_ip
+                    sender_state["last_sender_id"] = id_map[obs_ip]
                 if obs_ip != eff_ip and msg.get(b"y") == b"e":
                     rem_retry = deadline - time.monotonic()
                     if rem_retry > 0:
@@ -393,6 +400,8 @@ def verify_dht_release(
     init_sender_id = generate_bep42_node_id(init_ip_for_id)
     sender_state: Dict[str, Any] = {
         "public_ip": init_pub_ip,
+        "explicit_public_ip": bool(init_pub_ip),
+        "ip_votes": {},
         "id_by_ip": {init_ip_for_id: init_sender_id},
         "last_sender_id": init_sender_id,
     }

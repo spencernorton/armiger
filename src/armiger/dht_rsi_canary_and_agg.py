@@ -25,7 +25,7 @@ from cryptography.hazmat.primitives.ciphers.aead import ChaCha20Poly1305
 from cryptography.hazmat.primitives.kdf.hkdf import HKDF
 
 
-from .dht_rsi_models_and_privacy import (
+from armiger.dht_rsi_models_and_privacy import (
     AnonymizedTelemetryRecord,
     BlindedTitleStem,
     BundleFormat,
@@ -41,13 +41,13 @@ from .dht_rsi_models_and_privacy import (
     ThresholdDHTManifest,
     ZeroCueCatalogDelta,
 )
-from .dht_rsi_crypto_and_adapters import (
+from armiger.dht_rsi_crypto_and_adapters import (
     HybridPQCAEADEngine,
     MLKEM768,
     WOTSPlusSHAKE256,
     X25519ChaCha20Poly1305Engine,
 )
-from .dht_rsi_verification import (
+from armiger.dht_rsi_verification import (
     AuthoritativeASNVerifier,
     SybilQuorumVerifier,
     ThresholdSignatureVerifier,

@@ -346,17 +346,28 @@ class GatedBEP44UDPNode:
             resolver_cb = getattr(self, "_resolver_fn", None) or socket.gethostbyname
             if not _KRPC_DNS_SEMAPHORE.acquire(blocking=False):
                 raise asyncio.TimeoutError("krpc_dns_pool_saturated")
+            dns_fut: asyncio.Future[str] = loop.create_future()
 
-            def _bounded_resolve() -> str:
+            def _dns_worker() -> None:
                 try:
-                    return str(resolver_cb(host_str))
+                    ip_res = str(resolver_cb(host_str))
+                    loop.call_soon_threadsafe(
+                        lambda: None if dns_fut.done() else dns_fut.set_result(ip_res)
+                    )
+                except Exception as exc:
+                    loop.call_soon_threadsafe(
+                        lambda e=exc: None if dns_fut.done() else dns_fut.set_exception(e)
+                    )
                 finally:
                     _KRPC_DNS_SEMAPHORE.release()
 
-            resolved_ip = await asyncio.wait_for(
-                loop.run_in_executor(None, _bounded_resolve),
-                timeout=_rem_rpc_timeout(),
-            )
+            try:
+                t_dns = threading.Thread(target=_dns_worker, daemon=True)
+                t_dns.start()
+            except BaseException:
+                _KRPC_DNS_SEMAPHORE.release()
+                raise
+            resolved_ip = await asyncio.wait_for(dns_fut, timeout=_rem_rpc_timeout())
         target_addr = (resolved_ip, port_int)
 
         if self.transport is not None and len(self._pending_rpcs) < 128:

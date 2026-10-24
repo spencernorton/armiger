@@ -1951,6 +1951,79 @@ class TestSession9IngressAndBEP46Hardening(unittest.TestCase):
                 )
                 self.assertFalse(vd_dns_res["verified"])
                 self.assertLess(time.monotonic() - t0_vd_dns, 0.20)
+
+                # (k) Explicitly configured public_ip is never overridden by an untrusted node's b"ip" response
+                configured_ip = "203.0.113.10"
+                spoofed_ip = "203.0.113.99"
+                seen_ids = []
+
+                class _SpoofingIPNode(asyncio.DatagramProtocol):
+                    def connection_made(self, transport):
+                        self.transport = transport
+
+                    def datagram_received(self, data, addr):
+                        msg = bdecode_krpc(data)
+                        t_id = msg.get(b"t", b"00")
+                        a_dict = msg.get(b"a", {})
+                        q_name = msg.get(b"q", b"")
+                        q_nid = a_dict.get(b"id", b"")
+                        seen_ids.append(q_nid)
+                        spoof_compact = _sock_mod.inet_aton(spoofed_ip) + struct.pack("!H", addr[1])
+                        if q_name == b"get":
+                            self.transport.sendto(
+                                bencode({
+                                    b"t": t_id,
+                                    b"y": b"r",
+                                    b"ip": spoof_compact,
+                                    b"r": {
+                                        b"id": generate_bep42_node_id("198.51.100.2"),
+                                        b"k": pub_32,
+                                        b"seq": 25,
+                                        b"sig": bep42_sig,
+                                        b"token": b"tk42",
+                                        b"v": bep42_v_dict,
+                                    },
+                                }),
+                                addr,
+                            )
+                        elif q_name == b"get_peers":
+                            self.transport.sendto(
+                                bencode({
+                                    b"t": t_id,
+                                    b"y": b"r",
+                                    b"ip": spoof_compact,
+                                    b"r": {
+                                        b"id": generate_bep42_node_id("198.51.100.2"),
+                                        b"token": b"tk42",
+                                        b"values": [],
+                                    },
+                                }),
+                                addr,
+                            )
+
+                spf_tr, _ = await loop.create_datagram_endpoint(_SpoofingIPNode, local_addr=("127.0.0.1", 0))
+                spf_port = spf_tr.get_extra_info("sockname")[1]
+                try:
+                    spf_res = await asyncio.to_thread(
+                        verify_dht_release,
+                        pubkey_hex=pub_32.hex(),
+                        salt=salt,
+                        dht_nodes=[("127.0.0.1", spf_port)],
+                        webseed_urls=["https://example.org/seed"],
+                        expected_info_bytes=strict_bundle.info_bytes,
+                        webseed_fetcher=lambda u, max_b=0: strict_files["big.bin"],
+                        mode="webseed-fallback",
+                        min_seq=20,
+                        timeout=1.0,
+                        public_ip=configured_ip,
+                    )
+                    self.assertTrue(spf_res["verified"])
+                    self.assertGreaterEqual(len(seen_ids), 2)
+                    for q_nid in seen_ids:
+                        self.assertTrue(verify_bep42_node_id(configured_ip, q_nid, allow_local=False))
+                        self.assertFalse(verify_bep42_node_id(spoofed_ip, q_nid, allow_local=False))
+                finally:
+                    spf_tr.close()
             finally:
                 dht.close()
 

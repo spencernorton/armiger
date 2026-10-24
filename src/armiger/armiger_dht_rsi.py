@@ -46,7 +46,7 @@ from cryptography.hazmat.primitives.kdf.hkdf import HKDF
 
 import sys
 
-from .dht_rsi_models_and_privacy import (
+from armiger.dht_rsi_models_and_privacy import (
     AcyclicReleaseEnvelope,
     AnonymityGuard,
     AnonymityViolationError,
@@ -80,7 +80,7 @@ from .dht_rsi_models_and_privacy import (
     pure_laplace_noise,
     resolve_opt_in_sharing,
 )
-from .dht_rsi_crypto_and_adapters import (
+from armiger.dht_rsi_crypto_and_adapters import (
     AudioWebhookAdapter,
     HybridPQCAEADEngine,
     MLKEM768,
@@ -94,7 +94,7 @@ from .dht_rsi_crypto_and_adapters import (
     X25519ChaCha20Poly1305Engine,
     _OptInAdapterBase,
 )
-from .dht_rsi_verification import (
+from armiger.dht_rsi_verification import (
     AcyclicProvenanceVerifier,
     AuthoritativeASNVerifier,
     PhysicalGroundTruthVerifier,
@@ -103,7 +103,7 @@ from .dht_rsi_verification import (
     SybilQuorumVerifier,
     ThresholdSignatureVerifier,
 )
-from .dht_rsi_canary_and_agg import (
+from armiger.dht_rsi_canary_and_agg import (
     ByzantineResilientAggregator,
     GoldenCanaryRegressionGate,
     generate_golden_canary_suite,
