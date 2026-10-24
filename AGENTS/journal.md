@@ -1,3 +1,10 @@
+## 2026-10-24 — Refine distributed updates guide and technical reference
+
+- **Branch:** docs/distributed-updates-precision
+- **What changed:** Clarify in the opening that ordinary classification never sends feedback or fetches updates automatically, and state what requires explicit configuration for contributing versus receiving. Keep the overview and four-stage Mermaid loop approachable while consolidating comparison semantics into the four workflow steps. Expand the technical reference to distinguish `armiger-catalog-v1` unkeyed catalog hashes (`export_rsi_telemetry_bundle` / `zero_cue_catalog_delta`) from `armiger-catalog-v2` keyed hashes (`AnonymityGuard`), document `RSIUpdateAggregator` versus `ByzantineResilientAggregator` thresholds and 3-tensor `SwarmResidualAdapter` training behavior, contrast peer attestation ledger confirmation (`require_ledger_confirmation=True`) with receiver baseline comparison, note the single-process `_GLOBAL_PINNED_PUBKEY_ASN` contributor registration behavior, and detail how `sign_manifest()`, the `seq=3006` release receipt and `tests/bep44_udp_wire_harness.py` differ from BEP 44/46.
+- **Validation:** Verified all local file/anchor links and external BEP links, validated embedded JSON and Mermaid syntax, ran `git diff --check`, and executed `pytest -q tests/test_anonymous_opt_in_dht_sharing.py tests/test_distributed_knowledge_transfer.py`.
+- **Follow-ups:** None; documentation only.
+
 ## 2026-10-24 — Verify the protocol reference presentation
 
 - **Branch:** codex/distributed-bep-reference
