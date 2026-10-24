@@ -1,3 +1,11 @@
+## 2026-10-23 — dark headline chart below the description
+
+- **Branch:** codex/readme-headline-chart
+- **What changed:** Place the existing dark headline benchmark chart directly below the README introduction, before the setup guides. Keep the model version and evaluation link beside it.
+- **Validation:** The chart bytes match the canonical manifest; its source, data and labels are unchanged. Verify the rendered placement and required CI before merging.
+- **Deployment:** Documentation only; package, model and runtime versions remain unchanged.
+- **Status file updated:** Record the public pull request and verification in the private project handoff.
+
 ## 2026-10-23 — consistent README badges
 
 - **Branch:** codex/readme-badges
