@@ -198,6 +198,8 @@ class TestSession9IngressAndBEP46Hardening(unittest.TestCase):
         forged = bytes([nid[0] ^ 0xFF]) + nid[1:]
         self.assertFalse(verify_bep42_node_id(public_ip, forged, allow_local=False))
         self.assertTrue(verify_bep42_node_id("127.0.0.1", forged, allow_local=True))
+        self.assertFalse(verify_bep42_node_id("not-an-ip", b"X" * 20))
+        self.assertFalse(verify_bep42_node_id("2001:db8::1", b"X" * 20))
 
     def test_mutable_put_rejects_out_of_range_signed_sequence_and_verifies_bep46_dict(self) -> None:
         for seq in (-1, 2**63):
@@ -723,6 +725,33 @@ class TestSession9IngressAndBEP46Hardening(unittest.TestCase):
                 )
                 self.assertFalse(ok_mix)
                 self.assertIn("cyclic_provenance_violation:evaluator_in_release_signers", reason_mix)
+
+                # 5b. Manifest signed by a distinct key mapped to an evaluator identity (with independent envelope signers) must fail closed
+                alt_rel_ed, alt_rel_pub, alt_rel_wots_priv, alt_rel_wots_pub = ThresholdSignatureVerifier.generate_hybrid_signer()
+                asn_verifier.register_pinned_key(alt_rel_pub, 20940, pq_root_pubkey_hex=alt_rel_wots_pub)
+                alias_rel_trust = dict(trusted_rel)
+                alias_rel_trust[alt_rel_pub] = "evaluator-0"  # distinct key, same logical identity as eval_signers[0]
+                alias_sigs = dict(sigs)
+                alias_sigs[alt_rel_pub] = alt_rel_ed.sign(payload).hex()
+                alias_pq_sigs = dict(pq_sigs)
+                alias_pq_sigs[alt_rel_wots_pub] = WOTSPlusSHAKE256.sign(alt_rel_wots_priv, payload).hex()
+                alias_manifest = dataclasses.replace(manifest, signatures=alias_sigs, pq_signatures=alias_pq_sigs)
+                alias_env = AcyclicProvenanceVerifier.sign_release_envelope(
+                    dataclasses.replace(unsigned_envelope, manifest=alias_manifest),
+                    rel_signers,
+                )
+                ok_alias, reason_alias = AcyclicProvenanceVerifier.verify_envelope(
+                    alias_env,
+                    trusted_release_signers=alias_rel_trust,
+                    trusted_evaluator_signers=trusted_eval,
+                    threshold_m=2,
+                    min_evaluator_asns=3,
+                    current_seq=0,
+                    bootstrap_checkpoint_seq=1000,
+                    asn_verifier=asn_verifier,
+                )
+                self.assertFalse(ok_alias)
+                self.assertEqual(reason_alias, "cyclic_provenance_violation:evaluator_identity_in_release_signers:evaluator-0")
 
                 # 6. ArmigerDHTRSIEngine.verify_and_stage_update rejects authenticated_baseline with mismatched parent or suite hash,
                 #    and enforces AcyclicReleaseEnvelope verification before staging updates.

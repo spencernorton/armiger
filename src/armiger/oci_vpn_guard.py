@@ -219,7 +219,7 @@ def _is_bep42_exempt_ip(ip_str: str) -> bool:
     try:
         ip_obj = ipaddress.IPv4Address(ip_str)
     except Exception:
-        return True
+        return False
     b0, b1, _, _ = ip_obj.packed
     if b0 in (10, 127) or (b0 == 172 and 16 <= b1 <= 31) or (b0 == 192 and b1 == 168) or (b0 == 169 and b1 == 254):
         return True

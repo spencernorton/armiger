@@ -1622,6 +1622,18 @@ class AcyclicProvenanceVerifier:
             for wots_pk_hex in WOTSPlusSHAKE256._ED25519_TO_WOTS_PUBS.get(norm_ed, ()):
                 eff_pq_signers[wots_pk_hex] = identity
 
+        if enforce_evaluator_release_disjoint:
+            for raw_m_pk, _ in envelope.manifest.iter_ed25519_signatures():
+                norm_m_pk = ThresholdDHTManifest._normalize_pubkey_id(raw_m_pk)
+                m_rel_id = norm_rel_trust.get(norm_m_pk)
+                if m_rel_id is not None and m_rel_id in seen_eval_ids:
+                    return False, f"cyclic_provenance_violation:evaluator_identity_in_release_signers:{m_rel_id}"
+            for raw_m_pq, _ in envelope.manifest.iter_pq_signatures():
+                norm_m_pq = ThresholdDHTManifest._normalize_pubkey_id(raw_m_pq)
+                m_pq_id = eff_pq_signers.get(norm_m_pq)
+                if m_pq_id is not None and m_pq_id in seen_eval_ids:
+                    return False, f"cyclic_provenance_violation:evaluator_identity_in_release_signers:{m_pq_id}"
+
         m_ok, m_reason = ThresholdSignatureVerifier.verify(
             manifest=envelope.manifest,
             trusted_signers=trusted_release_signers,
