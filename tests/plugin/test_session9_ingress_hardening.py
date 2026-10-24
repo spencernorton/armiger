@@ -537,7 +537,8 @@ class TestSession9IngressAndBEP46Hardening(unittest.TestCase):
                 rel_signers = [ThresholdSignatureVerifier.generate_hybrid_signer() for _ in range(2)]
 
                 parent_sha = hashlib.sha256(b"parent-bundle").hexdigest()
-                cand_sha = hashlib.sha256(b"candidate-bundle").hexdigest()
+                cand_bytes = b'{"weights": [1.0, 2.0], "version": "2.12.3"}'
+                cand_sha = hashlib.sha256(cand_bytes).hexdigest()
                 suite_sha = hashlib.sha256(b"canary-suite-500").hexdigest()
                 now_ts = int(time.time())
 
@@ -723,12 +724,19 @@ class TestSession9IngressAndBEP46Hardening(unittest.TestCase):
                 self.assertFalse(ok_mix)
                 self.assertIn("cyclic_provenance_violation:evaluator_in_release_signers", reason_mix)
 
-                # 6. ArmigerDHTRSIEngine.verify_and_stage_update rejects authenticated_baseline with mismatched parent or suite hash
+                # 6. ArmigerDHTRSIEngine.verify_and_stage_update rejects authenticated_baseline with mismatched parent or suite hash,
+                #    and enforces AcyclicReleaseEnvelope verification before staging updates.
                 from armiger.armiger_dht_rsi import ArmigerDHTRSIEngine
-                eng = ArmigerDHTRSIEngine(trusted_signers=trusted_rel, threshold_m=2, min_distinct_asns=1)
+                from armiger.dht_rsi_models_and_privacy import PeerAttestation
+                eng = ArmigerDHTRSIEngine(
+                    trusted_signers=trusted_rel,
+                    trusted_evaluator_signers=trusted_eval,
+                    threshold_m=2,
+                    min_distinct_asns=2,
+                )
                 eng_ok_p, eng_reason_p, _ = eng.verify_and_stage_update(
                     manifest=manifest,
-                    bundle_bytes=b"candidate-bundle",
+                    bundle_bytes=cand_bytes,
                     attestations=[],
                     candidate_predictor_fn=lambda item: dict(item.ground_truth),
                     authenticated_baseline=baseline,
@@ -739,7 +747,7 @@ class TestSession9IngressAndBEP46Hardening(unittest.TestCase):
 
                 eng_ok_s, eng_reason_s, _ = eng.verify_and_stage_update(
                     manifest=manifest,
-                    bundle_bytes=b"candidate-bundle",
+                    bundle_bytes=cand_bytes,
                     attestations=[],
                     candidate_predictor_fn=lambda item: dict(item.ground_truth),
                     authenticated_baseline=baseline,
@@ -747,6 +755,82 @@ class TestSession9IngressAndBEP46Hardening(unittest.TestCase):
                 )
                 self.assertFalse(eng_ok_s)
                 self.assertEqual(eng_reason_s, "authenticated_baseline_canary_suite_mismatch")
+
+                peer_atts = []
+                for idx, (e_priv, e_pub, e_wots_priv, e_wots_pub) in enumerate(eval_signers):
+                    att_unsigned = PeerAttestation(
+                        peer_id=f"eval-{idx}",
+                        asn=eval_asns[idx],
+                        peer_pubkey_hex=e_pub,
+                        timestamp=now_ts,
+                        signature_hex="",
+                        pq_pubkey_hex=e_wots_pub,
+                        pq_signature_hex="",
+                        ip_address=eval_ips[idx],
+                    )
+                    att_msg = att_unsigned.canonical_bytes(cand_sha)
+                    att_sig = e_priv.sign(att_msg).hex()
+                    att_pq_sig = WOTSPlusSHAKE256.sign(e_wots_priv, att_msg).hex()
+                    peer_atts.append(
+                        dataclasses.replace(
+                            att_unsigned,
+                            signature_hex=att_sig,
+                            pq_signature_hex=att_pq_sig,
+                        )
+                    )
+
+                # 6a. Missing release_envelope is rejected by default
+                eng_no_env, reason_no_env, _ = eng.verify_and_stage_update(
+                    manifest=manifest,
+                    bundle_bytes=cand_bytes,
+                    attestations=peer_atts,
+                    candidate_predictor_fn=lambda item: dict(item.ground_truth),
+                    authenticated_baseline=baseline,
+                    expected_parent_bundle_sha256=parent_sha,
+                    expected_canary_suite_sha256=suite_sha,
+                    asn_verifier=asn_verifier,
+                    bootstrap_checkpoint_seq=1000,
+                )
+                self.assertFalse(eng_no_env)
+                self.assertEqual(reason_no_env, "missing_acyclic_release_envelope")
+
+                # 6b. Cyclic release_envelope is rejected at staging time
+                eng_bad_env, reason_bad_env, _ = eng.verify_and_stage_update(
+                    manifest=manifest,
+                    bundle_bytes=cand_bytes,
+                    attestations=peer_atts,
+                    candidate_predictor_fn=lambda item: dict(item.ground_truth),
+                    authenticated_baseline=baseline,
+                    expected_parent_bundle_sha256=parent_sha,
+                    expected_canary_suite_sha256=suite_sha,
+                    release_envelope=bad_envelope,
+                    asn_verifier=asn_verifier,
+                    bootstrap_checkpoint_seq=1000,
+                )
+                self.assertFalse(eng_bad_env)
+                self.assertIn("acyclic_provenance_failed:cyclic_provenance_violation", reason_bad_env)
+
+                # 6c. Valid release_envelope passes acyclic provenance + 500-canary gate
+                def _good_pred(item):
+                    res = dict(item.ground_truth)
+                    res["confidence"] = 0.96
+                    return res
+
+                eng_good_env, reason_good_env, report_good = eng.verify_and_stage_update(
+                    manifest=manifest,
+                    bundle_bytes=cand_bytes,
+                    attestations=peer_atts,
+                    candidate_predictor_fn=_good_pred,
+                    authenticated_baseline=baseline,
+                    expected_parent_bundle_sha256=parent_sha,
+                    expected_canary_suite_sha256=suite_sha,
+                    release_envelope=envelope,
+                    asn_verifier=asn_verifier,
+                    bootstrap_checkpoint_seq=1000,
+                )
+                self.assertTrue(eng_good_env, msg=reason_good_env)
+                self.assertEqual(reason_good_env, "update_staged_and_verified")
+                self.assertIsNotNone(report_good)
 
                 # 7. Empty or failing benchmark attestation metrics must be rejected by verify_envelope
                 empty_pred = AcyclicProvenanceVerifier.sign_benchmark_attestation(
@@ -1115,6 +1199,64 @@ class TestSession9IngressAndBEP46Hardening(unittest.TestCase):
                 finally:
                     om_srv.close()
                     await om_srv.wait_closed()
+
+                # Slow-drip peer exceeding max_total_seconds must fail closed with peer_wire_total_deadline_exceeded
+                async def _slow_drip_peer(reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
+                    try:
+                        await reader.readexactly(68)
+                        writer.write(b"\x13BitTorrent protocol" + b"\x00\x00\x00\x00\x00\x10\x00\x00" + strict_bundle.infohash_20 + (b"-SD0001-" + b"1" * 12))
+                        await writer.drain()
+                        await asyncio.sleep(0.5)
+                    except Exception:
+                        pass
+                    finally:
+                        writer.close()
+
+                sd_srv = await asyncio.start_server(_slow_drip_peer, "127.0.0.1", 0)
+                sd_port = sd_srv.sockets[0].getsockname()[1]
+                try:
+                    with self.assertRaisesRegex(asyncio.TimeoutError, "peer_wire_total_deadline_exceeded"):
+                        await fetch_bundle_via_peer_wire(
+                            "127.0.0.1",
+                            sd_port,
+                            strict_bundle.infohash_20,
+                            timeout=2.0,
+                            max_total_seconds=0.1,
+                        )
+                finally:
+                    sd_srv.close()
+                    await sd_srv.wait_closed()
+
+                # Bounded peer attempts in verify_dht_release when >20 dead peers are returned
+                many_dead_peers = [("127.0.0.1", 65000 + i) for i in range(20)]
+                valid_sig = sk.sign(bep44_signing_buffer(v=v_dict, seq=5, salt=salt))
+                tok_ok = g_resp[b"r"][b"token"]
+                await dht_client.rpc_call(
+                    ("127.0.0.1", dht_port),
+                    b"put",
+                    {
+                        b"id": b"B" * 20,
+                        b"k": pub_32,
+                        b"seq": 5,
+                        b"v": v_dict,
+                        b"sig": valid_sig,
+                        b"salt": salt,
+                        b"token": tok_ok,
+                    },
+                )
+                cap_res = await asyncio.to_thread(
+                    verify_dht_release,
+                    pubkey_hex=pub_32.hex(),
+                    salt=salt,
+                    dht_nodes=[("127.0.0.1", dht_port)],
+                    explicit_peers=many_dead_peers,
+                    mode="strict-p2p",
+                    timeout=0.2,
+                    max_peers=3,
+                    p2p_budget_sec=2.0,
+                )
+                self.assertFalse(cap_res["verified"])
+                self.assertEqual(len(cap_res["p2p_errors"]), 3)
             finally:
                 dht.close()
 

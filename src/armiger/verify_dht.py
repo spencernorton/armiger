@@ -24,6 +24,7 @@ import json
 from pathlib import Path
 import socket
 import struct
+import time
 import sys
 from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple
 import urllib.request
@@ -235,6 +236,8 @@ def verify_dht_release(
     mode: str = "strict-p2p",
     min_seq: int = 1,
     timeout: float = 3.0,
+    max_peers: int = 8,
+    p2p_budget_sec: Optional[float] = None,
 ) -> Dict[str, Any]:
     """Execute end-to-end BEP-44/46 + BEP-9/10/19 verification and return a structured receipt."""
     if mode not in ("strict-p2p", "webseed-fallback"):
@@ -340,7 +343,8 @@ def verify_dht_release(
     infohash_20, pointer_meta = _extract_infohash_20(best_record[b"v"])
 
     # Separate bounded iterative Kademlia lookup toward infohash_20 for get_peers
-    candidate_peers: List[Tuple[str, int]] = list(explicit_peers)
+    eff_max_peers = max(1, min(int(max_peers), 32))
+    candidate_peers: List[Tuple[str, int]] = list(explicit_peers)[:eff_max_peers]
     gp_frontier: List[Tuple[int, Tuple[str, int]]] = []
     seen_gp_queued: set[Tuple[str, int]] = set()
     for ref_nid, ref_addr in all_known_dht_nodes:
@@ -349,7 +353,7 @@ def verify_dht_release(
             gp_frontier.append((_xor_distance(ref_nid, infohash_20), ref_addr))
     queried_gp: set[Tuple[str, int]] = set()
 
-    while gp_frontier and len(queried_gp) < 24:
+    while gp_frontier and len(queried_gp) < 24 and len(candidate_peers) < eff_max_peers:
         gp_frontier.sort(key=lambda item: item[0])
         _, addr = gp_frontier.pop(0)
         if addr in queried_gp:
@@ -374,21 +378,30 @@ def verify_dht_release(
             for p in _decode_compact_peers(r_gp[b"values"]):
                 if p not in candidate_peers:
                     candidate_peers.append(p)
+                    if len(candidate_peers) >= eff_max_peers:
+                        break
         for ref_nid, ref_addr in _decode_compact_nodes_with_id(r_gp.get(b"nodes"), None):
             if ref_nid == sender_id:
                 continue
             if ref_addr not in queried_gp:
                 gp_frontier.append((_xor_distance(ref_nid, infohash_20), ref_addr))
 
-    # Attempt strict P2P BEP-9/10 ut_metadata + BEP-3 piece download first
+    # Attempt strict P2P BEP-9/10 ut_metadata + BEP-3 piece download first (bounded peer count + total budget)
+    eff_p2p_budget = float(p2p_budget_sec) if p2p_budget_sec is not None else max(float(timeout) * 3.0, 6.0)
+    p2p_deadline = time.monotonic() + eff_p2p_budget
     p2p_errors: List[str] = []
-    for peer_host, peer_port in candidate_peers:
+    for peer_host, peer_port in candidate_peers[:eff_max_peers]:
+        rem_budget = p2p_deadline - time.monotonic()
+        if rem_budget <= 0:
+            p2p_errors.append("p2p_verification_budget_exceeded")
+            break
         try:
             coro = fetch_bundle_via_peer_wire(
                 host=peer_host,
                 port=peer_port,
                 infohash_20=infohash_20,
-                timeout=timeout,
+                timeout=min(float(timeout), rem_budget),
+                max_total_seconds=rem_budget,
             )
             res = asyncio.run(coro)
             return {
@@ -515,6 +528,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     )
     parser.add_argument("--min-seq", type=int, default=1, help="Minimum acceptable BEP-44 sequence number")
     parser.add_argument("--timeout", type=float, default=3.0, help="Per-socket timeout in seconds")
+    parser.add_argument("--max-peers", type=int, default=8, help="Maximum candidate TCP peers to attempt")
+    parser.add_argument("--p2p-budget", type=float, default=None, help="Total time budget in seconds for P2P peer-wire phase")
     args = parser.parse_args(argv)
 
     dht_list = (
@@ -539,6 +554,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         mode=args.mode,
         min_seq=args.min_seq,
         timeout=args.timeout,
+        max_peers=args.max_peers,
+        p2p_budget_sec=args.p2p_budget,
     )
     print(json.dumps(receipt, indent=2, sort_keys=True))
     return 0 if receipt.get("verified") else 1

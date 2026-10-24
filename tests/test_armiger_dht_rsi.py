@@ -1033,6 +1033,7 @@ class TestOptInOutModesAndMasterEngine(unittest.TestCase):
             bundle_bytes=bundle_content,
             attestations=attestations,
             candidate_predictor_fn=dummy_predictor,
+            require_acyclic_envelope=False,
         )
         self.assertTrue(ok)
         self.assertEqual(reason, "update_staged_and_verified")

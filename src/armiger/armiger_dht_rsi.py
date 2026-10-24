@@ -144,6 +144,8 @@ class ArmigerDHTRSIEngine:
         delta_freshness_window_seconds: int = 14 * 86400,
         max_telemetry_queue_size: int = 1024,
         max_item_encryption_retries: int = 3,
+        trusted_evaluator_signers: Optional[Dict[str, str]] = None,
+        require_acyclic_envelope: bool = True,
     ) -> None:
         self.opt_in_sharing: bool = resolve_opt_in_sharing(opt_in_sharing)
         if mode is None:
@@ -160,6 +162,8 @@ class ArmigerDHTRSIEngine:
         self._telemetry_seq = int(current_seq)
         self.trusted_signers = trusted_signers or {}
         self.trusted_pq_signers = trusted_pq_signers or {}
+        self.trusted_evaluator_signers = dict(trusted_evaluator_signers or {})
+        self.require_acyclic_envelope = bool(require_acyclic_envelope)
         self.require_pq = bool(require_pq)
         self.threshold_m = int(threshold_m)
         self.min_distinct_asns = int(min_distinct_asns)
@@ -618,6 +622,9 @@ class ArmigerDHTRSIEngine:
         authenticated_baseline: Optional[AuthenticatedConformalBaseline] = None,
         expected_parent_bundle_sha256: Optional[str] = None,
         expected_canary_suite_sha256: Optional[str] = None,
+        release_envelope: Optional[AcyclicReleaseEnvelope] = None,
+        trusted_evaluator_signers: Optional[Dict[str, str]] = None,
+        require_acyclic_envelope: Optional[bool] = None,
     ) -> Tuple[bool, str, Optional[CanaryRegressionReport]]:
         """Verify signed DHT update manifest, check ASN quorum, validate safe formats, and run 500-canary gate."""
         if self.mode == DHTRSIMode.OFF:
@@ -664,6 +671,50 @@ class ArmigerDHTRSIEngine:
         actual_sha = hashlib.sha256(bundle_bytes).hexdigest()
         if actual_sha.lower() != manifest.bundle_sha256.lower():
             return False, "bundle_sha256_digest_mismatch", None
+
+        # 2b. Enforce acyclic provenance envelope (disjoint contributors / evaluators / release signers)
+        eff_req_env = (
+            self.require_acyclic_envelope
+            if require_acyclic_envelope is None
+            else bool(require_acyclic_envelope)
+        )
+        if eff_req_env or release_envelope is not None:
+            if release_envelope is None:
+                return False, "missing_acyclic_release_envelope", None
+            if (
+                release_envelope.manifest.canonical_payload() != manifest.canonical_payload()
+                or dict(release_envelope.manifest.signatures) != dict(manifest.signatures)
+                or dict(release_envelope.manifest.pq_signatures) != dict(manifest.pq_signatures)
+            ):
+                return False, "release_envelope_manifest_mismatch", None
+            eff_parent_sha = (expected_parent_bundle_sha256 or self.current_bundle_sha256 or "").strip().lower()
+            if not eff_parent_sha:
+                return False, "release_envelope_missing_expected_parent_bundle_sha256", None
+            if release_envelope.parent_bundle_sha256.strip().lower() != eff_parent_sha:
+                return False, "release_envelope_parent_bundle_mismatch", None
+            eff_suite_sha = (expected_canary_suite_sha256 or self.canary_gate.suite_sha256()).strip().lower()
+            if release_envelope.canary_suite_sha256.strip().lower() != eff_suite_sha:
+                return False, "release_envelope_canary_suite_mismatch", None
+            eff_eval_signers = (
+                dict(trusted_evaluator_signers)
+                if trusted_evaluator_signers is not None
+                else dict(self.trusted_evaluator_signers)
+            )
+            env_ok, env_reason = AcyclicProvenanceVerifier.verify_envelope(
+                release_envelope,
+                trusted_release_signers=self.trusted_signers,
+                trusted_evaluator_signers=eff_eval_signers,
+                threshold_m=self.threshold_m,
+                min_evaluator_asns=max(self.min_distinct_asns, manifest.min_asn_quorum),
+                current_seq=self.current_seq,
+                bootstrap_checkpoint_seq=bootstrap_checkpoint_seq,
+                require_pq=require_pq_flag,
+                asn_verifier=asn_verifier,
+            )
+            if not env_ok:
+                return False, f"acyclic_provenance_failed:{env_reason}", None
+            if authenticated_baseline is None and release_envelope.authenticated_baseline is not None:
+                baseline_metrics = release_envelope.authenticated_baseline.to_metrics_dict()
 
         # 3. Verify K-of-N distinct-ASN Sybil quorum
         q_ok, q_reason, asns = SybilQuorumVerifier.verify_quorum(

@@ -1864,8 +1864,8 @@ class TestDHTSecurityAnd9HeadRemediation(unittest.TestCase):
         )
 
         # TelemetryAnonymizer draws fresh Laplace noise across repeated observations with equal size/duration
-        anon_fresh = rsi.TelemetryAnonymizer(blinding_salt=b"fresh_dp_salt_1234", dp_epsilon=0.5, max_releases=3)
-        draws = {anon_fresh.apply_differential_privacy(1024 * 1024 * 1024, 3600.0) for _ in range(3)}
+        anon_fresh = rsi.TelemetryAnonymizer(blinding_salt=b"fresh_dp_salt_1234", dp_epsilon=4.0, max_releases=10)
+        draws = {anon_fresh.apply_differential_privacy(1024 * 1024 * 1024, 3600.0) for _ in range(10)}
         self.assertGreater(len(draws), 1)
         with self.assertRaises(rsi.AnonymityViolationError) as ctx_dp_budget:
             anon_fresh.apply_differential_privacy(1024 * 1024 * 1024, 3600.0)

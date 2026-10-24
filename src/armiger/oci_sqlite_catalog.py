@@ -621,6 +621,7 @@ async def fetch_bundle_via_peer_wire(
     timeout: float = 10.0,
     max_metadata_bytes: int = 1048576,
     max_payload_bytes: int = 67108864,
+    max_total_seconds: Optional[float] = None,
 ) -> Dict[str, Any]:
     """Bootstrap a bundle from ONLY its 20-byte `infohash_20` over TCP Peer-Wire using
     BEP-10 + BEP-9 (`ut_metadata`) to fetch and authenticate `info_bytes`, followed by
@@ -629,7 +630,32 @@ async def fetch_bundle_via_peer_wire(
     from armiger.oci_vpn_guard import _bdecode_at, bdecode, bdecode_krpc
     if not isinstance(infohash_20, (bytes, bytearray)) or len(infohash_20) != 20:
         raise ValueError("infohash_20 must be 20 bytes")
-    reader, writer = await asyncio.wait_for(asyncio.open_connection(host, int(port)), timeout=timeout)
+    loop = asyncio.get_running_loop()
+    total_budget = float(max_total_seconds) if max_total_seconds is not None else max(float(timeout) * 4.0, 10.0)
+    total_deadline = loop.time() + total_budget
+    progress_deadline = loop.time() + float(timeout)
+
+    def _rem_timeout() -> float:
+        now = loop.time()
+        rem_total = total_deadline - now
+        if rem_total <= 0:
+            raise asyncio.TimeoutError("peer_wire_total_deadline_exceeded")
+        rem = progress_deadline - now
+        if rem <= 0:
+            raise asyncio.TimeoutError("peer_wire_no_progress_timeout")
+        return min(rem, rem_total)
+
+    async def _wait_io(coro):
+        try:
+            return await asyncio.wait_for(coro, timeout=_rem_timeout())
+        except asyncio.TimeoutError as exc:
+            if str(exc) in ("peer_wire_total_deadline_exceeded", "peer_wire_no_progress_timeout"):
+                raise
+            if loop.time() >= total_deadline:
+                raise asyncio.TimeoutError("peer_wire_total_deadline_exceeded") from exc
+            raise asyncio.TimeoutError("peer_wire_no_progress_timeout") from exc
+
+    reader, writer = await _wait_io(asyncio.open_connection(host, int(port)))
     try:
         hs = BT_PROTOCOL_HEADER + BT_RESERVED_BEP10 + bytes(infohash_20) + (b"-AM21CL-" + os.urandom(12))
         writer.write(hs)
@@ -637,23 +663,16 @@ async def fetch_bundle_via_peer_wire(
         writer.write(struct.pack("!IBB", 2 + len(ext_hs), BT_MSG_EXTENDED, BT_EXT_HANDSHAKE_ID) + ext_hs)
         await writer.drain()
 
-        reply_hs = await asyncio.wait_for(reader.readexactly(68), timeout=timeout)
+        reply_hs = await _wait_io(reader.readexactly(68))
         if reply_hs[:20] != BT_PROTOCOL_HEADER or reply_hs[28:48] != bytes(infohash_20):
             raise ValueError("peer_wire_handshake_mismatch")
         if (reply_hs[25] & 0x10) == 0:
             raise ValueError("peer_does_not_support_bep10_extensions")
 
-        loop = asyncio.get_running_loop()
         progress_deadline = loop.time() + float(timeout)
         non_progress_msgs = 0
         max_non_progress_msgs = 32
         handshake_seen = False
-
-        def _rem_timeout() -> float:
-            rem = progress_deadline - loop.time()
-            if rem <= 0:
-                raise asyncio.TimeoutError("peer_wire_no_progress_timeout")
-            return rem
 
         def _mark_progress() -> None:
             nonlocal progress_deadline, non_progress_msgs
@@ -674,14 +693,14 @@ async def fetch_bundle_via_peer_wire(
         peer_choking = True
 
         while total_meta_pieces is None or len(meta_pieces) < total_meta_pieces:
-            hdr = await asyncio.wait_for(reader.readexactly(4), timeout=_rem_timeout())
+            hdr = await _wait_io(reader.readexactly(4))
             (msg_len,) = struct.unpack("!I", hdr)
             if msg_len == 0:
                 _mark_non_progress()
                 continue
             if msg_len > 131072:
                 raise ValueError("oversized_peer_wire_message")
-            body = await asyncio.wait_for(reader.readexactly(msg_len), timeout=_rem_timeout())
+            body = await _wait_io(reader.readexactly(msg_len))
             msg_id = body[0]
             if msg_id == BT_MSG_UNCHOKE:
                 peer_choking = False
@@ -769,14 +788,14 @@ async def fetch_bundle_via_peer_wire(
                     await writer.drain()
                     request_sent = True
                 while True:
-                    hdr = await asyncio.wait_for(reader.readexactly(4), timeout=_rem_timeout())
+                    hdr = await _wait_io(reader.readexactly(4))
                     (msg_len,) = struct.unpack("!I", hdr)
                     if msg_len == 0:
                         _mark_non_progress()
                         continue
                     if msg_len > 9 + req_len or msg_len > 131072:
                         raise ValueError("oversized_peer_wire_piece_message")
-                    body = await asyncio.wait_for(reader.readexactly(msg_len), timeout=_rem_timeout())
+                    body = await _wait_io(reader.readexactly(msg_len))
                     msg_id = body[0]
                     if msg_id == BT_MSG_UNCHOKE:
                         peer_choking = False
