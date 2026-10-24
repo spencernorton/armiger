@@ -39,7 +39,7 @@ The dotted arrow closes the loop: a receiver can also contribute its own verifie
 - **[BEP 44: signed DHT records](https://www.bittorrent.org/beps/bep_0044.html).** Its mutable items let a publisher update a small record at a stable lookup address. Ed25519 signatures authenticate the record, and increasing sequence numbers distinguish newer announcements from older ones. This is the small “an update is available” record, rather than the model weights themselves.
 - **[BEP 46: finding the current torrent](https://www.bittorrent.org/beps/bep_0046.html).** It builds on BEP 44 by putting a torrent's infohash in that mutable record. Subscribers following the publisher's public key and optional salt can discover which torrent currently carries the content, then fetch that content separately.
 
-Armiger adds the learning-specific layer: contribution validation, aggregation, trusted signers, payload hashes and local regression checks. BEP 44 and BEP 46 do not decide whether a model change improves accuracy. The diagram labels this discovery layer; see the [implementation scope](#protocol-implementation-scope) below for the local test transport's limits.
+Armiger adds the learning-specific layer: contribution validation, aggregation, trusted signers, payload hashes and local regression checks. BEP 44 and BEP 46 do not decide whether a model change improves accuracy. The diagram labels this discovery layer; see **Protocol implementation scope** in the expandable technical reference below for the local test transport's limits.
 
 ### How improvements are evaluated
 

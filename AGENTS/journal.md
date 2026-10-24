@@ -1,3 +1,10 @@
+## 2026-10-24 — Verify the protocol reference presentation
+
+- **Branch:** codex/distributed-bep-reference
+- **What changed:** Use a textual reference to the expandable implementation note; GitHub does not automatically open its details block when following a fragment link to the hidden heading.
+- **Validation:** Fourteen local links/anchors and both primary specification links remain. JSON, code fences, whitespace and the diagram pass; the visible BEP section and the diagram's BEP 44/46 label render on GitHub.
+- **Deployment:** Documentation only; no runtime or model changes.
+
 ## 2026-10-24 — Explain BEP 44 and BEP 46
 
 - **Branch:** codex/distributed-bep-reference
