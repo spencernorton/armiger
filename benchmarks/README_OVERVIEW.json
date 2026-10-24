@@ -1,0 +1,147 @@
+{
+  "schema_version": 1,
+  "source_manifest": "benchmarks/CHARTS_MANIFEST.json",
+  "source_manifest_sha256": "bf92f21aa75b652f17bf1abe19ead098e10d45f57664086eec0007d593792a1c",
+  "renderer": "benchmarks/generate_readme_overview.py",
+  "renderer_sha256": "3d31e704527cf7ccd6c7ecf8bc5f0c1f57747c6091029618d344004b0468259e",
+  "image": "docs/assets/armiger_overview.png",
+  "image_sha256": "dc898bf044d49ff73e8635bf9728ae4d0a3b5519129074c378cb3508fffb90be",
+  "data": {
+    "model_version": "3.0.0",
+    "overall": {
+      "metric": "mean",
+      "n": 2835,
+      "scores": {
+        "Armiger Ultra (Fair Hybrid)": 94.85,
+        "MIMMO BERT (360M)": 72.24,
+        "Bitmagnet Built-In": 35.17
+      }
+    },
+    "categories": [
+      {
+        "label": "Movies",
+        "n": 695,
+        "scores": {
+          "Armiger Ultra (Fair Hybrid)": 94.24,
+          "MIMMO BERT (360M)": 78.85,
+          "Bitmagnet Built-In": 55.83
+        }
+      },
+      {
+        "label": "TV shows",
+        "n": 601,
+        "scores": {
+          "Armiger Ultra (Fair Hybrid)": 97.67,
+          "MIMMO BERT (360M)": 58.4,
+          "Bitmagnet Built-In": 28.62
+        }
+      },
+      {
+        "label": "Music",
+        "n": 140,
+        "scores": {
+          "Armiger Ultra (Fair Hybrid)": 92.14,
+          "MIMMO BERT (360M)": 77.86,
+          "Bitmagnet Built-In": 7.86
+        }
+      },
+      {
+        "label": "Audiobooks",
+        "n": 95,
+        "scores": {
+          "Armiger Ultra (Fair Hybrid)": 96.84,
+          "MIMMO BERT (360M)": 0.0,
+          "Bitmagnet Built-In": 9.47
+        }
+      },
+      {
+        "label": "eBooks",
+        "n": 25,
+        "scores": {
+          "Armiger Ultra (Fair Hybrid)": 88.0,
+          "MIMMO BERT (360M)": 80.0,
+          "Bitmagnet Built-In": 4.0
+        }
+      },
+      {
+        "label": "Comics",
+        "n": 99,
+        "scores": {
+          "Armiger Ultra (Fair Hybrid)": 88.89,
+          "MIMMO BERT (360M)": 0.0,
+          "Bitmagnet Built-In": 0.0
+        }
+      },
+      {
+        "label": "Courses",
+        "n": 33,
+        "scores": {
+          "Armiger Ultra (Fair Hybrid)": 90.91,
+          "MIMMO BERT (360M)": 0.0,
+          "Bitmagnet Built-In": 0.0
+        }
+      },
+      {
+        "label": "Games",
+        "n": 61,
+        "scores": {
+          "Armiger Ultra (Fair Hybrid)": 90.16,
+          "MIMMO BERT (360M)": 0.0,
+          "Bitmagnet Built-In": 0.0
+        }
+      },
+      {
+        "label": "Software",
+        "n": 32,
+        "scores": {
+          "Armiger Ultra (Fair Hybrid)": 84.38,
+          "MIMMO BERT (360M)": 59.38,
+          "Bitmagnet Built-In": 15.62
+        }
+      },
+      {
+        "label": "Adult content",
+        "n": 1044,
+        "scores": {
+          "Armiger Ultra (Fair Hybrid)": 95.79,
+          "MIMMO BERT (360M)": 95.5,
+          "Bitmagnet Built-In": 39.37
+        }
+      }
+    ],
+    "other_category_n": 10,
+    "title_matching": {
+      "metric": "mean",
+      "n": 1296,
+      "scores": {
+        "Armiger Ultra (Fair Hybrid)": 95.06,
+        "GuessIt": 84.03,
+        "RTN (rank-torrent-name)": 80.48
+      }
+    },
+    "audio_language": {
+      "metric": "mean",
+      "n": 545,
+      "scores": {
+        "Armiger Ultra (Fair Hybrid)": 96.7,
+        "GuessIt": 94.86,
+        "RTN (rank-torrent-name)": 93.76
+      }
+    },
+    "junk": {
+      "metric": "balanced",
+      "n": 977,
+      "scores": {
+        "Armiger Ultra (Fair Hybrid)": 99.23
+      }
+    },
+    "seeds": {
+      "metric": "auroc",
+      "n": 10278,
+      "scores": {
+        "Armiger Ultra (Fair Hybrid)": 96.83,
+        "Raw Seeder Count": 85.17
+      }
+    }
+  }
+}
