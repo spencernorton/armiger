@@ -1,3 +1,10 @@
+## 2026-10-24 — Restructure distributed updates guide around Problem, Solution and peer quorum promotion
+
+- **Branch:** docs/problem-solution-how-it-works
+- **What changed:** Restructure `docs/distributed-updates.md` to open with `## The Problem`, `## The Solution` and `## How it works`, replacing the single-file loop diagram with a multi-peer fan-in diagram showing peers contributing feedback on plugin hash files and weights, confirmation across a subset of independent nodes, and promotion to a new `seq` version via BEP 44/46. Explicitly note the federated/quorum-gated boundary on version promotion alongside the existing technical reference.
+- **Validation:** Verified all local/external links and anchors, JSON block syntax, Mermaid rendering on GitHub, and `git diff --check`.
+- **Follow-ups:** None; documentation only.
+
 ## 2026-10-24 — Refine distributed updates guide and technical reference
 
 - **Branch:** docs/distributed-updates-precision
