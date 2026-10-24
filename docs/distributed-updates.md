@@ -30,23 +30,39 @@ To prevent bad predictions or Sybil nodes from poisoning the fleet, candidate up
 
 ## How it works
 
-Opted-in peers contribute verified observations or weight deltas, cross-peer agreement forms a candidate plugin update, a quorum of independent peer nodes confirms the candidate against their own verified records and canary suite, and the confirmed update is promoted as a new sequence number (`seq`) via **BEP 44 / BEP 46** for other nodes to verify and adopt.
+Opted-in nodes (`Nodes A, B, C`) export verified observations or weight deltas, an aggregator synthesizes a candidate plugin update, independent reviewing nodes across distinct networks (`Nodes D, E, F`) test the candidate against their own verified records and 500-item canary baseline to issue signed attestations, threshold signers publish the new sequence version (`seq`) via **BEP 44 / BEP 46**, and receiving nodes (`Nodes G, H`) verify the quorum and run their own local canary check before adopting it.
 
 ```mermaid
 flowchart LR
-    p1["Peer A<br/>verified feedback"] --> cand["Candidate update<br/>hashes or weights"]
-    p2["Peer B<br/>verified feedback"] --> cand
-    p3["Peer C<br/>verified feedback"] --> cand
-    cand --> quorum["Subset of nodes<br/>confirm & sign"]
-    quorum -->|New seq via<br/>BEP 44 / 46| adopt["Other nodes<br/>test & adopt"]
+    subgraph s1["1. Contribute"]
+        a["Node A<br/>verified import"]
+        b["Node B<br/>verified import"]
+        c["Node C<br/>verified import"]
+    end
+    agg["2. Aggregate<br/>candidate hash or<br/>weight delta"]
+    subgraph s3["3. Peer-test & attest (distinct ASNs)"]
+        d["Node D<br/>ledger + canary"]
+        e["Node E<br/>ledger + canary"]
+        f["Node F<br/>ledger + canary"]
+    end
+    pub["4. Promote seq<br/>M-of-N signers<br/>BEP 44 / 46"]
+    subgraph s5["5. Verify & adopt"]
+        g["Node G<br/>canary or rollback"]
+        h["Node H<br/>canary or rollback"]
+    end
+    a & b & c --> agg
+    agg --> d & e & f
+    d & e & f --> pub
+    pub --> g & h
 ```
 
-Receiving an update never turns outbound sharing on; only nodes with `opt_in_sharing=True` export feedback into future rounds.
+Receiving an update never turns outbound sharing on (`Nodes G, H` can keep `opt_in_sharing=False`). For catalog-hash updates when default ledger confirmation is enabled, reviewing nodes (`Nodes D, E, F`) must also hold matching verified imports in their local ledgers to confirm those keys.
 
-1. **Peers contribute verified feedback.** Contributions happen only when an opted-in installation calls a feedback or export API—never automatically during classification. Local observations must pass physical verification (completed download, decodable media streams and catalog provenance) so unverified model predictions are never exported as ground truth.
-2. **Cross-peer evidence forms a candidate update.** Aggregators combine authenticated peer submissions: requiring multi-node agreement before adding a catalog hash, selecting calibration temperatures that lower prediction loss relative to unscaled scores, fitting small swarm-adapter weight deltas across contributed swarm outcomes, or taking a per-network trimmed mean of submitted weight deltas.
-3. **A subset of nodes confirms and promotes the version.** Independent reviewing peers across distinct networks (`>= 5` ASNs) compare the candidate against their own verified local records (rejecting contradicted or unconfirmed catalog keys and worse calibration loss) and stage it against their 500-item canary baseline. Once the peer quorum attests that the candidate passes and threshold signers co-sign the manifest, the update is published as the next monotonic `seq` version.
-4. **Other nodes discover, test and adopt (or roll back).** Subscribing nodes discover the new `seq` announcement via BEP 44/46, fetch the bundle, verify the threshold signatures and distinct-ASN peer attestations, and stage the update against their own pre-update canary baseline and verified local records. Passing updates are adopted (including newly discovered catalog hashes); any local regression rolls back to the exact prior state.
+1. **Nodes A, B, C contribute verified feedback.** Contributions happen only when an opted-in installation calls a feedback or export API—never automatically during classification. Local observations must pass physical verification (completed download, decodable media streams and catalog provenance) so unverified model predictions are never exported as ground truth.
+2. **Aggregator builds a candidate plugin update.** `RSIUpdateAggregator` or `ByzantineResilientAggregator` authenticates contributor submissions and combines cross-node evidence: requiring multi-node agreement before adding a catalog hash, selecting calibration temperatures that lower prediction loss relative to unscaled scores, fitting the 3 trainable `SwarmResidualAdapter` junk-path tensors across contributed swarm outcomes, or taking a per-ASN trimmed mean of submitted weight deltas.
+3. **Nodes D, E, F validate and attest across distinct ASNs.** Registered reviewing nodes in distinct networks (`min_distinct_asns=5`) run `attest_dht_update`: each checks the candidate against its own verified local ledger (rejecting contradicted or unconfirmed catalog keys and worse calibration loss), stages the candidate against its 500-item canary baseline, rolls back the test state, and—only if all checks pass—signs an ASN-bound `PeerAttestation` (`Ed25519` + `WOTS+-SHAKE256`).
+4. **M-of-N signers promote `seq` via BEP 44 / 46.** Trusted federation signers co-sign the `ThresholdDHTManifest` binding the payload `SHA-256` and monotonic version `seq`, and publish the compact version pointer via BEP 44 / BEP 46.
+5. **Nodes G, H verify the quorum, test locally and adopt (or roll back).** Receiving nodes run `stage_and_apply_dht_update`: they verify the `M-of-N` manifest signatures and the `K-of-N` distinct-ASN attestations from `Nodes D, E, F`, stage the update, and compare post-update 500-item canary metrics and their own verified local records against their pre-update baseline. Passing updates advance `seq` (adopting newly discovered catalog hashes and weight deltas); any regression restores the exact prior state fingerprint.
 
 Nodes are never ranked against one another to copy a single "winning" node's model; candidate plugin updates are synthesized from multi-node evidence and confirmed against each reviewing and receiving node's local baseline.
 

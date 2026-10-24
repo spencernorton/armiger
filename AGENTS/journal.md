@@ -1,3 +1,10 @@
+## 2026-10-24 — Show concrete contributing, attesting and receiving node roles in diagram
+
+- **Branch:** docs/peer-validation-diagram
+- **What changed:** Replace the single `Subset of nodes confirm & sign` box in `docs/distributed-updates.md` with explicit node groups matching the implementation: `Nodes A, B, C` (contribute verified imports/deltas) -> `Aggregator` (builds candidate hash or weight delta) -> `Nodes D, E, F` (peer-test against local ledger + 500-item canary across distinct ASNs and sign `PeerAttestation`s) -> `Promote seq` (`M-of-N` federation signers + BEP 44/46 announcement) -> `Nodes G, H` (verify quorum, run local canary check, adopt `seq` or roll back).
+- **Validation:** Verified all local/external links and anchors, JSON block syntax, Mermaid rendering, and `git diff --check`.
+- **Follow-ups:** None; documentation only.
+
 ## 2026-10-24 — Restructure distributed updates guide around Problem, Solution and peer quorum promotion
 
 - **Branch:** docs/problem-solution-how-it-works
