@@ -1,3 +1,12 @@
+## 2026-10-24 — Explain BEP 44 and BEP 46
+
+- **Branch:** codex/distributed-bep-reference
+- **What changed:** Name BEP 44/46 on the discovery link and explain signed mutable announcements, torrent-update pointers and separate bundle retrieval. Link both primary specifications and keep the four-stage learning loop intact.
+- **Evidence:** Compare the official BEPs with the mutable-item harness, custom UDP bundle messages, release pointer receipts and update bridge contract. Distinguish Armiger's application manifests and local test transport from full BEP 46 client interoperability.
+- **Validation:** Fifteen local links/anchors, both primary specification pages, JSON, code fences and patch whitespace pass. The revised Mermaid loop renders and has been visually inspected. Runtime and build verification remain required CI gates.
+- **Deployment:** Documentation only; no model, runtime or production setting changed.
+- **Status file updated:** Record the protocol clarification and publication evidence in the private project handoff.
+
 ## 2026-10-24 — Show the shared-learning feedback loop
 
 - **Branch:** codex/distributed-learning-loop
