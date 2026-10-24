@@ -1858,6 +1858,99 @@ class TestSession9IngressAndBEP46Hardening(unittest.TestCase):
                 with self.assertRaises(asyncio.TimeoutError):
                     await slow_rpc_node.rpc_call(("slow-referral.example.org", dht_port), b"ping", {}, timeout=0.04)
                 self.assertLess(time.monotonic() - t0_rpc, 0.20)
+
+                # (i) verify_dht_release uses BEP-42-valid sender_id and adapts to BEP-42 `ip` notifications from strict public DHT nodes
+                sim_public_ip = "198.51.100.77"
+                bep42_v_dict = {b"ih": strict_bundle.infohash_20, b"seq": 25, b"v": 2}
+                bep42_sig = sk.sign(bep44_signing_buffer(v=bep42_v_dict, seq=25, salt=salt))
+
+                class _StrictBEP42PublicNode(asyncio.DatagramProtocol):
+                    def connection_made(self, transport):
+                        self.transport = transport
+
+                    def datagram_received(self, data, addr):
+                        msg = bdecode_krpc(data)
+                        t_id = msg.get(b"t", b"00")
+                        a_dict = msg.get(b"a", {})
+                        q_name = msg.get(b"q", b"")
+                        q_nid = a_dict.get(b"id", b"")
+                        ip_compact = _sock_mod.inet_aton(sim_public_ip) + struct.pack("!H", addr[1])
+                        if not verify_bep42_node_id(sim_public_ip, q_nid, allow_local=False):
+                            self.transport.sendto(
+                                bencode({
+                                    b"t": t_id,
+                                    b"y": b"e",
+                                    b"e": [201, b"BEP-42 node ID mismatch"],
+                                    b"ip": ip_compact,
+                                }),
+                                addr,
+                            )
+                            return
+                        if q_name == b"get":
+                            self.transport.sendto(
+                                bencode({
+                                    b"t": t_id,
+                                    b"y": b"r",
+                                    b"ip": ip_compact,
+                                    b"r": {
+                                        b"id": generate_bep42_node_id("198.51.100.1"),
+                                        b"k": pub_32,
+                                        b"seq": 25,
+                                        b"sig": bep42_sig,
+                                        b"token": b"tk42",
+                                        b"v": bep42_v_dict,
+                                    },
+                                }),
+                                addr,
+                            )
+                        elif q_name == b"get_peers":
+                            self.transport.sendto(
+                                bencode({
+                                    b"t": t_id,
+                                    b"y": b"r",
+                                    b"ip": ip_compact,
+                                    b"r": {
+                                        b"id": generate_bep42_node_id("198.51.100.1"),
+                                        b"token": b"tk42",
+                                        b"values": [],
+                                    },
+                                }),
+                                addr,
+                            )
+
+                bep42_tr, _ = await loop.create_datagram_endpoint(_StrictBEP42PublicNode, local_addr=("127.0.0.1", 0))
+                bep42_port = bep42_tr.get_extra_info("sockname")[1]
+                try:
+                    bep42_res = await asyncio.to_thread(
+                        verify_dht_release,
+                        pubkey_hex=pub_32.hex(),
+                        salt=salt,
+                        dht_nodes=[("127.0.0.1", bep42_port)],
+                        webseed_urls=["https://example.org/seed"],
+                        expected_info_bytes=strict_bundle.info_bytes,
+                        webseed_fetcher=lambda u, max_b=0: strict_files["big.bin"],
+                        mode="webseed-fallback",
+                        min_seq=20,
+                        timeout=1.0,
+                    )
+                    self.assertTrue(bep42_res["verified"], msg=str(bep42_res))
+                    self.assertEqual(bep42_res["seq"], 25)
+                finally:
+                    bep42_tr.close()
+
+                # (j) verify_dht_release bounds bootstrap hostname resolution within `timeout`
+                t0_vd_dns = time.monotonic()
+                vd_dns_res = await asyncio.to_thread(
+                    verify_dht_release,
+                    pubkey_hex=pub_32.hex(),
+                    salt=salt,
+                    dht_nodes=[("stalled-bootstrap.example.org", 6881)],
+                    mode="strict-p2p",
+                    timeout=0.04,
+                    resolver_fn=lambda h: (time.sleep(0.25), "127.0.0.1")[1],
+                )
+                self.assertFalse(vd_dns_res["verified"])
+                self.assertLess(time.monotonic() - t0_vd_dns, 0.20)
             finally:
                 dht.close()
 

@@ -27,33 +27,36 @@ import struct
 import time
 import sys
 from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple
-import urllib.parse
 import urllib.request
 
-try:
-    from armiger.oci_dht_node import (
-        DEFAULT_DHT_BOOTSTRAP_NODES,
-        bdecode,
-        bdecode_krpc,
-        bencode,
-        compute_bep44_target,
-        fetch_bundle_via_bep19_webseed,
-        fetch_bundle_via_peer_wire,
-        parse_bootstrap_nodes,
-    )
-    from armiger.oci_vpn_guard import _verify_bep44, bep44_signing_buffer
-except ImportError:
-    from oci_dht_node import (  # type: ignore[no-redef]
-        DEFAULT_DHT_BOOTSTRAP_NODES,
-        bdecode,
-        bdecode_krpc,
-        bencode,
-        compute_bep44_target,
-        fetch_bundle_via_bep19_webseed,
-        fetch_bundle_via_peer_wire,
-        parse_bootstrap_nodes,
-    )
-    from oci_vpn_guard import _verify_bep44, bep44_signing_buffer  # type: ignore[no-redef]
+_THIS_DIR = Path(__file__).resolve().parent
+if str(_THIS_DIR) not in sys.path:
+    sys.path.insert(0, str(_THIS_DIR))
+
+import urllib.parse
+
+from armiger.oci_dht_node import (  # noqa: E402
+    bdecode,
+    bdecode_krpc,
+    bencode,
+    compute_bep44_target,
+    fetch_bundle_via_bep19_webseed,
+    fetch_bundle_via_peer_wire,
+)
+import os
+import queue
+import threading
+
+from armiger.oci_dht_seeder import (  # noqa: E402
+    DEFAULT_DHT_BOOTSTRAP_NODES,
+    _KRPC_DNS_SEMAPHORE,
+    parse_bootstrap_nodes,
+)
+from armiger.oci_vpn_guard import (  # noqa: E402
+    _verify_bep44,
+    bep44_signing_buffer,
+    generate_bep42_node_id,
+)
 
 MAX_TORRENT_META_BYTES = 1048576
 
@@ -121,19 +124,125 @@ def _extract_infohash_20(v_obj: Any) -> Tuple[bytes, Dict[str, Any]]:
     raise ValueError("Unable to extract 20-byte BitTorrent infohash from BEP-44 value")
 
 
+def _resolve_ipv4_with_deadline(
+    host: str,
+    deadline: float,
+    resolver_fn: Optional[Callable[[str], str]] = None,
+) -> str:
+    host_str = str(host).strip()
+    if resolver_fn is None:
+        try:
+            socket.inet_aton(host_str)
+            return host_str
+        except OSError:
+            pass
+    rem = deadline - time.monotonic()
+    if rem <= 0:
+        raise TimeoutError("krpc_dns_timeout")
+    if not _KRPC_DNS_SEMAPHORE.acquire(blocking=False):
+        raise TimeoutError("krpc_dns_pool_saturated")
+    eff_resolver = resolver_fn or socket.gethostbyname
+    res_q: "queue.Queue[Tuple[bool, Any]]" = queue.Queue(maxsize=1)
+
+    def _worker() -> None:
+        try:
+            res_q.put((True, str(eff_resolver(host_str))))
+        except Exception as exc:
+            res_q.put((False, exc))
+        finally:
+            _KRPC_DNS_SEMAPHORE.release()
+
+    try:
+        t = threading.Thread(target=_worker, daemon=True)
+        t.start()
+    except BaseException:
+        _KRPC_DNS_SEMAPHORE.release()
+        raise
+    try:
+        ok, payload = res_q.get(timeout=rem)
+    except queue.Empty as exc:
+        raise TimeoutError("krpc_dns_timeout") from exc
+    if not ok:
+        raise payload
+    return str(payload)
+
+
+def _extract_bep42_observed_ip(msg: Dict[bytes, Any]) -> Optional[str]:
+    raw_ip = msg.get(b"ip")
+    if not isinstance(raw_ip, (bytes, bytearray)):
+        r_sub = msg.get(b"r")
+        if isinstance(r_sub, dict):
+            raw_ip = r_sub.get(b"ip")
+    if isinstance(raw_ip, (bytes, bytearray)) and len(raw_ip) in (4, 6):
+        try:
+            return socket.inet_ntoa(bytes(raw_ip[:4]))
+        except OSError:
+            return None
+    return None
+
+
 def _udp_krpc_query(
     addr: Tuple[str, int],
     query_dict: Dict[bytes, Any],
     timeout: float = 2.0,
+    resolver_fn: Optional[Callable[[str], str]] = None,
+    sender_state: Optional[Dict[str, Any]] = None,
 ) -> Optional[Dict[bytes, Any]]:
-    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    sock.settimeout(timeout)
+    deadline = time.monotonic() + max(0.001, float(timeout))
     try:
-        sock.connect(addr)
+        resolved_ip = _resolve_ipv4_with_deadline(addr[0], deadline, resolver_fn=resolver_fn)
+    except Exception:
+        return None
+    rem = deadline - time.monotonic()
+    if rem <= 0:
+        return None
+    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    try:
+        sock.settimeout(rem)
+        sock.connect((resolved_ip, int(addr[1])))
+        eff_ip: Optional[str] = None
+        if sender_state is not None and isinstance(query_dict.get(b"a"), dict):
+            eff_ip = sender_state.get("public_ip") or str(sock.getsockname()[0])
+            id_map = sender_state.setdefault("id_by_ip", {})
+            if eff_ip not in id_map:
+                id_map[eff_ip] = generate_bep42_node_id(eff_ip)
+            query_dict[b"a"][b"id"] = id_map[eff_ip]
+            sender_state["last_sender_id"] = id_map[eff_ip]
+        rem = deadline - time.monotonic()
+        if rem <= 0:
+            return None
+        sock.settimeout(rem)
         sock.send(bencode(query_dict))
+        rem = deadline - time.monotonic()
+        if rem <= 0:
+            return None
+        sock.settimeout(rem)
         data = sock.recv(8192)
         msg = bdecode_krpc(data)
-        return msg if isinstance(msg, dict) else None
+        if not isinstance(msg, dict):
+            return None
+        if sender_state is not None and isinstance(query_dict.get(b"a"), dict):
+            obs_ip = _extract_bep42_observed_ip(msg)
+            if obs_ip:
+                sender_state["public_ip"] = obs_ip
+                id_map = sender_state.setdefault("id_by_ip", {})
+                if obs_ip not in id_map:
+                    id_map[obs_ip] = generate_bep42_node_id(obs_ip)
+                sender_state["last_sender_id"] = id_map[obs_ip]
+                if obs_ip != eff_ip and msg.get(b"y") == b"e":
+                    rem_retry = deadline - time.monotonic()
+                    if rem_retry > 0:
+                        query_dict[b"a"][b"id"] = id_map[obs_ip]
+                        sock.settimeout(rem_retry)
+                        sock.send(bencode(query_dict))
+                        rem_retry = deadline - time.monotonic()
+                        if rem_retry > 0:
+                            sock.settimeout(rem_retry)
+                            data2 = sock.recv(8192)
+                            msg2 = bdecode_krpc(data2)
+                            if isinstance(msg2, dict):
+                                return msg2
+        return msg
     except Exception:
         return None
     finally:
@@ -220,10 +329,7 @@ def _fetch_webseed_metadata(
             raise TimeoutError("webseed_metadata_total_deadline_exceeded")
         return min(float(timeout), rem)
 
-    try:
-        from armiger.oci_sqlite_catalog import _https_get_with_deadline
-    except ImportError:
-        from oci_sqlite_catalog import _https_get_with_deadline  # type: ignore[no-redef]
+    from armiger.oci_sqlite_catalog import _https_get_with_deadline
 
     for candidate_url in (f"{base}/{ih_hex}.torrent", f"{base}/bundle.torrent"):
         if time.monotonic() >= meta_deadline:
@@ -270,6 +376,8 @@ def verify_dht_release(
     timeout: float = 3.0,
     max_peers: int = 8,
     p2p_budget_sec: Optional[float] = None,
+    public_ip: Optional[str] = None,
+    resolver_fn: Optional[Callable[[str], str]] = None,
 ) -> Dict[str, Any]:
     """Execute end-to-end BEP-44/46 + BEP-9/10/19 verification and return a structured receipt."""
     if mode not in ("strict-p2p", "webseed-fallback"):
@@ -280,7 +388,14 @@ def verify_dht_release(
         raise ValueError("pubkey_hex must be 32-byte Ed25519 public key (64 hex chars)")
 
     target_20 = compute_bep44_target(pubkey_32, salt)
-    sender_id = hashlib.sha1(b"armiger-verifier-" + target_20).digest()
+    init_pub_ip = (public_ip or os.environ.get("ARMIGER_PUBLIC_IPV4", "")).strip() or None
+    init_ip_for_id = init_pub_ip or "127.0.0.1"
+    init_sender_id = generate_bep42_node_id(init_ip_for_id)
+    sender_state: Dict[str, Any] = {
+        "public_ip": init_pub_ip,
+        "id_by_ip": {init_ip_for_id: init_sender_id},
+        "last_sender_id": init_sender_id,
+    }
 
     best_record: Optional[Dict[bytes, Any]] = None
     best_seq = -1
@@ -298,21 +413,24 @@ def verify_dht_release(
         if addr in queried_get:
             continue
         queried_get.add(addr)
-        q_args: Dict[bytes, Any] = {b"id": sender_id, b"target": target_20}
+        q_args: Dict[bytes, Any] = {b"id": sender_state["last_sender_id"], b"target": target_20}
         if salt:
             q_args[b"salt"] = salt
         resp = _udp_krpc_query(
             addr,
             {b"t": b"vf01", b"y": b"q", b"q": b"get", b"a": q_args},
             timeout=timeout,
+            resolver_fn=resolver_fn,
+            sender_state=sender_state,
         )
         if not isinstance(resp, dict) or resp.get(b"y") != b"r":
             continue
         r_body = resp.get(b"r")
         if not isinstance(r_body, dict):
             continue
+        known_self_ids = set(sender_state["id_by_ip"].values())
         for ref_nid, ref_addr in _decode_compact_nodes_with_id(r_body.get(b"nodes"), None):
-            if ref_nid == sender_id:
+            if ref_nid in known_self_ids:
                 continue
             all_known_dht_nodes.append((ref_nid, ref_addr))
             if ref_addr not in queried_get:
@@ -397,9 +515,11 @@ def verify_dht_release(
                 b"t": b"gp01",
                 b"y": b"q",
                 b"q": b"get_peers",
-                b"a": {b"id": sender_id, b"info_hash": infohash_20},
+                b"a": {b"id": sender_state["last_sender_id"], b"info_hash": infohash_20},
             },
             timeout=timeout,
+            resolver_fn=resolver_fn,
+            sender_state=sender_state,
         )
         if not isinstance(gp_resp, dict) or gp_resp.get(b"y") != b"r":
             continue
@@ -412,8 +532,9 @@ def verify_dht_release(
                     candidate_peers.append(p)
                     if len(candidate_peers) >= eff_max_peers:
                         break
+        known_self_ids = set(sender_state["id_by_ip"].values())
         for ref_nid, ref_addr in _decode_compact_nodes_with_id(r_gp.get(b"nodes"), None):
-            if ref_nid == sender_id:
+            if ref_nid in known_self_ids:
                 continue
             if ref_addr not in queried_gp:
                 gp_frontier.append((_xor_distance(ref_nid, infohash_20), ref_addr))
