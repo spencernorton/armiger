@@ -9,7 +9,7 @@
   <a href="https://buy.stripe.com/8x26oH2U44f65TRe574wM04"><img alt="Donate via Stripe" src="https://img.shields.io/badge/donate-Stripe-635bff.svg?logo=stripe&amp;logoColor=white"></a>
 </p>
 
-Armiger helps Bitmagnet and Rats Search label torrents by type and language, using names and file lists. **Armiger Ultra** also adds title matching, audio-language checks and estimates of download availability. It runs on a CPU; no GPU or paid API is required.
+Armiger helps Bitmagnet and Rats Search label torrents by type and language, using names and file lists. **Armiger Ultra** also adds title matching, audio-language checks and estimates of download availability. This feeds upstream into Sonarr / Radarr stacks providing exceptionally high quality indexer results for release grabs and searches.  It runs on a CPU; no GPU or paid API is required (but GPUs have faster processing and lower latency).
 
 ![Armiger Ultra compared with MIMMO and Bitmagnet by content category, with title matching, audio language, junk checks and seed availability](docs/assets/armiger_overview.png)
 
