@@ -622,6 +622,7 @@ async def fetch_bundle_via_peer_wire(
     max_metadata_bytes: int = 1048576,
     max_payload_bytes: int = 67108864,
     max_total_seconds: Optional[float] = None,
+    pipeline_depth: int = 16,
 ) -> Dict[str, Any]:
     """Bootstrap a bundle from ONLY its 20-byte `infohash_20` over TCP Peer-Wire using
     BEP-10 + BEP-9 (`ut_metadata`) to fetch and authenticate `info_bytes`, followed by
@@ -631,7 +632,7 @@ async def fetch_bundle_via_peer_wire(
     if not isinstance(infohash_20, (bytes, bytearray)) or len(infohash_20) != 20:
         raise ValueError("infohash_20 must be 20 bytes")
     loop = asyncio.get_running_loop()
-    total_budget = float(max_total_seconds) if max_total_seconds is not None else max(float(timeout) * 4.0, 10.0)
+    total_budget = float(max_total_seconds) if max_total_seconds is not None else max(float(timeout) * 10.0, 30.0)
     total_deadline = loop.time() + total_budget
     progress_deadline = loop.time() + float(timeout)
 
@@ -775,52 +776,76 @@ async def fetch_bundle_via_peer_wire(
         writer.write(struct.pack("!IB", 1, BT_MSG_INTERESTED))
         await writer.drain()
 
-        payload_buf = bytearray()
         block_size = 16384
+        all_blocks: List[Tuple[int, int, int, int]] = []
+        g_off = 0
         for p_idx in range(num_pieces):
             p_total = min(piece_length, total_bytes - p_idx * piece_length)
             p_off = 0
             while p_off < p_total:
                 req_len = min(block_size, p_total - p_off)
-                request_sent = False
-                if not peer_choking:
-                    writer.write(struct.pack("!IBIII", 13, BT_MSG_REQUEST, p_idx, p_off, req_len))
-                    await writer.drain()
-                    request_sent = True
-                while True:
-                    hdr = await _wait_io(reader.readexactly(4))
-                    (msg_len,) = struct.unpack("!I", hdr)
-                    if msg_len == 0:
-                        _mark_non_progress()
-                        continue
-                    if msg_len > 9 + req_len or msg_len > 131072:
-                        raise ValueError("oversized_peer_wire_piece_message")
-                    body = await _wait_io(reader.readexactly(msg_len))
-                    msg_id = body[0]
-                    if msg_id == BT_MSG_UNCHOKE:
-                        peer_choking = False
-                        _mark_non_progress()
-                        if not request_sent:
-                            writer.write(struct.pack("!IBIII", 13, BT_MSG_REQUEST, p_idx, p_off, req_len))
-                            await writer.drain()
-                            request_sent = True
-                        continue
-                    if msg_id == BT_MSG_CHOKE:
-                        peer_choking = True
-                        request_sent = False
-                        _mark_non_progress()
-                        continue
-                    if not peer_choking and msg_id == BT_MSG_PIECE and len(body) >= 9:
-                        r_idx, r_begin = struct.unpack("!II", body[1:9])
-                        if r_idx == p_idx and r_begin == p_off:
-                            chunk = body[9:]
-                            if len(chunk) != req_len:
-                                raise ValueError("short_piece_block")
-                            payload_buf.extend(chunk)
-                            p_off += len(chunk)
-                            _mark_progress()
-                            break
-                    _mark_non_progress()
+                all_blocks.append((p_idx, p_off, req_len, g_off))
+                p_off += req_len
+                g_off += req_len
+
+        payload_buf = bytearray(total_bytes)
+        received_blocks: set[Tuple[int, int]] = set()
+        inflight: Dict[Tuple[int, int], Tuple[int, int]] = {}
+        next_block_idx = 0
+        max_window = max(1, min(int(pipeline_depth), 64))
+
+        async def _fill_pipeline() -> None:
+            nonlocal next_block_idx
+            if peer_choking:
+                return
+            wrote = False
+            while len(inflight) < max_window and next_block_idx < len(all_blocks):
+                b_pidx, b_poff, b_rlen, b_goff = all_blocks[next_block_idx]
+                next_block_idx += 1
+                if (b_pidx, b_poff) in received_blocks or (b_pidx, b_poff) in inflight:
+                    continue
+                inflight[(b_pidx, b_poff)] = (b_rlen, b_goff)
+                writer.write(struct.pack("!IBIII", 13, BT_MSG_REQUEST, b_pidx, b_poff, b_rlen))
+                wrote = True
+            if wrote:
+                await writer.drain()
+
+        await _fill_pipeline()
+        while len(received_blocks) < len(all_blocks):
+            hdr = await _wait_io(reader.readexactly(4))
+            (msg_len,) = struct.unpack("!I", hdr)
+            if msg_len == 0:
+                _mark_non_progress()
+                continue
+            if msg_len > 9 + block_size or msg_len > 131072:
+                raise ValueError("oversized_peer_wire_piece_message")
+            body = await _wait_io(reader.readexactly(msg_len))
+            msg_id = body[0]
+            if msg_id == BT_MSG_UNCHOKE:
+                peer_choking = False
+                _mark_non_progress()
+                await _fill_pipeline()
+                continue
+            if msg_id == BT_MSG_CHOKE:
+                peer_choking = True
+                inflight.clear()
+                next_block_idx = 0
+                _mark_non_progress()
+                continue
+            if not peer_choking and msg_id == BT_MSG_PIECE and len(body) >= 9:
+                r_idx, r_begin = struct.unpack("!II", body[1:9])
+                exp_entry = inflight.pop((r_idx, r_begin), None)
+                if exp_entry is not None:
+                    exp_len, exp_goff = exp_entry
+                    chunk = body[9:]
+                    if len(chunk) != exp_len:
+                        raise ValueError("short_piece_block")
+                    payload_buf[exp_goff : exp_goff + exp_len] = chunk
+                    received_blocks.add((r_idx, r_begin))
+                    _mark_progress()
+                    await _fill_pipeline()
+                    continue
+            _mark_non_progress()
 
         verified = verify_info_and_payload(info_bytes, bytes(payload_buf), expected_infohash_20=bytes(infohash_20))
         verified["info_bytes"] = info_bytes

@@ -710,6 +710,7 @@ class ArmigerDHTRSIEngine:
                 bootstrap_checkpoint_seq=bootstrap_checkpoint_seq,
                 require_pq=require_pq_flag,
                 asn_verifier=asn_verifier,
+                trusted_release_pq_signers=eff_pq_signers,
             )
             if not env_ok:
                 return False, f"acyclic_provenance_failed:{env_reason}", None

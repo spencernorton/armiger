@@ -387,7 +387,7 @@ def verify_dht_release(
                 gp_frontier.append((_xor_distance(ref_nid, infohash_20), ref_addr))
 
     # Attempt strict P2P BEP-9/10 ut_metadata + BEP-3 piece download first (bounded peer count + total budget)
-    eff_p2p_budget = float(p2p_budget_sec) if p2p_budget_sec is not None else max(float(timeout) * 3.0, 6.0)
+    eff_p2p_budget = float(p2p_budget_sec) if p2p_budget_sec is not None else max(float(timeout) * 10.0, 30.0)
     p2p_deadline = time.monotonic() + eff_p2p_budget
     p2p_errors: List[str] = []
     for peer_host, peer_port in candidate_peers[:eff_max_peers]:

@@ -1456,6 +1456,8 @@ class AcyclicProvenanceVerifier:
         require_pq: bool = True,
         asn_verifier: Optional[AuthoritativeASNVerifier] = None,
         enforce_evaluator_release_disjoint: bool = True,
+        trusted_release_pq_signers: Optional[Mapping[str, str]] = None,
+        trusted_evaluator_pq_signers: Optional[Mapping[str, str]] = None,
     ) -> Tuple[bool, str]:
         """Verify disjoint contributor / evaluator / release-quorum roles, evaluator ASN bindings, and DSSE PAE release signatures."""
         if not trusted_release_signers:
@@ -1502,11 +1504,26 @@ class AcyclicProvenanceVerifier:
         if envelope.authenticated_baseline.canary_suite_sha256 != envelope.canary_suite_sha256.strip().lower():
             return False, "baseline_canary_suite_mismatch"
 
-        norm_eval_trust = {
-            ThresholdDHTManifest._normalize_pubkey_id(k): v
-            for k, v in trusted_evaluator_signers.items()
-            if ThresholdDHTManifest._normalize_pubkey_id(k)
-        }
+        norm_eval_trust: Dict[str, str] = {}
+        eval_pq_by_ed: Dict[str, Set[str]] = {}
+        eval_id_by_pq: Dict[str, str] = {}
+        for k, v in trusted_evaluator_signers.items():
+            norm_k = ThresholdDHTManifest._normalize_pubkey_id(k)
+            if not norm_k:
+                continue
+            norm_eval_trust[norm_k] = v
+            raw_k = str(k).strip().lower()
+            if ":" in raw_k:
+                _, pq_part = raw_k.split(":", 1)
+                norm_pq_part = ThresholdDHTManifest._normalize_pubkey_id(pq_part)
+                if len(norm_pq_part) == 64:
+                    eval_pq_by_ed.setdefault(norm_k, set()).add(norm_pq_part)
+                    eval_id_by_pq[norm_pq_part] = v
+        if trusted_evaluator_pq_signers:
+            for pq_k, pq_v in trusted_evaluator_pq_signers.items():
+                norm_pq_k = ThresholdDHTManifest._normalize_pubkey_id(pq_k)
+                if len(norm_pq_k) == 64:
+                    eval_id_by_pq[norm_pq_k] = str(pq_v)
         if not norm_eval_trust:
             return False, "empty_trusted_evaluator_signers"
 
@@ -1577,8 +1594,26 @@ class AcyclicProvenanceVerifier:
                 if not att.pq_pubkey_hex or not att.pq_signature_hex:
                     return False, "missing_evaluator_pq_signature"
                 norm_eval_pq = ThresholdDHTManifest._normalize_pubkey_id(att.pq_pubkey_hex)
-                bound_wots = WOTSPlusSHAKE256._ED25519_TO_WOTS_PUBS.get(norm_pk, set())
-                if norm_eval_pq not in bound_wots:
+                bound_wots = set(WOTSPlusSHAKE256._ED25519_TO_WOTS_PUBS.get(norm_pk, set()))
+                bound_wots.update(eval_pq_by_ed.get(norm_pk, set()))
+                pinned_eval_pq = (
+                    eff_asn_verifier.pinned_pubkey_pq_root.get(norm_pk)
+                    or AuthoritativeASNVerifier._GLOBAL_PINNED_PUBKEY_PQ_ROOT.get(norm_pk)
+                    or WOTSPlusSHAKE256.get_root_wots_pub(norm_pk)
+                )
+                if pinned_eval_pq:
+                    bound_wots.add(ThresholdDHTManifest._normalize_pubkey_id(pinned_eval_pq))
+                meta_eval = WOTSPlusSHAKE256.extract_signature_metadata(norm_eval_pq, att.pq_signature_hex.strip())
+                eval_root_pq = str(meta_eval.get("root_pq_pub_hex", "")).lower() if meta_eval else ""
+                eval_leaf_pq = str(meta_eval.get("leaf_pub_hex", "")).lower() if meta_eval else ""
+                pq_bound_ok = (
+                    norm_eval_pq in bound_wots
+                    or (eval_root_pq and eval_root_pq in bound_wots)
+                    or (eval_leaf_pq and eval_leaf_pq in bound_wots)
+                    or eval_id_by_pq.get(norm_eval_pq) == eval_id
+                    or (eval_root_pq and eval_id_by_pq.get(eval_root_pq) == eval_id)
+                )
+                if not pq_bound_ok:
                     return False, "untrusted_or_unbound_evaluator_pq_pubkey"
                 try:
                     if not WOTSPlusSHAKE256.verify(
@@ -1615,10 +1650,28 @@ class AcyclicProvenanceVerifier:
             return False, f"insufficient_evaluator_asns:{len(verified_eval_asns)}<{min_evaluator_asns}"
 
         eff_pq_signers: Dict[str, str] = {}
+        if trusted_release_pq_signers:
+            for pq_k, pq_id in trusted_release_pq_signers.items():
+                norm_pq_k = ThresholdDHTManifest._normalize_pubkey_id(pq_k)
+                if len(norm_pq_k) == 64:
+                    eff_pq_signers[norm_pq_k] = str(pq_id)
         norm_rel_trust: Dict[str, str] = {}
         for ed_pk_hex, identity in trusted_release_signers.items():
             norm_ed = ThresholdDHTManifest._normalize_pubkey_id(ed_pk_hex)
             norm_rel_trust[norm_ed] = identity
+            raw_ed_str = str(ed_pk_hex).strip().lower()
+            if ":" in raw_ed_str:
+                _, pq_part = raw_ed_str.split(":", 1)
+                norm_pq_part = ThresholdDHTManifest._normalize_pubkey_id(pq_part)
+                if len(norm_pq_part) == 64:
+                    eff_pq_signers[norm_pq_part] = identity
+            pinned_rel_pq = (
+                eff_asn_verifier.pinned_pubkey_pq_root.get(norm_ed)
+                or AuthoritativeASNVerifier._GLOBAL_PINNED_PUBKEY_PQ_ROOT.get(norm_ed)
+                or WOTSPlusSHAKE256.get_root_wots_pub(norm_ed)
+            )
+            if pinned_rel_pq and len(ThresholdDHTManifest._normalize_pubkey_id(pinned_rel_pq)) == 64:
+                eff_pq_signers[ThresholdDHTManifest._normalize_pubkey_id(pinned_rel_pq)] = identity
             for wots_pk_hex in WOTSPlusSHAKE256._ED25519_TO_WOTS_PUBS.get(norm_ed, ()):
                 eff_pq_signers[wots_pk_hex] = identity
 
@@ -1681,9 +1734,11 @@ class AcyclicProvenanceVerifier:
             valid_env_pq_ids: Set[str] = set()
             for raw_pq_pk, raw_pq_sig in envelope.envelope_pq_signatures.items():
                 norm_pq = ThresholdDHTManifest._normalize_pubkey_id(raw_pq_pk)
-                if norm_pq not in eff_pq_signers:
+                meta_env_pq = WOTSPlusSHAKE256.extract_signature_metadata(norm_pq, raw_pq_sig.strip())
+                root_env_pq = str(meta_env_pq.get("root_pq_pub_hex", "")).lower() if meta_env_pq else ""
+                pq_id = eff_pq_signers.get(norm_pq) or (eff_pq_signers.get(root_env_pq) if root_env_pq else None)
+                if pq_id is None:
                     continue
-                pq_id = eff_pq_signers[norm_pq]
                 if pq_id not in valid_env_rel_ids or pq_id in valid_env_pq_ids:
                     continue
                 try:

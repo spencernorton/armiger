@@ -861,6 +861,38 @@ class TestSession9IngressAndBEP46Hardening(unittest.TestCase):
                 self.assertEqual(reason_good_env, "update_staged_and_verified")
                 self.assertIsNotNone(report_good)
 
+                # 6d. Fresh receiving process without process-local WOTSPlusSHAKE256._ED25519_TO_WOTS_PUBS registry
+                #     succeeds using explicit pinned PQ trust from asn_verifier / trusted_release_pq_signers
+                saved_ed_to_wots = {k: set(v) for k, v in WOTSPlusSHAKE256._ED25519_TO_WOTS_PUBS.items()}
+                saved_root_by_ed = dict(WOTSPlusSHAKE256._WOTS_TO_ED25519_PUB)
+                try:
+                    WOTSPlusSHAKE256._ED25519_TO_WOTS_PUBS.clear()
+                    WOTSPlusSHAKE256._WOTS_TO_ED25519_PUB.clear()
+                    rel_pq_trust = {
+                        r_wots_pub: f"release-signer-{idx}"
+                        for idx, (_, _, _, r_wots_pub) in enumerate(rel_signers)
+                    }
+                    eval_pq_trust = {
+                        e_wots_pub: f"evaluator-{idx}"
+                        for idx, (_, _, _, e_wots_pub) in enumerate(eval_signers)
+                    }
+                    ok_fresh, reason_fresh = AcyclicProvenanceVerifier.verify_envelope(
+                        envelope,
+                        trusted_release_signers=trusted_rel,
+                        trusted_evaluator_signers=trusted_eval,
+                        trusted_release_pq_signers=rel_pq_trust,
+                        trusted_evaluator_pq_signers=eval_pq_trust,
+                        threshold_m=2,
+                        min_evaluator_asns=3,
+                        current_seq=0,
+                        bootstrap_checkpoint_seq=1000,
+                        asn_verifier=asn_verifier,
+                    )
+                    self.assertTrue(ok_fresh, msg=reason_fresh)
+                finally:
+                    WOTSPlusSHAKE256._ED25519_TO_WOTS_PUBS.update(saved_ed_to_wots)
+                    WOTSPlusSHAKE256._WOTS_TO_ED25519_PUB.update(saved_root_by_ed)
+
                 # 7. Empty or failing benchmark attestation metrics must be rejected by verify_envelope
                 empty_pred = AcyclicProvenanceVerifier.sign_benchmark_attestation(
                     peer_id="eval-0",
@@ -1149,7 +1181,13 @@ class TestSession9IngressAndBEP46Hardening(unittest.TestCase):
                 st_srv = await asyncio.start_server(_strict_bep3_peer, "127.0.0.1", 0)
                 st_port = st_srv.sockets[0].getsockname()[1]
                 try:
-                    st_res = await fetch_bundle_via_peer_wire("127.0.0.1", st_port, strict_bundle.infohash_20, timeout=3.0)
+                    st_res = await fetch_bundle_via_peer_wire(
+                        "127.0.0.1",
+                        st_port,
+                        strict_bundle.infohash_20,
+                        timeout=3.0,
+                        pipeline_depth=8,
+                    )
                     self.assertEqual(st_res["files"], strict_files)
                 finally:
                     st_srv.close()
