@@ -29,9 +29,6 @@ import sys
 from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple
 import urllib.request
 
-_THIS_DIR = Path(__file__).resolve().parent
-if str(_THIS_DIR) not in sys.path:
-    sys.path.insert(0, str(_THIS_DIR))
 
 import urllib.parse
 

@@ -250,6 +250,13 @@ class GatedBEP44UDPNode:
         if self.transport is not None:
             self.transport.close()
             self.transport = None
+        for eph_tr in list(getattr(self, "_ephemeral_transports", ())):
+            try:
+                eph_tr.close()
+            except Exception:
+                pass
+        if hasattr(self, "_ephemeral_transports"):
+            self._ephemeral_transports.clear()
         for fut in list(self._pending_rpcs.values()):
             if not fut.done():
                 fut.cancel()
@@ -376,6 +383,9 @@ class GatedBEP44UDPNode:
                 _KRPC_DNS_SEMAPHORE.release()
                 raise
             resolved_ip = await asyncio.wait_for(dns_fut, timeout=_rem_rpc_timeout())
+            if not self.vpn_guard.require_for_packet():
+                self.close()
+                raise RuntimeError("VPN egress unverified; blocking outbound DHT RPC")
         target_addr = (resolved_ip, port_int)
 
         if self.transport is not None and len(self._pending_rpcs) < 128:
@@ -383,8 +393,14 @@ class GatedBEP44UDPNode:
             fut: asyncio.Future[bytes] = loop.create_future()
             self._pending_rpcs[key] = fut
             try:
+                if not self.vpn_guard.require_for_packet() or self.transport is None:
+                    self.close()
+                    raise RuntimeError("VPN egress unverified; blocking outbound DHT RPC")
                 self.transport.sendto(bencode(req), target_addr)
                 raw = await asyncio.wait_for(fut, timeout=_rem_rpc_timeout())
+                if not self.vpn_guard.require_for_packet():
+                    self.close()
+                    raise RuntimeError("VPN egress unverified; blocking outbound DHT RPC")
                 resp = bdecode_krpc(raw)
                 if not isinstance(resp, dict):
                     raise RuntimeError("Invalid non-dict KRPC response")
@@ -395,6 +411,9 @@ class GatedBEP44UDPNode:
             finally:
                 self._pending_rpcs.pop(key, None)
 
+        if not self.vpn_guard.require_for_packet():
+            self.close()
+            raise RuntimeError("VPN egress unverified; blocking outbound DHT RPC")
         fut_eph: asyncio.Future[bytes] = loop.create_future()
 
         class _ClientProto(asyncio.DatagramProtocol):
@@ -406,13 +425,26 @@ class GatedBEP44UDPNode:
                 if not fut_eph.done():
                     fut_eph.set_exception(exc)
 
+            def connection_lost(self, exc: Optional[Exception]) -> None:
+                if not fut_eph.done():
+                    fut_eph.set_exception(exc or RuntimeError("ephemeral_transport_closed"))
+
         transport, _ = await asyncio.wait_for(
             loop.create_datagram_endpoint(_ClientProto, remote_addr=target_addr),
             timeout=_rem_rpc_timeout(),
         )
+        if not hasattr(self, "_ephemeral_transports"):
+            self._ephemeral_transports: Set[Any] = set()
+        self._ephemeral_transports.add(transport)
         try:
+            if not self.vpn_guard.require_for_packet():
+                self.close()
+                raise RuntimeError("VPN egress unverified; blocking outbound DHT RPC")
             transport.sendto(bencode(req))
             raw = await asyncio.wait_for(fut_eph, timeout=_rem_rpc_timeout())
+            if not self.vpn_guard.require_for_packet():
+                self.close()
+                raise RuntimeError("VPN egress unverified; blocking outbound DHT RPC")
             resp = bdecode_krpc(raw)
             if not isinstance(resp, dict):
                 raise RuntimeError("Invalid non-dict KRPC response")
@@ -421,6 +453,7 @@ class GatedBEP44UDPNode:
                 self.add_routing_node(r_dict[b"id"], resolved_ip, port_int)
             return resp
         finally:
+            self._ephemeral_transports.discard(transport)
             transport.close()
 
     async def iterative_find_closest(

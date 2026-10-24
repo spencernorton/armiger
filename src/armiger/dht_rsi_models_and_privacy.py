@@ -407,6 +407,7 @@ class CatalogConsensusResult:
     agreement_ratio: float = 0.0
     manifest: Optional[ThresholdDHTManifest] = None
     signed_bundle_bytes: Optional[bytes] = None
+    torrent_metainfo_bytes: Optional[bytes] = None
 
     @property
     def aggregated_deltas(self) -> Dict[str, float]:
@@ -443,6 +444,7 @@ class ContinuousAggregationResult:
     trim_fraction: float
     manifest: Optional[ThresholdDHTManifest] = None
     signed_bundle_bytes: Optional[bytes] = None
+    torrent_metainfo_bytes: Optional[bytes] = None
 
 
 @dataclasses.dataclass(frozen=True)
@@ -1475,6 +1477,7 @@ class AnonymityGuard:
             if "n_bucket" not in parsed_obj or int(parsed_obj["n_bucket"]) < self.min_k_samples:
                 self.blocked_violations_count += 1
                 raise AnonymityViolationError("weight_delta_missing_k_anonymous_n_bucket")
+            q_all: List[int] = []
             for arr_key in ("delta_w_q8", "delta_b_q8"):
                 if arr_key in parsed_obj:
                     arr = parsed_obj[arr_key]
@@ -1485,6 +1488,13 @@ class AnonymityGuard:
                         if isinstance(q, bool) or not isinstance(q, int) or q < -128 or q > 127:
                             self.blocked_violations_count += 1
                             raise AnonymityViolationError(f"out_of_range_int8_in_{arr_key}:{q!r}")
+                        q_all.append(int(q))
+            sc_val = float(parsed_obj["scale"])
+            reconstructed_l2 = math.sqrt(sum((q_v * sc_val) ** 2 for q_v in q_all))
+            max_wire_l2 = max(self.clip_norm * (1.15 + math.sqrt(max(1, len(q_all))) * 0.05), self.clip_norm + 0.5)
+            if not math.isfinite(reconstructed_l2) or reconstructed_l2 > max_wire_l2:
+                self.blocked_violations_count += 1
+                raise AnonymityViolationError(f"wire_payload_l2_norm_exceeds_clip_bound:{reconstructed_l2:.4f}>{max_wire_l2:.4f}")
 
         if not (has_weight_delta or has_reliability_bins or has_records):
             self.blocked_violations_count += 1
@@ -1633,7 +1643,25 @@ class AuthenticatedConformalBaseline:
     signer_pubkey_hex: str = ""
     signature_hex: str = ""
 
+    @staticmethod
+    def _validate_finite_metric(name: str, val: Any, low: float, high: float) -> float:
+        if isinstance(val, bool) or not isinstance(val, (int, float)) or not math.isfinite(float(val)):
+            raise ValueError(f"invalid_baseline_{name}:{val}")
+        fval = float(val)
+        if not (low <= fval <= high):
+            raise ValueError(f"invalid_baseline_{name}:{val}")
+        return fval
+
     def canonical_payload_bytes(self) -> bytes:
+        for m_name, m_val in (
+            ("accuracy", self.accuracy),
+            ("ece", self.ece),
+            ("macro_f1", self.macro_f1),
+            ("mondrian_coverage", self.mondrian_coverage),
+            ("max_false_accept_rate", self.max_false_accept_rate),
+        ):
+            if isinstance(m_val, bool) or not isinstance(m_val, (int, float)) or not math.isfinite(float(m_val)):
+                raise ValueError(f"invalid_baseline_{m_name}:{m_val}")
         doc = {
             "accuracy": round(float(self.accuracy), 6),
             "canary_suite_sha256": str(self.canary_suite_sha256).strip().lower(),
@@ -1643,7 +1671,7 @@ class AuthenticatedConformalBaseline:
             "mondrian_coverage": round(float(self.mondrian_coverage), 6),
             "parent_bundle_sha256": str(self.parent_bundle_sha256).strip().lower(),
         }
-        return json.dumps(doc, sort_keys=True, separators=(",", ":")).encode("utf-8")
+        return json.dumps(doc, sort_keys=True, separators=(",", ":"), allow_nan=False).encode("utf-8")
 
     def pae_bytes(self) -> bytes:
         return dsse_pae(DSSE_TYPE_BASELINE_V1, self.canonical_payload_bytes())
@@ -1674,11 +1702,11 @@ class AuthenticatedConformalBaseline:
         unsigned = cls(
             parent_bundle_sha256=parent_bundle_sha256.strip().lower(),
             canary_suite_sha256=canary_suite_sha256.strip().lower(),
-            accuracy=float(accuracy),
-            ece=float(ece),
-            macro_f1=float(macro_f1),
-            mondrian_coverage=float(mondrian_coverage),
-            max_false_accept_rate=float(max_false_accept_rate),
+            accuracy=cls._validate_finite_metric("accuracy", accuracy, 0.50, 1.0),
+            ece=cls._validate_finite_metric("ece", ece, 0.0, 0.50),
+            macro_f1=cls._validate_finite_metric("macro_f1", macro_f1, 0.50, 1.0),
+            mondrian_coverage=cls._validate_finite_metric("mondrian_coverage", mondrian_coverage, 0.50, 1.0),
+            max_false_accept_rate=cls._validate_finite_metric("max_false_accept_rate", max_false_accept_rate, 0.0, 0.50),
         )
         sig = ed25519_priv.sign(unsigned.pae_bytes()).hex()
         pub = ed25519_priv.public_key().public_bytes(Encoding.Raw, PublicFormat.Raw).hex()
@@ -1692,12 +1720,17 @@ class AuthenticatedConformalBaseline:
             norm_trusted = {ThresholdDHTManifest._normalize_pubkey_id(k): v for k, v in trusted_signers.items()}
             if norm_pk not in norm_trusted:
                 return False, "untrusted_baseline_signer"
-        if not (0.50 <= float(self.accuracy) <= 1.0):
-            return False, f"invalid_baseline_accuracy:{self.accuracy}"
-        if not (0.0 <= float(self.ece) <= 0.50):
-            return False, f"invalid_baseline_ece:{self.ece}"
-        if not (0.50 <= float(self.macro_f1) <= 1.0):
-            return False, f"invalid_baseline_macro_f1:{self.macro_f1}"
+        for m_name, m_val, low, high in (
+            ("accuracy", self.accuracy, 0.50, 1.0),
+            ("ece", self.ece, 0.0, 0.50),
+            ("macro_f1", self.macro_f1, 0.50, 1.0),
+            ("mondrian_coverage", self.mondrian_coverage, 0.50, 1.0),
+            ("max_false_accept_rate", self.max_false_accept_rate, 0.0, 0.50),
+        ):
+            try:
+                self._validate_finite_metric(m_name, m_val, low, high)
+            except ValueError as exc:
+                return False, str(exc)
         try:
             vk = ed25519.Ed25519PublicKey.from_public_bytes(bytes.fromhex(norm_pk))
             vk.verify(bytes.fromhex(self.signature_hex.strip()), self.pae_bytes())

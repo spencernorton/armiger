@@ -2024,6 +2024,81 @@ class TestSession9IngressAndBEP46Hardening(unittest.TestCase):
                         self.assertFalse(verify_bep42_node_id(spoofed_ip, q_nid, allow_local=False))
                 finally:
                     spf_tr.close()
+
+                # (l) AuthenticatedConformalBaseline rejects non-finite (NaN / inf) mondrian_coverage and max_false_accept_rate
+                with self.assertRaisesRegex(ValueError, "invalid_baseline_mondrian_coverage"):
+                    AuthenticatedConformalBaseline.create_signed(
+                        parent_bundle_sha256="a" * 64,
+                        canary_suite_sha256="b" * 64,
+                        accuracy=0.96,
+                        ece=0.02,
+                        macro_f1=0.95,
+                        mondrian_coverage=float("nan"),
+                        ed25519_priv=sk,
+                    )
+                nan_baseline = AuthenticatedConformalBaseline(
+                    parent_bundle_sha256="a" * 64,
+                    canary_suite_sha256="b" * 64,
+                    accuracy=0.96,
+                    ece=0.02,
+                    macro_f1=0.95,
+                    mondrian_coverage=float("nan"),
+                    max_false_accept_rate=0.0,
+                    signer_pubkey_hex=pub_32.hex(),
+                    signature_hex="00" * 64,
+                )
+                self.assertEqual(nan_baseline.verify_signature()[0], False)
+                self.assertIn("invalid_baseline_mondrian_coverage", nan_baseline.verify_signature()[1])
+                inf_far_baseline = dataclasses.replace(
+                    nan_baseline,
+                    mondrian_coverage=0.90,
+                    max_false_accept_rate=float("inf"),
+                )
+                self.assertEqual(inf_far_baseline.verify_signature()[0], False)
+                self.assertIn("invalid_baseline_max_false_accept_rate", inf_far_baseline.verify_signature()[1])
+
+                # (m) Dropping VPN during asynchronous DNS resolution in rpc_call aborts before sending any datagram
+                packets_received = 0
+
+                class _ZeroRecvProto(asyncio.DatagramProtocol):
+                    def datagram_received(self, data, addr):
+                        nonlocal packets_received
+                        packets_received += 1
+
+                zr_tr, _ = await loop.create_datagram_endpoint(_ZeroRecvProto, local_addr=("127.0.0.1", 0))
+                zr_port = zr_tr.get_extra_info("sockname")[1]
+                try:
+                    class _DroppingVPN:
+                        def __init__(self):
+                            self.up = True
+                            self.cbs = []
+                        def register_on_drop(self, cb):
+                            self.cbs.append(cb)
+                        def require_for_packet(self):
+                            return self.up
+                        def assert_egress_or_raise(self):
+                            if not self.up:
+                                raise RuntimeError("VPN down")
+                        def drop_now(self):
+                            self.up = False
+                            for cb in list(self.cbs):
+                                cb(None)
+
+                    dvpn = _DroppingVPN()
+                    dnode = GatedBEP44UDPNode(dvpn, anonymity_guard=AnonymityGuard(True), host="127.0.0.1", port=0)
+                    await dnode.start()
+
+                    def _drop_during_dns(h: str) -> str:
+                        dvpn.drop_now()
+                        return "127.0.0.1"
+
+                    dnode._resolver_fn = _drop_during_dns  # type: ignore[attr-defined]
+                    with self.assertRaisesRegex(RuntimeError, "VPN egress unverified"):
+                        await dnode.rpc_call(("drop-mid-dns.example.org", zr_port), b"ping", {}, timeout=1.0)
+                    await asyncio.sleep(0.02)
+                    self.assertEqual(packets_received, 0)
+                finally:
+                    zr_tr.close()
             finally:
                 dht.close()
 
