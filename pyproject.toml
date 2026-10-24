@@ -10,7 +10,7 @@ readme = "README.md"
 license = {text = "Apache-2.0"}
 requires-python = ">=3.10"
 authors = [
-  {name = "Spencer Norton", email = "279589816+gekleos@users.noreply.github.com"}
+  {name = "Spencer Norton", email = "12041021+NorviTechGH@users.noreply.github.com"}
 ]
 keywords = ["onnx", "pytorch", "classification", "metadata", "bittorrent", "dht", "conformal-prediction", "safety"]
 classifiers = [

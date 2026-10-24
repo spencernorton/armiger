@@ -116,7 +116,11 @@ Concrete differences between the BEP specifications, the update bridge and the l
 - **Local UDP wire harness ([`tests/bep44_udp_wire_harness.py`](../tests/bep44_udp_wire_harness.py)):** Implements BEP 44 mutable `get`/`put` over localhost UDP (`target = SHA-1(k || salt)`, canonical signing buffer `[4:salt<len>:<salt>]3:seqi<seq>e1:v<len>:<v>`, 1000-byte limit on `v`, monotonic `seq` error `302`, and `cas` mismatch error `301`). However, it stores a UTF-8 JSON pointer (`{"ih": ..., "merkle_root": ..., "seq": ..., "sha256": ..., "shard_id": ...}`) in `v` instead of a BEP 46 bencoded dictionary `{"ih": <20-byte binary torrent infohash>}`, transfers 4 KiB payload slices via custom `put_bundle`/`get_bundle` UDP RPCs instead of BitTorrent peer wire protocol, omits BEP 44 `get` write tokens (`token`), and returns error `301` (rather than BEP 44's `206`) on invalid Ed25519 signatures.
 - **Release receipt vs. runtime update bundles:** [`signed_dht_manifest_seq3006.json`](../benchmarks/receipts/dht_seq3006/signed_dht_manifest_seq3006.json) binds the v3.0.0 release (`seq=3006`, `quorum_attestations=0`) under a single offline Ed25519 authority while storing its Height-10 `XMSS-SHAKE256` signature in [`full_model_release_pointer_v3_gold_mit3_seq3006.json`](../benchmarks/receipts/dht_seq3006/full_model_release_pointer_v3_gold_mit3_seq3006.json). By contrast, `ArmigerUltraPipeline.stage_and_apply_dht_update` requires an M-of-N `ThresholdDHTManifest` (`Ed25519` + `WOTS+-SHAKE256`) plus K-of-N distinct-ASN `PeerAttestation`s, and `ArmigerDHTUpdater.verify_bundle` requires `quorum_attestations >= min_quorum` and an inline `pq_signature_hex` or `xmss_signature_hex`.
 
-Local harness results verify wire serialization, signature checking and chunk reassembly; they do not establish interoperability with arbitrary Mainline DHT or BEP 46 BitTorrent clients.
+Local harness results verify wire serialization, signature checking and chunk reassembly; for end-to-end BEP 9 / 10 / 19 / 42 / 44 / 46 verification against live or local DHT and BitTorrent peer-wire seeders, use `armiger.verify_dht` and the `oci_*` modules:
+
+- **BEP 42 / 44 / 46 DHT & BitTorrent peer-wire modules ([`oci_vpn_guard.py`](../src/armiger/oci_vpn_guard.py), [`oci_sqlite_catalog.py`](../src/armiger/oci_sqlite_catalog.py), [`oci_dht_seeder.py`](../src/armiger/oci_dht_seeder.py)):** Implement canonical bencode validation (`bdecode`, `bdecode_krpc`), BEP 42 IPv4 CRC32C node ID generation and verification (`generate_bep42_node_id`, `verify_bep42_node_id`), BEP 44 mutable `get`/`put` with write tokens and Ed25519 signature verification (`GatedBEP44UDPNode`), BEP 9 / BEP 10 (`ut_metadata`) zero-trust `.torrent` `info` dictionary bootstrap (`fetch_bundle_via_peer_wire` / `BitTorrentPeerWireSeeder`), and BEP 19 (`url-list`) HTTPS webseed fallback (`fetch_bundle_via_bep19_webseed`) verified against the signed 20-byte `ih` and piece SHA-1 hashes.
+- **DSSE v1 PAE and Acyclic Provenance (`dsse_pae`, `AuthenticatedConformalBaseline`, `BenchmarkAttestationPredicate`, `AcyclicReleaseEnvelope`, `AcyclicProvenanceVerifier` in [`dht_rsi_models_and_privacy.py`](../src/armiger/dht_rsi_models_and_privacy.py) and [`dht_rsi_verification.py`](../src/armiger/dht_rsi_verification.py)):** Bind predicate types and payloads using DSSE v1 Pre-Authentication Encoding (`DSSEv1 <type_len> <type> <body_len> <body>`), enforce pairwise disjoint sets across contributors, evaluators, and release signers (`contributors ∩ evaluators = ∅`, `contributors ∩ release_signers = ∅`, `evaluators ∩ release_signers = ∅`), and verify evaluator canary metrics and `passed` flags against a release-signed `AuthenticatedConformalBaseline`.
+- **Standalone external verifier (`python -m armiger.verify_dht`, [`verify_dht.py`](../src/armiger/verify_dht.py)):** Queries BEP 44 mutable records (`target = SHA-1(pubkey || salt)`), verifies Ed25519 signatures over `[4:salt<len>:<salt>]3:seqi<seq>e1:v<len>:<v>` and monotonic `seq >= min_seq`, fetches the `.torrent` `info` dictionary via BEP 9/10 `ut_metadata` when no `--torrent-file` is supplied, verifies `SHA-1(bencode(info)) == ih`, downloads and SHA-1-verifies every piece over the BitTorrent peer wire (`--mode strict-p2p`, default) or via BEP 19 HTTPS webseeds (`--mode webseed-fallback`), verifies the SHA-256 Merkle root (`mr`), and emits a machine-readable JSON verification receipt.
 
 ### Triggers, aggregation and acceptance mechanics
 
@@ -147,6 +151,8 @@ These controls limit payload contents; they do not hide network addresses or pro
 
 ### Code and checks
 
+- [Standalone BEP 44/46 & BEP 9/10/19 verifier CLI (`verify_dht.py`)](../src/armiger/verify_dht.py)
+- [BEP 42/44 KRPC guard, peer-wire seeder and catalog builder (`oci_vpn_guard.py`, `oci_dht_seeder.py`, `oci_sqlite_catalog.py`)](../src/armiger/oci_dht_seeder.py)
 - [Update and contribution engine (`armiger_dht_rsi.py`)](../src/armiger/armiger_dht_rsi.py)
 - [Catalog shard synchronization (`armiger_dht_db_sync.py`)](../src/armiger/armiger_dht_db_sync.py)
 - [Ultra update application and rollback (`armiger_ultra_pipeline.py`)](../src/armiger/armiger_ultra_pipeline.py)
@@ -160,7 +166,7 @@ These controls limit payload contents; they do not hide network addresses or pro
 From a development installation with the model bundle available, run:
 
 ```bash
-python -m pytest -q tests/test_anonymous_opt_in_dht_sharing.py tests/test_distributed_knowledge_transfer.py
+python -m pytest -q tests/plugin/test_session9_ingress_hardening.py tests/test_anonymous_opt_in_dht_sharing.py tests/test_distributed_knowledge_transfer.py
 ```
 
 What these suites verify—and their boundaries:

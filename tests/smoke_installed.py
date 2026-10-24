@@ -10,7 +10,7 @@ from armiger.artifacts import download_model
 assert "site-packages" in str(Path(armiger.__file__).resolve()), armiger.__file__
 for name in (
     "armiger_dht_rsi", "armiger_dht_db_sync", "byte_span_extractor", "zero_cue_binary",
-    "pq_xmss_merkle", "ultra_pipeline_update_bridge", "dht_head_delta",
+    "pq_xmss_merkle", "ultra_pipeline_update_bridge", "dht_head_delta", "oci_dht_node", "verify_dht",
 ):
     importlib.import_module(f"armiger.{name}")
 for name in ("armiger_inference", "armiger_ultra_pipeline", "armiger_ultra"):

@@ -25,16 +25,23 @@ from cryptography.hazmat.primitives.ciphers.aead import ChaCha20Poly1305
 from cryptography.hazmat.primitives.kdf.hkdf import HKDF
 
 
-from .dht_rsi_models_and_privacy import (
+from armiger.dht_rsi_models_and_privacy import (
+    AcyclicReleaseEnvelope,
+    AuthenticatedConformalBaseline,
+    BenchmarkAttestationPredicate,
     BundleFormat,
     CandidateObservation,
+    DSSE_TYPE_ATTESTATION_V2,
+    DSSE_TYPE_BASELINE_V1,
+    DSSE_TYPE_RELEASE_V2,
     MediaCategory,
     PeerAttestation,
     PhysicalVerificationResult,
     ThresholdDHTManifest,
     VerifiedObservation,
+    dsse_pae,
 )
-from .dht_rsi_crypto_and_adapters import (
+from armiger.dht_rsi_crypto_and_adapters import (
     MediaStreamVerifier,
     WOTSPlusSHAKE256,
 )
@@ -697,8 +704,10 @@ class ThresholdSignatureVerifier:
         threshold_m: int,
         current_seq: int,
         trusted_pq_signers: Optional[Dict[str, str]] = None,  # pq_pubkey_hex -> name/identity
+        bootstrap_checkpoint_seq: Optional[int] = None,
         require_pq: bool = True,
         asn_verifier: Optional[AuthoritativeASNVerifier] = None,
+        verified_asn_quorum: Optional[Set[int]] = None,
     ) -> Tuple[bool, str]:
         """Verify monotonic sequence number, strict signer uniqueness, and M-of-N Hybrid threshold signatures."""
         # 0. Strict type & policy bounds
@@ -716,7 +725,12 @@ class ThresholdSignatureVerifier:
         # 1. Monotonic sequence check (downgrade, replay & huge-seq lockout protection)
         if manifest.seq <= current_seq:
             return False, f"stale_or_replayed_seq:{manifest.seq}<={current_seq}"
-        if manifest.seq > (2**63 - 1) or manifest.seq > current_seq + 1024:
+        effective_base_seq = int(current_seq)
+        if effective_base_seq == 0 and bootstrap_checkpoint_seq is not None and int(bootstrap_checkpoint_seq) > 0:
+            if manifest.seq < int(bootstrap_checkpoint_seq):
+                return False, f"below_bootstrap_checkpoint_seq:{manifest.seq}<{int(bootstrap_checkpoint_seq)}"
+            effective_base_seq = int(bootstrap_checkpoint_seq)
+        if manifest.seq > (2**63 - 1) or manifest.seq > effective_base_seq + 1024:
             return False, f"seq_jump_exceeds_max_window:{manifest.seq}"
         # 1b. Manifest timestamp sanity bound (reject far-future or >14d expired timestamps)
         now_ts = int(time.time())
@@ -1355,3 +1369,447 @@ class SubnetDiversityLimiter:
 
 
 
+
+
+class AcyclicProvenanceVerifier:
+    """Verifies TUF / in-toto acyclic provenance separation across contributors, evaluators, and release signers."""
+
+    @staticmethod
+    def sign_benchmark_attestation(
+        *,
+        peer_id: str,
+        asn: int,
+        parent_bundle_sha256: str,
+        candidate_bundle_sha256: str,
+        canary_suite_sha256: str,
+        canary_metrics: Mapping[str, Union[float, bool]],
+        evaluator_version: str,
+        timestamp: int,
+        ed25519_priv: ed25519.Ed25519PrivateKey,
+        wots_priv_seed: Optional[bytes] = None,
+        ip_address: Optional[str] = None,
+    ) -> BenchmarkAttestationPredicate:
+        from cryptography.hazmat.primitives.serialization import Encoding, PublicFormat, PrivateFormat, NoEncryption
+        ed_pub_hex = ed25519_priv.public_key().public_bytes(Encoding.Raw, PublicFormat.Raw).hex()
+        if wots_priv_seed is None:
+            raw_ed = ed25519_priv.private_bytes(Encoding.Raw, PrivateFormat.Raw, NoEncryption())
+            wots_priv_seed, wots_pub_bytes = WOTSPlusSHAKE256.derive_keypair_from_ed25519_priv(raw_ed)
+        else:
+            wots_priv_seed, wots_pub_bytes = WOTSPlusSHAKE256._normalize_root_priv(wots_priv_seed)
+        if not isinstance(canary_metrics, Mapping) or not canary_metrics:
+            raise ValueError("missing_canary_metrics")
+        if "passed" not in canary_metrics or not isinstance(canary_metrics["passed"], bool):
+            raise ValueError("missing_or_invalid_passed_flag")
+        raw_acc = canary_metrics.get("accuracy", canary_metrics.get("category_accuracy"))
+        if isinstance(raw_acc, bool) or not isinstance(raw_acc, (int, float)) or not math.isfinite(float(raw_acc)) or not (0.0 <= float(raw_acc) <= 1.0):
+            raise ValueError("missing_or_invalid_accuracy")
+        for req_key in ("ece", "macro_f1", "mondrian_coverage", "max_false_accept_rate"):
+            if req_key not in canary_metrics:
+                raise ValueError(f"missing_canary_metric:{req_key}")
+            req_val = canary_metrics[req_key]
+            if isinstance(req_val, bool) or not isinstance(req_val, (int, float)) or not math.isfinite(float(req_val)) or not (0.0 <= float(req_val) <= 1.0):
+                raise ValueError(f"invalid_canary_metric:{req_key}")
+        clean_metrics: Dict[str, Union[float, bool]] = {}
+        for k, v in canary_metrics.items():
+            key_str = str(k)
+            if isinstance(v, bool):
+                if key_str != "passed":
+                    raise ValueError(f"unexpected_boolean_canary_metric:{key_str}")
+                clean_metrics[key_str] = bool(v)
+            elif isinstance(v, (int, float)) and math.isfinite(float(v)):
+                clean_metrics[key_str] = float(v)
+            else:
+                raise ValueError(f"invalid_canary_metric:{key_str}")
+        unsigned = BenchmarkAttestationPredicate(
+            peer_id=peer_id,
+            asn=int(asn),
+            parent_bundle_sha256=parent_bundle_sha256.strip().lower(),
+            candidate_bundle_sha256=candidate_bundle_sha256.strip().lower(),
+            canary_suite_sha256=canary_suite_sha256.strip().lower(),
+            canary_metrics=clean_metrics,
+            evaluator_version=evaluator_version,
+            timestamp=int(timestamp),
+            peer_pubkey_hex=ed_pub_hex,
+            signature_hex="",
+            pq_pubkey_hex=wots_pub_bytes.hex(),
+            pq_signature_hex="",
+            ip_address=ip_address,
+        )
+        pae = unsigned.pae_bytes()
+        ed_sig = ed25519_priv.sign(pae).hex()
+        pq_sig = WOTSPlusSHAKE256.sign(wots_priv_seed, pae).hex()
+        return dataclasses.replace(unsigned, signature_hex=ed_sig, pq_signature_hex=pq_sig)
+
+    @staticmethod
+    def sign_release_envelope(
+        envelope: AcyclicReleaseEnvelope,
+        release_signers: Sequence[Tuple[ed25519.Ed25519PrivateKey, str, bytes, str]],
+    ) -> AcyclicReleaseEnvelope:
+        """Sign the DSSE PAE of an AcyclicReleaseEnvelope with M-of-N hybrid release signers."""
+        pae = envelope.pae_bytes()
+        env_sigs: Dict[str, str] = {}
+        env_pq_sigs: Dict[str, str] = {}
+        for r_priv, r_pub, r_wots_priv, r_wots_pub in release_signers:
+            norm_pub = ThresholdDHTManifest._normalize_pubkey_id(r_pub)
+            norm_pq = ThresholdDHTManifest._normalize_pubkey_id(r_wots_pub)
+            env_sigs[norm_pub] = r_priv.sign(pae).hex()
+            env_pq_sigs[norm_pq] = WOTSPlusSHAKE256.sign(r_wots_priv, pae).hex()
+        return dataclasses.replace(
+            envelope,
+            envelope_signatures=env_sigs,
+            envelope_pq_signatures=env_pq_sigs,
+        )
+
+    @staticmethod
+    def verify_envelope(
+        envelope: AcyclicReleaseEnvelope,
+        *,
+        trusted_release_signers: Dict[str, str],
+        trusted_evaluator_signers: Dict[str, str],
+        threshold_m: int = 2,
+        min_evaluator_asns: int = 3,
+        current_seq: int = 0,
+        bootstrap_checkpoint_seq: Optional[int] = None,
+        require_pq: bool = True,
+        asn_verifier: Optional[AuthoritativeASNVerifier] = None,
+        enforce_evaluator_release_disjoint: bool = True,
+        trusted_release_pq_signers: Optional[Mapping[str, str]] = None,
+        trusted_evaluator_pq_signers: Optional[Mapping[str, str]] = None,
+        trusted_contributor_signers: Optional[Mapping[str, str]] = None,
+    ) -> Tuple[bool, str]:
+        """Verify disjoint contributor / evaluator / release-quorum roles, evaluator ASN bindings, and DSSE PAE release signatures."""
+        if not trusted_release_signers:
+            return False, "empty_trusted_release_signers"
+        if not trusted_evaluator_signers:
+            return False, "empty_trusted_evaluator_signers"
+
+        contributors = {
+            ThresholdDHTManifest._normalize_pubkey_id(pk)
+            for pk in envelope.contributor_pubkeys
+            if str(pk).strip() and len(ThresholdDHTManifest._normalize_pubkey_id(pk)) == 64
+        }
+        if not contributors:
+            return False, "missing_contributor_pubkeys"
+
+        manifest_release_signers = {
+            ThresholdDHTManifest._normalize_pubkey_id(pk)
+            for pk, _ in envelope.manifest.iter_ed25519_signatures()
+        }
+        envelope_release_signers = {
+            ThresholdDHTManifest._normalize_pubkey_id(pk)
+            for pk in (envelope.envelope_signatures or {}).keys()
+        }
+        release_signers = manifest_release_signers | envelope_release_signers
+        evaluator_signers = {
+            ThresholdDHTManifest._normalize_pubkey_id(att.peer_pubkey_hex)
+            for att in envelope.benchmark_attestations
+        }
+
+        if contributors & evaluator_signers:
+            return False, "cyclic_provenance_violation:contributor_in_evaluators"
+        if contributors & release_signers:
+            return False, "cyclic_provenance_violation:contributor_in_release_signers"
+        if enforce_evaluator_release_disjoint and (evaluator_signers & release_signers):
+            return False, "cyclic_provenance_violation:evaluator_in_release_signers"
+
+        if envelope.authenticated_baseline is None:
+            return False, "missing_authenticated_baseline"
+        b_ok, b_reason = envelope.authenticated_baseline.verify_signature(trusted_release_signers)
+        if not b_ok:
+            return False, f"baseline_verification_failed:{b_reason}"
+        if envelope.authenticated_baseline.parent_bundle_sha256 != envelope.parent_bundle_sha256.strip().lower():
+            return False, "baseline_parent_bundle_mismatch"
+        if envelope.authenticated_baseline.canary_suite_sha256 != envelope.canary_suite_sha256.strip().lower():
+            return False, "baseline_canary_suite_mismatch"
+
+        eff_asn_verifier = asn_verifier if asn_verifier is not None else AuthoritativeASNVerifier(require_authoritative_binding=True)
+
+        norm_eval_trust: Dict[str, str] = {}
+        eval_pq_by_ed: Dict[str, Set[str]] = {}
+        eval_id_by_pq: Dict[str, str] = {}
+        for k, v in trusted_evaluator_signers.items():
+            norm_k = ThresholdDHTManifest._normalize_pubkey_id(k)
+            if not norm_k:
+                continue
+            norm_eval_trust[norm_k] = v
+            raw_k = str(k).strip().lower()
+            if ":" in raw_k:
+                _, pq_part = raw_k.split(":", 1)
+                norm_pq_part = ThresholdDHTManifest._normalize_pubkey_id(pq_part)
+                if len(norm_pq_part) == 64:
+                    eval_pq_by_ed.setdefault(norm_k, set()).add(norm_pq_part)
+                    eval_id_by_pq[norm_pq_part] = v
+        if trusted_evaluator_pq_signers:
+            for pq_k, pq_v in trusted_evaluator_pq_signers.items():
+                norm_pq_k = ThresholdDHTManifest._normalize_pubkey_id(pq_k)
+                if len(norm_pq_k) == 64:
+                    eval_id_by_pq[norm_pq_k] = str(pq_v)
+        if not norm_eval_trust:
+            return False, "empty_trusted_evaluator_signers"
+
+        eff_pq_signers: Dict[str, str] = {}
+        if trusted_release_pq_signers:
+            for pq_k, pq_id in trusted_release_pq_signers.items():
+                norm_pq_k = ThresholdDHTManifest._normalize_pubkey_id(pq_k)
+                if len(norm_pq_k) == 64:
+                    eff_pq_signers[norm_pq_k] = str(pq_id)
+        norm_rel_trust: Dict[str, str] = {}
+        for ed_pk_hex, identity in trusted_release_signers.items():
+            norm_ed = ThresholdDHTManifest._normalize_pubkey_id(ed_pk_hex)
+            norm_rel_trust[norm_ed] = identity
+            raw_ed_str = str(ed_pk_hex).strip().lower()
+            if ":" in raw_ed_str:
+                _, pq_part = raw_ed_str.split(":", 1)
+                norm_pq_part = ThresholdDHTManifest._normalize_pubkey_id(pq_part)
+                if len(norm_pq_part) == 64:
+                    eff_pq_signers[norm_pq_part] = identity
+            pinned_rel_pq = (
+                eff_asn_verifier.pinned_pubkey_pq_root.get(norm_ed)
+                or AuthoritativeASNVerifier._GLOBAL_PINNED_PUBKEY_PQ_ROOT.get(norm_ed)
+                or WOTSPlusSHAKE256.get_root_wots_pub(norm_ed)
+            )
+            if pinned_rel_pq and len(ThresholdDHTManifest._normalize_pubkey_id(pinned_rel_pq)) == 64:
+                eff_pq_signers[ThresholdDHTManifest._normalize_pubkey_id(pinned_rel_pq)] = identity
+            for wots_pk_hex in WOTSPlusSHAKE256._ED25519_TO_WOTS_PUBS.get(norm_ed, ()):
+                eff_pq_signers[wots_pk_hex] = identity
+
+        if not trusted_contributor_signers:
+            return False, "empty_trusted_contributor_signers"
+        norm_contrib_trust: Dict[str, str] = {}
+        for c_k, c_id in trusted_contributor_signers.items():
+            norm_ck = ThresholdDHTManifest._normalize_pubkey_id(c_k)
+            if len(norm_ck) == 64 and str(c_id).strip():
+                norm_contrib_trust[norm_ck] = str(c_id).strip()
+            raw_ck = str(c_k).strip().lower()
+            if ":" in raw_ck:
+                _, pq_part = raw_ck.split(":", 1)
+                norm_pq_part = ThresholdDHTManifest._normalize_pubkey_id(pq_part)
+                if len(norm_pq_part) == 64 and str(c_id).strip():
+                    norm_contrib_trust[norm_pq_part] = str(c_id).strip()
+        if not norm_contrib_trust:
+            return False, "empty_trusted_contributor_signers"
+
+        contributor_ids: Set[str] = set()
+        for c_pk in sorted(contributors):
+            if c_pk not in norm_contrib_trust:
+                return False, f"untrusted_contributor_pubkey:{c_pk[:16]}"
+            contributor_ids.add(norm_contrib_trust[c_pk])
+            for mapping in (norm_eval_trust, eval_id_by_pq, norm_rel_trust, eff_pq_signers):
+                mapped_id = mapping.get(c_pk)
+                if mapped_id is not None:
+                    contributor_ids.add(str(mapped_id))
+
+        verified_eval_asns: Set[int] = set()
+        seen_eval_pks: Set[str] = set()
+        seen_eval_ids: Set[str] = set()
+        subnet_limiter = SubnetDiversityLimiter(max_per_ipv4_24=1, max_per_ipv6_48=1)
+
+        for att in envelope.benchmark_attestations:
+            norm_pk = ThresholdDHTManifest._normalize_pubkey_id(att.peer_pubkey_hex)
+            if norm_pk in seen_eval_pks:
+                return False, f"duplicate_evaluator_pubkey:{norm_pk[:16]}"
+            seen_eval_pks.add(norm_pk)
+            if norm_pk not in norm_eval_trust:
+                return False, f"untrusted_evaluator_pubkey:{norm_pk[:16]}"
+            eval_id = norm_eval_trust[norm_pk]
+            if eval_id in contributor_ids:
+                return False, f"cyclic_provenance_violation:contributor_identity_in_evaluators:{eval_id}"
+            if eval_id in seen_eval_ids:
+                return False, f"duplicate_evaluator_identity:{eval_id}"
+            seen_eval_ids.add(eval_id)
+
+            if att.parent_bundle_sha256.strip().lower() != envelope.parent_bundle_sha256.strip().lower():
+                return False, "attestation_parent_bundle_mismatch"
+            if att.candidate_bundle_sha256.strip().lower() != envelope.manifest.bundle_sha256.strip().lower():
+                return False, "attestation_candidate_bundle_mismatch"
+            if att.canary_suite_sha256.strip().lower() != envelope.canary_suite_sha256.strip().lower():
+                return False, "attestation_canary_suite_mismatch"
+
+            metrics = att.canary_metrics
+            if not isinstance(metrics, Mapping) or not metrics:
+                return False, "attestation_missing_canary_metrics"
+            if "passed" not in metrics:
+                return False, "attestation_missing_passed_flag"
+            if not isinstance(metrics["passed"], bool) or metrics["passed"] is not True:
+                return False, "attestation_canary_marked_failed"
+            for m_k, m_v in metrics.items():
+                if isinstance(m_v, bool):
+                    if str(m_k) != "passed":
+                        return False, f"attestation_unexpected_boolean_metric:{m_k}"
+                elif not isinstance(m_v, (int, float)) or not math.isfinite(float(m_v)):
+                    return False, f"attestation_invalid_metric_value:{m_k}"
+            raw_acc = metrics.get("accuracy", metrics.get("category_accuracy"))
+            if isinstance(raw_acc, bool) or not isinstance(raw_acc, (int, float)) or not math.isfinite(float(raw_acc)):
+                return False, "attestation_missing_or_invalid_accuracy"
+            acc_val = float(raw_acc)
+            if not (0.0 <= acc_val <= 1.0):
+                return False, "attestation_accuracy_out_of_range"
+            if acc_val + 1e-9 < float(envelope.authenticated_baseline.accuracy) - 0.005:
+                return False, "attestation_accuracy_regression_exceeded"
+            for m_key in ("ece", "macro_f1", "mondrian_coverage", "max_false_accept_rate"):
+                if m_key not in metrics:
+                    return False, f"attestation_missing_{m_key}"
+                m_raw = metrics[m_key]
+                if isinstance(m_raw, bool) or not isinstance(m_raw, (int, float)) or not math.isfinite(float(m_raw)) or not (0.0 <= float(m_raw) <= 1.0):
+                    return False, f"attestation_invalid_{m_key}"
+            if float(metrics["macro_f1"]) + 1e-9 < float(envelope.authenticated_baseline.macro_f1) - 0.005:
+                return False, "attestation_macro_f1_regression_exceeded"
+            if float(metrics["ece"]) - 1e-9 > float(envelope.authenticated_baseline.ece) + 0.02:
+                return False, "attestation_ece_regression_exceeded"
+            if float(metrics["mondrian_coverage"]) + 1e-9 < float(envelope.authenticated_baseline.mondrian_coverage):
+                return False, "attestation_mondrian_coverage_below_threshold"
+            if float(metrics["max_false_accept_rate"]) - 1e-9 > float(envelope.authenticated_baseline.max_false_accept_rate):
+                return False, "attestation_false_accept_rate_exceeded"
+
+            pae = att.pae_bytes()
+            try:
+                vk = ed25519.Ed25519PublicKey.from_public_bytes(bytes.fromhex(norm_pk))
+                vk.verify(bytes.fromhex(att.signature_hex.strip()), pae)
+            except Exception as exc:
+                return False, f"invalid_evaluator_ed25519_signature:{exc}"
+
+            if require_pq:
+                if not att.pq_pubkey_hex or not att.pq_signature_hex:
+                    return False, "missing_evaluator_pq_signature"
+                norm_eval_pq = ThresholdDHTManifest._normalize_pubkey_id(att.pq_pubkey_hex)
+                bound_wots = set(WOTSPlusSHAKE256._ED25519_TO_WOTS_PUBS.get(norm_pk, set()))
+                bound_wots.update(eval_pq_by_ed.get(norm_pk, set()))
+                pinned_eval_pq = (
+                    eff_asn_verifier.pinned_pubkey_pq_root.get(norm_pk)
+                    or AuthoritativeASNVerifier._GLOBAL_PINNED_PUBKEY_PQ_ROOT.get(norm_pk)
+                    or WOTSPlusSHAKE256.get_root_wots_pub(norm_pk)
+                )
+                if pinned_eval_pq:
+                    bound_wots.add(ThresholdDHTManifest._normalize_pubkey_id(pinned_eval_pq))
+                meta_eval = WOTSPlusSHAKE256.extract_signature_metadata(norm_eval_pq, att.pq_signature_hex.strip())
+                eval_root_pq = str(meta_eval.get("root_pq_pub_hex", "")).lower() if meta_eval else ""
+                eval_leaf_pq = str(meta_eval.get("leaf_pub_hex", "")).lower() if meta_eval else ""
+                pq_bound_ok = (
+                    norm_eval_pq in bound_wots
+                    or (eval_root_pq and eval_root_pq in bound_wots)
+                    or (eval_leaf_pq and eval_leaf_pq in bound_wots)
+                    or eval_id_by_pq.get(norm_eval_pq) == eval_id
+                    or (eval_root_pq and eval_id_by_pq.get(eval_root_pq) == eval_id)
+                )
+                if not pq_bound_ok:
+                    return False, "untrusted_or_unbound_evaluator_pq_pubkey"
+                try:
+                    if not WOTSPlusSHAKE256.verify(
+                        bytes.fromhex(norm_eval_pq),
+                        pae,
+                        bytes.fromhex(att.pq_signature_hex.strip()),
+                    ):
+                        return False, "invalid_evaluator_pq_signature"
+                except Exception as exc:
+                    return False, f"invalid_evaluator_pq_signature:{exc}"
+
+            if not att.ip_address or not str(att.ip_address).strip():
+                return False, "missing_evaluator_ip_address"
+            s_ok, s_reason = subnet_limiter.allow_vote(att.ip_address)
+            if not s_ok:
+                return False, f"evaluator_subnet_limit:{s_reason}"
+
+            b_ok, b_reason = eff_asn_verifier.verify_binding(
+                claimed_asn=att.asn,
+                pubkey_hex=norm_pk,
+                ip_address=att.ip_address,
+                require_authoritative=True,
+                require_pinned_key=True,
+            )
+            if not b_ok:
+                return False, f"evaluator_asn_binding_failed:{b_reason}"
+            routed_asn = eff_asn_verifier.lookup_ip_asn(att.ip_address)
+            if routed_asn != int(att.asn):
+                return False, f"evaluator_ip_asn_route_mismatch:{routed_asn}!={att.asn}"
+
+            verified_eval_asns.add(int(att.asn))
+
+        if len(verified_eval_asns) < int(min_evaluator_asns):
+            return False, f"insufficient_evaluator_asns:{len(verified_eval_asns)}<{min_evaluator_asns}"
+
+        for raw_m_pk, _ in envelope.manifest.iter_ed25519_signatures():
+            norm_m_pk = ThresholdDHTManifest._normalize_pubkey_id(raw_m_pk)
+            m_rel_id = norm_rel_trust.get(norm_m_pk)
+            if m_rel_id is not None and m_rel_id in contributor_ids:
+                return False, f"cyclic_provenance_violation:contributor_identity_in_release_signers:{m_rel_id}"
+            if enforce_evaluator_release_disjoint and m_rel_id is not None and m_rel_id in seen_eval_ids:
+                return False, f"cyclic_provenance_violation:evaluator_identity_in_release_signers:{m_rel_id}"
+        for raw_m_pq, raw_m_pq_sig in envelope.manifest.iter_pq_signatures():
+            norm_m_pq = ThresholdDHTManifest._normalize_pubkey_id(raw_m_pq)
+            meta_m_pq = WOTSPlusSHAKE256.extract_signature_metadata(norm_m_pq, str(raw_m_pq_sig).strip())
+            root_m_pq = str(meta_m_pq.get("root_pq_pub_hex", "")).lower() if meta_m_pq else ""
+            m_pq_id = eff_pq_signers.get(norm_m_pq) or (eff_pq_signers.get(root_m_pq) if root_m_pq else None)
+            if m_pq_id is not None and m_pq_id in contributor_ids:
+                return False, f"cyclic_provenance_violation:contributor_identity_in_release_signers:{m_pq_id}"
+            if enforce_evaluator_release_disjoint and m_pq_id is not None and m_pq_id in seen_eval_ids:
+                return False, f"cyclic_provenance_violation:evaluator_identity_in_release_signers:{m_pq_id}"
+
+        m_ok, m_reason = ThresholdSignatureVerifier.verify(
+            manifest=envelope.manifest,
+            trusted_signers=trusted_release_signers,
+            threshold_m=threshold_m,
+            current_seq=current_seq,
+            trusted_pq_signers=eff_pq_signers,
+            require_pq=require_pq,
+            asn_verifier=eff_asn_verifier,
+            verified_asn_quorum=verified_eval_asns,
+            bootstrap_checkpoint_seq=bootstrap_checkpoint_seq,
+        )
+        if not m_ok:
+            return False, f"release_manifest_verification_failed:{m_reason}"
+
+        # Verify threshold release signatures over the DSSE PAE of the provenance envelope itself
+        if not envelope.envelope_signatures:
+            return False, "missing_envelope_release_signatures"
+        env_pae = envelope.pae_bytes()
+        valid_env_rel_ids: Set[str] = set()
+        for raw_pk, raw_sig in envelope.envelope_signatures.items():
+            norm_pk = ThresholdDHTManifest._normalize_pubkey_id(raw_pk)
+            if norm_pk in contributors:
+                return False, "cyclic_provenance_violation:contributor_in_release_signers"
+            if enforce_evaluator_release_disjoint and norm_pk in evaluator_signers:
+                return False, "cyclic_provenance_violation:evaluator_in_release_signers"
+            if norm_pk not in norm_rel_trust:
+                continue
+            rel_id = norm_rel_trust[norm_pk]
+            if rel_id in contributor_ids:
+                return False, f"cyclic_provenance_violation:contributor_identity_in_release_signers:{rel_id}"
+            if enforce_evaluator_release_disjoint and rel_id in seen_eval_ids:
+                return False, f"cyclic_provenance_violation:evaluator_identity_in_release_signers:{rel_id}"
+            if rel_id in valid_env_rel_ids:
+                return False, f"duplicate_envelope_release_signer:{rel_id}"
+            try:
+                vk = ed25519.Ed25519PublicKey.from_public_bytes(bytes.fromhex(norm_pk))
+                vk.verify(bytes.fromhex(raw_sig.strip()), env_pae)
+                valid_env_rel_ids.add(rel_id)
+            except Exception:
+                continue
+        if len(valid_env_rel_ids) < int(threshold_m):
+            return False, f"insufficient_envelope_release_signatures:{len(valid_env_rel_ids)}<{threshold_m}"
+
+        if require_pq:
+            if not envelope.envelope_pq_signatures:
+                return False, "missing_envelope_pq_release_signatures"
+            valid_env_pq_ids: Set[str] = set()
+            for raw_pq_pk, raw_pq_sig in envelope.envelope_pq_signatures.items():
+                norm_pq = ThresholdDHTManifest._normalize_pubkey_id(raw_pq_pk)
+                meta_env_pq = WOTSPlusSHAKE256.extract_signature_metadata(norm_pq, raw_pq_sig.strip())
+                root_env_pq = str(meta_env_pq.get("root_pq_pub_hex", "")).lower() if meta_env_pq else ""
+                pq_id = eff_pq_signers.get(norm_pq) or (eff_pq_signers.get(root_env_pq) if root_env_pq else None)
+                if pq_id is None:
+                    continue
+                if pq_id in contributor_ids:
+                    return False, f"cyclic_provenance_violation:contributor_identity_in_release_signers:{pq_id}"
+                if enforce_evaluator_release_disjoint and pq_id in seen_eval_ids:
+                    return False, f"cyclic_provenance_violation:evaluator_identity_in_release_signers:{pq_id}"
+                if pq_id not in valid_env_rel_ids or pq_id in valid_env_pq_ids:
+                    continue
+                try:
+                    if WOTSPlusSHAKE256.verify(bytes.fromhex(norm_pq), env_pae, bytes.fromhex(raw_pq_sig.strip())):
+                        valid_env_pq_ids.add(pq_id)
+                except Exception:
+                    continue
+            if len(valid_env_pq_ids) < int(threshold_m):
+                return False, f"insufficient_envelope_pq_release_signatures:{len(valid_env_pq_ids)}<{threshold_m}"
+
+        return True, "acyclic_provenance_envelope_verified"

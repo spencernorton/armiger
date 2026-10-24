@@ -407,6 +407,7 @@ class CatalogConsensusResult:
     agreement_ratio: float = 0.0
     manifest: Optional[ThresholdDHTManifest] = None
     signed_bundle_bytes: Optional[bytes] = None
+    torrent_metainfo_bytes: Optional[bytes] = None
 
     @property
     def aggregated_deltas(self) -> Dict[str, float]:
@@ -443,6 +444,7 @@ class ContinuousAggregationResult:
     trim_fraction: float
     manifest: Optional[ThresholdDHTManifest] = None
     signed_bundle_bytes: Optional[bytes] = None
+    torrent_metainfo_bytes: Optional[bytes] = None
 
 
 @dataclasses.dataclass(frozen=True)
@@ -1475,6 +1477,7 @@ class AnonymityGuard:
             if "n_bucket" not in parsed_obj or int(parsed_obj["n_bucket"]) < self.min_k_samples:
                 self.blocked_violations_count += 1
                 raise AnonymityViolationError("weight_delta_missing_k_anonymous_n_bucket")
+            q_all: List[int] = []
             for arr_key in ("delta_w_q8", "delta_b_q8"):
                 if arr_key in parsed_obj:
                     arr = parsed_obj[arr_key]
@@ -1485,6 +1488,13 @@ class AnonymityGuard:
                         if isinstance(q, bool) or not isinstance(q, int) or q < -128 or q > 127:
                             self.blocked_violations_count += 1
                             raise AnonymityViolationError(f"out_of_range_int8_in_{arr_key}:{q!r}")
+                        q_all.append(int(q))
+            sc_val = float(parsed_obj["scale"])
+            reconstructed_l2 = math.sqrt(sum((q_v * sc_val) ** 2 for q_v in q_all))
+            max_wire_l2 = max(self.clip_norm * (1.15 + math.sqrt(max(1, len(q_all))) * 0.05), self.clip_norm + 0.5)
+            if not math.isfinite(reconstructed_l2) or reconstructed_l2 > max_wire_l2:
+                self.blocked_violations_count += 1
+                raise AnonymityViolationError(f"wire_payload_l2_norm_exceeds_clip_bound:{reconstructed_l2:.4f}>{max_wire_l2:.4f}")
 
         if not (has_weight_delta or has_reliability_bins or has_records):
             self.blocked_violations_count += 1
@@ -1593,3 +1603,228 @@ class AnonymityGuard:
             "sig_hex": sig_bytes.hex(),
         }
 
+
+
+# =====================================================================
+# 5b. DSSE Pre-Authentication Encoding & Acyclic Provenance Envelopes
+# =====================================================================
+
+DSSE_TYPE_ATTESTATION_V2 = "application/vnd.armiger.attestation.v2+json"
+DSSE_TYPE_RELEASE_V2 = "application/vnd.armiger.release.v2+json"
+DSSE_TYPE_BASELINE_V1 = "application/vnd.armiger.conformal-baseline.v1+json"
+
+
+def dsse_pae(payload_type: str, payload: bytes) -> bytes:
+    """Compute Dead Simple Signing Envelope (DSSE v1) Pre-Authentication Encoding (PAE).
+
+    PAE(type, body) = "DSSEv1" + SP + LEN(type) + SP + type + SP + LEN(body) + SP + body
+    Prevents cross-protocol and cross-layer signature confusion.
+    """
+    if not isinstance(payload_type, str) or not payload_type.strip():
+        raise ValueError("payload_type must be a non-empty string")
+    if not isinstance(payload, (bytes, bytearray, memoryview)):
+        raise TypeError("payload must be bytes-like")
+    pt_bytes = payload_type.encode("utf-8")
+    body_bytes = bytes(payload)
+    header = f"DSSEv1 {len(pt_bytes)} ".encode("ascii") + pt_bytes + f" {len(body_bytes)} ".encode("ascii")
+    return header + body_bytes
+
+
+@dataclasses.dataclass(frozen=True)
+class AuthenticatedConformalBaseline:
+    """Cryptographically bound baseline metrics for the 500-item Golden Canary Regression Gate."""
+    parent_bundle_sha256: str
+    canary_suite_sha256: str
+    accuracy: float
+    ece: float
+    macro_f1: float
+    mondrian_coverage: float = 0.90
+    max_false_accept_rate: float = 0.0
+    signer_pubkey_hex: str = ""
+    signature_hex: str = ""
+
+    @staticmethod
+    def _validate_finite_metric(name: str, val: Any, low: float, high: float) -> float:
+        if isinstance(val, bool) or not isinstance(val, (int, float)) or not math.isfinite(float(val)):
+            raise ValueError(f"invalid_baseline_{name}:{val}")
+        fval = float(val)
+        if not (low <= fval <= high):
+            raise ValueError(f"invalid_baseline_{name}:{val}")
+        return fval
+
+    def canonical_payload_bytes(self) -> bytes:
+        for m_name, m_val in (
+            ("accuracy", self.accuracy),
+            ("ece", self.ece),
+            ("macro_f1", self.macro_f1),
+            ("mondrian_coverage", self.mondrian_coverage),
+            ("max_false_accept_rate", self.max_false_accept_rate),
+        ):
+            if isinstance(m_val, bool) or not isinstance(m_val, (int, float)) or not math.isfinite(float(m_val)):
+                raise ValueError(f"invalid_baseline_{m_name}:{m_val}")
+        doc = {
+            "accuracy": round(float(self.accuracy), 6),
+            "canary_suite_sha256": str(self.canary_suite_sha256).strip().lower(),
+            "ece": round(float(self.ece), 6),
+            "macro_f1": round(float(self.macro_f1), 6),
+            "max_false_accept_rate": round(float(self.max_false_accept_rate), 6),
+            "mondrian_coverage": round(float(self.mondrian_coverage), 6),
+            "parent_bundle_sha256": str(self.parent_bundle_sha256).strip().lower(),
+        }
+        return json.dumps(doc, sort_keys=True, separators=(",", ":"), allow_nan=False).encode("utf-8")
+
+    def pae_bytes(self) -> bytes:
+        return dsse_pae(DSSE_TYPE_BASELINE_V1, self.canonical_payload_bytes())
+
+    def to_metrics_dict(self) -> Dict[str, float]:
+        return {
+            "accuracy": float(self.accuracy),
+            "ece": float(self.ece),
+            "macro_f1": float(self.macro_f1),
+            "mondrian_coverage": float(self.mondrian_coverage),
+            "max_false_accept_rate": float(self.max_false_accept_rate),
+        }
+
+    @classmethod
+    def create_signed(
+        cls,
+        *,
+        parent_bundle_sha256: str,
+        canary_suite_sha256: str,
+        accuracy: float,
+        ece: float,
+        macro_f1: float,
+        ed25519_priv: ed25519.Ed25519PrivateKey,
+        mondrian_coverage: float = 0.90,
+        max_false_accept_rate: float = 0.0,
+    ) -> "AuthenticatedConformalBaseline":
+        from cryptography.hazmat.primitives.serialization import Encoding, PublicFormat
+        unsigned = cls(
+            parent_bundle_sha256=parent_bundle_sha256.strip().lower(),
+            canary_suite_sha256=canary_suite_sha256.strip().lower(),
+            accuracy=cls._validate_finite_metric("accuracy", accuracy, 0.50, 1.0),
+            ece=cls._validate_finite_metric("ece", ece, 0.0, 0.50),
+            macro_f1=cls._validate_finite_metric("macro_f1", macro_f1, 0.50, 1.0),
+            mondrian_coverage=cls._validate_finite_metric("mondrian_coverage", mondrian_coverage, 0.50, 1.0),
+            max_false_accept_rate=cls._validate_finite_metric("max_false_accept_rate", max_false_accept_rate, 0.0, 0.50),
+        )
+        sig = ed25519_priv.sign(unsigned.pae_bytes()).hex()
+        pub = ed25519_priv.public_key().public_bytes(Encoding.Raw, PublicFormat.Raw).hex()
+        return dataclasses.replace(unsigned, signer_pubkey_hex=pub, signature_hex=sig)
+
+    def verify_signature(self, trusted_signers: Optional[Mapping[str, str]] = None) -> Tuple[bool, str]:
+        norm_pk = ThresholdDHTManifest._normalize_pubkey_id(self.signer_pubkey_hex)
+        if len(norm_pk) != 64:
+            return False, "invalid_baseline_signer_pubkey"
+        if trusted_signers is not None:
+            norm_trusted = {ThresholdDHTManifest._normalize_pubkey_id(k): v for k, v in trusted_signers.items()}
+            if norm_pk not in norm_trusted:
+                return False, "untrusted_baseline_signer"
+        for m_name, m_val, low, high in (
+            ("accuracy", self.accuracy, 0.50, 1.0),
+            ("ece", self.ece, 0.0, 0.50),
+            ("macro_f1", self.macro_f1, 0.50, 1.0),
+            ("mondrian_coverage", self.mondrian_coverage, 0.50, 1.0),
+            ("max_false_accept_rate", self.max_false_accept_rate, 0.0, 0.50),
+        ):
+            try:
+                self._validate_finite_metric(m_name, m_val, low, high)
+            except ValueError as exc:
+                return False, str(exc)
+        try:
+            vk = ed25519.Ed25519PublicKey.from_public_bytes(bytes.fromhex(norm_pk))
+            vk.verify(bytes.fromhex(self.signature_hex.strip()), self.pae_bytes())
+        except Exception as exc:
+            return False, f"invalid_baseline_signature:{exc}"
+        return True, "baseline_verified"
+
+
+@dataclasses.dataclass(frozen=True)
+class BenchmarkAttestationPredicate:
+    """In-toto / DSSE v2 benchmark evaluation attestation signed by an independent evaluator node."""
+    peer_id: str
+    asn: int
+    parent_bundle_sha256: str
+    candidate_bundle_sha256: str
+    canary_suite_sha256: str
+    canary_metrics: Dict[str, Union[float, bool]]
+    evaluator_version: str
+    timestamp: int
+    peer_pubkey_hex: str
+    signature_hex: str
+    pq_pubkey_hex: str = ""
+    pq_signature_hex: str = ""
+    ip_address: Optional[str] = None
+
+    def canonical_payload_bytes(self) -> bytes:
+        metrics_clean: Dict[str, Union[float, bool]] = {}
+        for k, v in sorted(self.canary_metrics.items()):
+            key_str = str(k)
+            if isinstance(v, bool):
+                metrics_clean[key_str] = bool(v)
+            elif isinstance(v, (int, float)) and math.isfinite(float(v)):
+                metrics_clean[key_str] = round(float(v), 6)
+
+        doc: Dict[str, Any] = {
+            "asn": int(self.asn),
+            "canary_metrics": metrics_clean,
+            "canary_suite_sha256": str(self.canary_suite_sha256).strip().lower(),
+            "candidate_bundle_sha256": str(self.candidate_bundle_sha256).strip().lower(),
+            "evaluator_version": str(self.evaluator_version).strip(),
+            "parent_bundle_sha256": str(self.parent_bundle_sha256).strip().lower(),
+            "peer_id": str(self.peer_id).strip(),
+            "predicate_type": DSSE_TYPE_ATTESTATION_V2,
+            "timestamp": int(self.timestamp),
+        }
+        if self.ip_address is not None and str(self.ip_address).strip():
+            doc["ip_address"] = str(self.ip_address).strip()
+        return json.dumps(doc, sort_keys=True, separators=(",", ":")).encode("utf-8")
+
+    def pae_bytes(self) -> bytes:
+        return dsse_pae(DSSE_TYPE_ATTESTATION_V2, self.canonical_payload_bytes())
+
+
+@dataclasses.dataclass(frozen=True)
+class AcyclicReleaseEnvelope:
+    """TUF / in-toto acyclic release envelope separating contributor, evaluator, and release-quorum roles."""
+    manifest: ThresholdDHTManifest
+    parent_bundle_sha256: str
+    canary_suite_sha256: str
+    contributor_pubkeys: Tuple[str, ...]
+    benchmark_attestations: Tuple[BenchmarkAttestationPredicate, ...]
+    authenticated_baseline: Optional[AuthenticatedConformalBaseline] = None
+    envelope_signatures: Dict[str, str] = dataclasses.field(default_factory=dict)
+    envelope_pq_signatures: Dict[str, str] = dataclasses.field(default_factory=dict)
+
+    def canonical_payload_bytes(self) -> bytes:
+        att_digests = sorted(
+            hashlib.sha256(
+                att.pae_bytes() + bytes.fromhex(att.signature_hex.strip())
+            ).hexdigest()
+            for att in self.benchmark_attestations
+            if att.signature_hex and len(att.signature_hex.strip()) == 128
+        )
+        baseline_digest = ""
+        if self.authenticated_baseline is not None and len(self.authenticated_baseline.signature_hex.strip()) == 128:
+            baseline_digest = hashlib.sha256(
+                self.authenticated_baseline.pae_bytes()
+                + bytes.fromhex(self.authenticated_baseline.signature_hex.strip())
+            ).hexdigest()
+        norm_contributors = sorted({
+            ThresholdDHTManifest._normalize_pubkey_id(pk)
+            for pk in self.contributor_pubkeys
+            if str(pk).strip()
+        })
+        doc = {
+            "attestation_digests": att_digests,
+            "baseline_sha256": baseline_digest,
+            "canary_suite_sha256": str(self.canary_suite_sha256).strip().lower(),
+            "contributor_pubkeys": norm_contributors,
+            "manifest_sha256": hashlib.sha256(self.manifest.canonical_payload()).hexdigest(),
+            "parent_bundle_sha256": str(self.parent_bundle_sha256).strip().lower(),
+            "predicate_type": DSSE_TYPE_RELEASE_V2,
+        }
+        return json.dumps(doc, sort_keys=True, separators=(",", ":")).encode("utf-8")
+
+    def pae_bytes(self) -> bytes:
+        return dsse_pae(DSSE_TYPE_RELEASE_V2, self.canonical_payload_bytes())
