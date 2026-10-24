@@ -1,64 +1,67 @@
 # Distributed updates and sharing
 
 > [!NOTE]
-> **Shared learning across Armiger instances.** Participating installations can contribute verified outcomes or aggregate parameter adjustments. Aggregation, peer review and trusted signing turn supported evidence into updates that other installations test locally before applying. Contributing is optional and **off by default**.
+> **Shared plugin updates across Armiger instances.** Participating nodes can contribute verified feedback on the catalog hashes, calibration temperatures and residual-adapter weights used by Armiger's plugins. When a candidate improvement is confirmed across a subset of independent nodes and signed as a new sequence version, other installations can discover it over the DHT, test it locally and adopt it. Contributing is optional and **off by default**.
 
 Normal classification runs locally and never sends feedback or fetches updates on its own. You can use Armiger without this subsystem—start with the [quickstart](quickstart.md) for ordinary local classification. Both contributing feedback and receiving updates require explicit configuration: enabling opt-in and calling the export APIs to contribute, or pinning trusted signers and peer attestors and supplying a transport to receive updates.
 
-## Why it helps
+## The Problem
 
-- **Let one installation's verified outcomes help others.** Completed imports verified on one instance can support catalog additions, confidence adjustments or swarm-trap detection for instances that have not seen those items.
-- **Learn from combined evidence without full retraining.** An aggregator fits catalog updates, confidence calibration or small adapter adjustments across participants without retraining the base model on each device.
-- **Keep local control.** Receivers choose which signers and peer reviewers to trust, can apply updates with sharing disabled, and automatically roll back any update that fails verification or local regression checks.
+A static local classifier falls behind in three ways:
 
-Signed updates make shared improvements available locally; they do not guarantee higher real-world accuracy on every workload.
+- **New titles outpace the shipped catalog.** Bare or minimally tagged releases for newly released movies and series are absent from the offline title catalog until verified examples are observed.
+- **Swarm traps and tracker conditions shift.** Fake-seeder honeypots and masquerading executables adapt faster than full base-model releases.
+- **No single node sees enough verified imports.** One installation rarely downloads and verifies enough diverse media to recalibrate confidence thresholds or refit adapter weights safely on its own, and retraining or redistributing the full base neural model for incremental updates is impractical.
+
+## The Solution
+
+Instead of retraining the base neural model on each device, participating nodes share evidence and candidate updates for the **lightweight plugin files** that run alongside the base model:
+
+- **Catalog hash additions:** compact 16-hex-character `BLAKE2b-64` hashes of normalized `title|year` strings mapped to `movie` or `tv_show` so bare release names resolve without retraining.
+- **Confidence calibration:** per-head temperature scalars and logit-bias adjustments that align confidence estimates with verified outcomes.
+- **Residual-adapter weights:** small numerical adjustments to the 3 trainable junk-path tensors of the swarm residual adapter (or a full validated model bundle).
+
+Contributions use two export paths depending on the workflow:
+
+- **Encrypted per-import feedback:** sent after a physically verified download, carrying an anonymized outcome record, a temperature loss profile, swarm anomaly features, and (by default for verified clean movies and series) a shared catalog hash so other nodes can match the same normalized `title|year` locally. Callers can disable catalog-hash export per call.
+- **Guarded aggregate deltas:** exported only after accumulating at least 25 local samples, clipping and adding noise to quantized weight deltas, and using per-instance keyed hashes for standalone catalog records.
+
+To prevent bad predictions or Sybil nodes from poisoning the fleet, candidate updates are built only from physically verified imports and **must be confirmed across a subset of independent nodes** (and co-signed by pinned release authorities) before being promoted as a new version. Every receiving node still tests a promoted version against its own local baseline and rolls back automatically on regression.
 
 ## How it works
 
-Participating instances supply verified evidence or guarded deltas, an aggregator builds a candidate update, reviewing peers and trusted signers authorize it, and receiving instances test it locally before committing. The **DHT** (distributed hash table) carries small signed update pointers; the update bundle itself is transferred separately.
+Opted-in peers contribute verified observations or weight deltas, cross-peer agreement forms a candidate plugin update, a quorum of independent peer nodes confirms the candidate against their own verified records and canary suite, and the confirmed update is promoted as a new sequence number (`seq`) via **BEP 44 / BEP 46** for other nodes to verify and adopt.
 
 ```mermaid
 flowchart LR
-    feedback["Opted-in nodes<br/>share feedback"] --> build["Aggregator<br/>builds update"]
-    build --> review["Peers attest<br/>signers sign"]
-    review -->|BEP 44 / 46| receive["Receivers<br/>test or revert"]
-    receive -. "New verified feedback<br/>only when opted in" .-> feedback
+    p1["Peer A<br/>verified feedback"] --> cand["Candidate update<br/>hashes or weights"]
+    p2["Peer B<br/>verified feedback"] --> cand
+    p3["Peer C<br/>verified feedback"] --> cand
+    cand --> quorum["Subset of nodes<br/>confirm & sign"]
+    quorum -->|New seq via<br/>BEP 44 / 46| adopt["Other nodes<br/>test & adopt"]
 ```
 
-The dotted arrow closes the loop only when sharing is enabled: receiving an update never turns outbound sharing on.
+Receiving an update never turns outbound sharing on; only nodes with `opt_in_sharing=True` export feedback into future rounds.
 
-1. **Verify locally and contribute.** Contributions happen only when an opted-in installation calls a feedback or export API—never automatically during classification. Local observations are checked against completed downloads and media stream inspection so unverified model predictions are not exported as ground truth.
-2. **Aggregate and fit.** Learning happens at the aggregator, which authenticates contributors and combines cross-instance evidence: requiring multi-party agreement for catalog entries, selecting calibration temperatures that reduce prediction loss relative to unscaled scores, fitting small swarm-adapter adjustments on contributed features, or trimming outliers across networks.
-3. **Review and sign.** Reviewing peers compare the candidate update against their own verified local records (rejecting contradicted or unconfirmed catalog changes and worse calibration loss) and test it against their pre-update canary baseline before issuing an attestation. Trusted signers co-sign the release manifest.
-4. **Verify, compare with local baseline and apply.** Receivers check manifest signatures, sequence order, payload hashes, peer attestations and file formats, then compare the staged candidate against their own pre-update canary baseline and verified local records. Passing updates are committed (including newly discovered catalog keys); regressions roll back to the previous state.
+1. **Peers contribute verified feedback.** Contributions happen only when an opted-in installation calls a feedback or export API—never automatically during classification. Local observations must pass physical verification (completed download, decodable media streams and catalog provenance) so unverified model predictions are never exported as ground truth.
+2. **Cross-peer evidence forms a candidate update.** Aggregators combine authenticated peer submissions: requiring multi-node agreement before adding a catalog hash, selecting calibration temperatures that lower prediction loss relative to unscaled scores, fitting small swarm-adapter weight deltas across contributed swarm outcomes, or taking a per-network trimmed mean of submitted weight deltas.
+3. **A subset of nodes confirms and promotes the version.** Independent reviewing peers across distinct networks (`>= 5` ASNs) compare the candidate against their own verified local records (rejecting contradicted or unconfirmed catalog keys and worse calibration loss) and stage it against their 500-item canary baseline. Once the peer quorum attests that the candidate passes and threshold signers co-sign the manifest, the update is published as the next monotonic `seq` version.
+4. **Other nodes discover, test and adopt (or roll back).** Subscribing nodes discover the new `seq` announcement via BEP 44/46, fetch the bundle, verify the threshold signatures and distinct-ASN peer attestations, and stage the update against their own pre-update canary baseline and verified local records. Passing updates are adopted (including newly discovered catalog hashes); any local regression rolls back to the exact prior state.
 
-Instances are never ranked against one another to copy a winner's model; each stage evaluates verified evidence or compares a candidate update against a local baseline.
+Nodes are never ranked against one another to copy a single "winning" node's model; candidate plugin updates are synthesized from multi-node evidence and confirmed against each reviewing and receiving node's local baseline.
 
 ### Where BEP 44 and BEP 46 fit
 
-**BEP** means BitTorrent Enhancement Proposal. These two specifications describe decentralized pointer storage and discovery:
+**BEP** means BitTorrent Enhancement Proposal. These two specifications describe how nodes publish and discover the latest version pointer in the **DHT** (distributed hash table):
 
-- **[BEP 44: signed DHT records](https://www.bittorrent.org/beps/bep_0044.html).** Mutable items store a small signed record (`<= 1000` bytes) at a lookup target derived from the publisher's public key and optional salt, using increasing sequence numbers (and optional compare-and-swap checks) to order updates. This carries the compact update announcement rather than model weights.
-- **[BEP 46: updating torrents via DHT mutable items](https://www.bittorrent.org/beps/bep_0046.html).** Places a target torrent's 20-byte infohash inside a BEP 44 mutable record discovered via a public-key magnet link, so subscribers can find and fetch the current payload separately.
+- **[BEP 44: signed DHT records](https://www.bittorrent.org/beps/bep_0044.html).** Mutable items store a small signed record (`<= 1000` bytes) at a lookup target derived from a public key and optional salt, using increasing sequence numbers (`seq`) and optional compare-and-swap checks to order versions. This carries the compact version announcement rather than large weight files.
+- **[BEP 46: updating torrents via DHT mutable items](https://www.bittorrent.org/beps/bep_0046.html).** Places a target torrent's 20-byte infohash inside a BEP 44 mutable record discovered via a public-key magnet link, so subscribers can discover which content hash carries the current version and fetch the payload separately.
 
-BEP 44 and BEP 46 cover discovery; Armiger defines the update manifests, peer-quorum attestations, payload schemas and local regression gates. See **Protocol implementation scope** in the expandable reference below for how Armiger's manifest hashes and local UDP test harness differ from standard BEP 46 torrent transport.
-
-## What can be shared
-
-Candidate updates can carry three kinds of improvement:
-
-- **Catalog additions:** compact title/year hashes mapped to `movie` or `tv_show` so bare release names can be resolved without retraining.
-- **Confidence calibration:** per-head temperature scaling and logit-bias adjustments that align confidence estimates with observed outcomes.
-- **Model-adapter changes:** small numerical adjustments to the swarm residual adapter used alongside the base model (or a full validated model bundle).
-
-Contributions use two distinct export paths:
-
-- **Encrypted per-import feedback:** sent to a configured aggregator after a physically verified import, carrying an anonymized outcome record, calibration loss profile, swarm anomaly features, and (by default for verified clean movies and series) a shared catalog hash so receivers can match the same normalized `title|year` locally. Callers can disable catalog-hash export per call.
-- **Guarded aggregate exports:** require at least 25 local samples before export, clip and add noise to quantized weight deltas, and use per-instance keyed hashes for standalone catalog records.
+BEP 44 and BEP 46 handle version discovery; Armiger defines the plugin update manifests, distinct-ASN peer attestations, payload schemas and local regression gates. See **Protocol implementation scope** in the expandable reference below for how Armiger's manifest hashes and local UDP test harness differ from standard BEP 46 torrent transport.
 
 ## Your sharing choices
 
-**Receiving does not require contributing.** With `opt_in_sharing=False` (the default), contribution exports and DHT publications are blocked, while local verification and application of supplied inbound bundles remain available.
+**Receiving does not require contributing.** With `opt_in_sharing=False` (the default), contribution exports and DHT publications are blocked, while local verification and adoption of supplied inbound bundles remain available.
 
 With no override, sharing resolves to `False`. To enable contributions, pass `opt_in_sharing=True` explicitly, or leave the argument unset and set `ARMIGER_DHT_SHARE_OPT_IN` to `1`, `true` or `yes`. An explicit `False` overrides the environment. Components also enforce their configured mode, such as `pull_only` or `off`.
 
@@ -78,7 +81,7 @@ Use `sharing_status()` to inspect the active setting and outbound counters:
 
 ## Trust and limitations
 
-Receivers reject all updates until trusted federation signers and peer attestors are explicitly configured out-of-band. Neither a contributor's temporary signing key nor the constructor's all-zero placeholder root key establishes trust.
+Promoting and accepting a new `seq` version is **federated and quorum-gated, not permissionless**: because an open DHT allows Sybil attackers to spin up arbitrary node identities, receivers reject all updates until trusted federation signers (`M-of-N`) and registered peer attestors (`K-of-N` across distinct ASNs) are explicitly configured out-of-band. Neither a contributor's temporary signing key nor the constructor's all-zero placeholder root key establishes trust.
 
 The v3.0.0 release establishes `seq=3006` as its offline release checkpoint and retires earlier deterministic test keys; see the [signed release manifest](../benchmarks/receipts/dht_seq3006/signed_dht_manifest_seq3006.json) and [release receipt](../benchmarks/receipts/dht_seq3006/dht_release_v3_gold_mit3_receipt.json). That receipt records a single-authority release (`quorum_attestations=0`) rather than a peer-attested runtime update bundle. Do not copy test keys into a deployment.
 
