@@ -569,7 +569,7 @@ class TestSession9IngressAndBEP46Hardening(unittest.TestCase):
                         parent_bundle_sha256=parent_sha,
                         candidate_bundle_sha256=cand_sha,
                         canary_suite_sha256=suite_sha,
-                        canary_metrics={"accuracy": 0.97, "ece": 0.018, "macro_f1": 0.96},
+                        canary_metrics={"accuracy": 0.97, "ece": 0.018, "macro_f1": 0.96, "mondrian_coverage": 0.96, "max_false_accept_rate": 0.0, "passed": True},
                         evaluator_version="2.12.2",
                         timestamp=now_ts,
                         ed25519_priv=e_priv,
@@ -757,8 +757,7 @@ class TestSession9IngressAndBEP46Hardening(unittest.TestCase):
 
                 # 6. ArmigerDHTRSIEngine.verify_and_stage_update rejects authenticated_baseline with mismatched parent or suite hash,
                 #    and enforces AcyclicReleaseEnvelope verification before staging updates.
-                from armiger.armiger_dht_rsi import ArmigerDHTRSIEngine
-                from armiger.dht_rsi_models_and_privacy import PeerAttestation
+                from armiger.armiger_dht_rsi import ArmigerDHTRSIEngine, PeerAttestation
                 eng = ArmigerDHTRSIEngine(
                     trusted_signers=trusted_rel,
                     trusted_evaluator_signers=trusted_eval,
@@ -895,19 +894,41 @@ class TestSession9IngressAndBEP46Hardening(unittest.TestCase):
                     WOTSPlusSHAKE256._ED25519_TO_WOTS_PUBS.update(saved_ed_to_wots)
                     WOTSPlusSHAKE256._WOTS_TO_ED25519_PUB.update(saved_root_by_ed)
 
-                # 7. Empty or failing benchmark attestation metrics must be rejected by verify_envelope
-                empty_pred = AcyclicProvenanceVerifier.sign_benchmark_attestation(
-                    peer_id="eval-0",
-                    asn=eval_asns[0],
-                    parent_bundle_sha256=parent_sha,
-                    candidate_bundle_sha256=cand_sha,
-                    canary_suite_sha256=suite_sha,
-                    canary_metrics={},
-                    evaluator_version="2.12.3",
-                    timestamp=now_ts,
-                    ed25519_priv=eval_signers[0][0],
-                    wots_priv_seed=eval_signers[0][2],
-                    ip_address=eval_ips[0],
+                # 7. Incomplete or empty benchmark attestation metrics are rejected by sign_benchmark_attestation AND verify_envelope
+                with self.assertRaisesRegex(ValueError, "missing_canary_metrics"):
+                    AcyclicProvenanceVerifier.sign_benchmark_attestation(
+                        peer_id="eval-0",
+                        asn=eval_asns[0],
+                        parent_bundle_sha256=parent_sha,
+                        candidate_bundle_sha256=cand_sha,
+                        canary_suite_sha256=suite_sha,
+                        canary_metrics={},
+                        evaluator_version="2.12.3",
+                        timestamp=now_ts,
+                        ed25519_priv=eval_signers[0][0],
+                        wots_priv_seed=eval_signers[0][2],
+                        ip_address=eval_ips[0],
+                    )
+                with self.assertRaisesRegex(ValueError, "missing_or_invalid_passed_flag|missing_canary_metric"):
+                    AcyclicProvenanceVerifier.sign_benchmark_attestation(
+                        peer_id="eval-0",
+                        asn=eval_asns[0],
+                        parent_bundle_sha256=parent_sha,
+                        candidate_bundle_sha256=cand_sha,
+                        canary_suite_sha256=suite_sha,
+                        canary_metrics={"accuracy": 0.97, "ece": 0.018, "macro_f1": 0.96},
+                        evaluator_version="2.12.3",
+                        timestamp=now_ts,
+                        ed25519_priv=eval_signers[0][0],
+                        wots_priv_seed=eval_signers[0][2],
+                        ip_address=eval_ips[0],
+                    )
+                empty_unsigned = dataclasses.replace(eval_preds[0], canary_metrics={}, signature_hex="", pq_signature_hex="")
+                empty_pae = empty_unsigned.pae_bytes()
+                empty_pred = dataclasses.replace(
+                    empty_unsigned,
+                    signature_hex=eval_signers[0][0].sign(empty_pae).hex(),
+                    pq_signature_hex=WOTSPlusSHAKE256.sign(eval_signers[0][2], empty_pae).hex(),
                 )
                 env_empty_m = AcyclicProvenanceVerifier.sign_release_envelope(
                     dataclasses.replace(unsigned_envelope, benchmark_attestations=(empty_pred, eval_preds[1], eval_preds[2])),
@@ -932,7 +953,7 @@ class TestSession9IngressAndBEP46Hardening(unittest.TestCase):
                     parent_bundle_sha256=parent_sha,
                     candidate_bundle_sha256=cand_sha,
                     canary_suite_sha256=suite_sha,
-                    canary_metrics={"accuracy": 0.80, "ece": 0.02, "macro_f1": 0.96},
+                    canary_metrics={"accuracy": 0.80, "ece": 0.02, "macro_f1": 0.96, "mondrian_coverage": 0.96, "max_false_accept_rate": 0.0, "passed": True},
                     evaluator_version="2.12.3",
                     timestamp=now_ts,
                     ed25519_priv=eval_signers[0][0],
@@ -963,7 +984,7 @@ class TestSession9IngressAndBEP46Hardening(unittest.TestCase):
                     parent_bundle_sha256=parent_sha,
                     candidate_bundle_sha256=cand_sha,
                     canary_suite_sha256=suite_sha,
-                    canary_metrics={"accuracy": 0.97, "ece": 0.018, "macro_f1": 0.96, "passed": False},
+                    canary_metrics={"accuracy": 0.97, "ece": 0.018, "macro_f1": 0.96, "mondrian_coverage": 0.96, "max_false_accept_rate": 0.0, "passed": False},
                     evaluator_version="2.12.3",
                     timestamp=now_ts,
                     ed25519_priv=eval_signers[0][0],
@@ -1018,18 +1039,17 @@ class TestSession9IngressAndBEP46Hardening(unittest.TestCase):
                 self.assertIn("invalid_evaluator_ed25519_signature", reason_sp)
 
                 # 9. Omitting ece or macro_f1 from benchmark attestation must be rejected
-                missing_ece_pred = AcyclicProvenanceVerifier.sign_benchmark_attestation(
-                    peer_id="eval-0",
-                    asn=eval_asns[0],
-                    parent_bundle_sha256=parent_sha,
-                    candidate_bundle_sha256=cand_sha,
-                    canary_suite_sha256=suite_sha,
-                    canary_metrics={"accuracy": 0.97, "macro_f1": 0.96},
-                    evaluator_version="2.12.3",
-                    timestamp=now_ts,
-                    ed25519_priv=eval_signers[0][0],
-                    wots_priv_seed=eval_signers[0][2],
-                    ip_address=eval_ips[0],
+                no_ece_unsigned = dataclasses.replace(
+                    eval_preds[0],
+                    canary_metrics={"accuracy": 0.97, "macro_f1": 0.96, "mondrian_coverage": 0.96, "max_false_accept_rate": 0.0, "passed": True},
+                    signature_hex="",
+                    pq_signature_hex="",
+                )
+                no_ece_pae = no_ece_unsigned.pae_bytes()
+                missing_ece_pred = dataclasses.replace(
+                    no_ece_unsigned,
+                    signature_hex=eval_signers[0][0].sign(no_ece_pae).hex(),
+                    pq_signature_hex=WOTSPlusSHAKE256.sign(eval_signers[0][2], no_ece_pae).hex(),
                 )
                 env_no_ece = AcyclicProvenanceVerifier.sign_release_envelope(
                     dataclasses.replace(unsigned_envelope, benchmark_attestations=(missing_ece_pred, eval_preds[1], eval_preds[2])),
@@ -1055,7 +1075,7 @@ class TestSession9IngressAndBEP46Hardening(unittest.TestCase):
                     parent_bundle_sha256=parent_sha,
                     candidate_bundle_sha256=cand_sha,
                     canary_suite_sha256=suite_sha,
-                    canary_metrics={"accuracy": 0.97, "ece": 0.018, "macro_f1": 0.96, "mondrian_coverage": 0.80},
+                    canary_metrics={"accuracy": 0.97, "ece": 0.018, "macro_f1": 0.96, "mondrian_coverage": 0.80, "max_false_accept_rate": 0.0, "passed": True},
                     evaluator_version="2.12.3",
                     timestamp=now_ts,
                     ed25519_priv=eval_signers[0][0],
@@ -1512,6 +1532,95 @@ class TestSession9IngressAndBEP46Hardening(unittest.TestCase):
                     )
                 )
                 self.assertEqual(meta_calls, 1)
+
+                # Delayed-header and delayed-redirect tests against the default transport (_default_get / _https_get_with_deadline)
+                import http.client
+                import socket as _sock_mod
+
+                def _run_raw_http_server(handler_fn):
+                    srv_sock = _sock_mod.socket(_sock_mod.AF_INET, _sock_mod.SOCK_STREAM)
+                    srv_sock.setsockopt(_sock_mod.SOL_SOCKET, _sock_mod.SO_REUSEADDR, 1)
+                    srv_sock.bind(("127.0.0.1", 0))
+                    srv_sock.listen(8)
+                    port_num = srv_sock.getsockname()[1]
+                    stop_ev = threading.Event()
+                    def _accept_loop():
+                        while not stop_ev.is_set():
+                            try:
+                                srv_sock.settimeout(0.05)
+                                conn_s, _ = srv_sock.accept()
+                            except OSError:
+                                continue
+                            threading.Thread(target=handler_fn, args=(conn_s,), daemon=True).start()
+                    t_srv = threading.Thread(target=_accept_loop, daemon=True)
+                    t_srv.start()
+                    return srv_sock, port_num, stop_ev
+
+                # (a) Delayed response headers trickling across max_total_seconds
+                def _trickle_headers_handler(conn_s):
+                    try:
+                        conn_s.recv(1024)
+                        conn_s.sendall(b"HTTP/1.1 200 OK\r\n")
+                        for i in range(10):
+                            time.sleep(0.03)
+                            conn_s.sendall(f"X-Trickle-{i}: val\r\n".encode("ascii"))
+                    except Exception:
+                        pass
+                    finally:
+                        try:
+                            conn_s.close()
+                        except Exception:
+                            pass
+
+                th_sock, th_port, th_stop = _run_raw_http_server(_trickle_headers_handler)
+                try:
+                    with self.assertRaisesRegex(TimeoutError, "webseed_total_deadline_exceeded"):
+                        fetch_bundle_via_bep19_webseed(
+                            strict_bundle.info_bytes,
+                            f"https://127.0.0.1:{th_port}/seed",
+                            expected_infohash_20=strict_bundle.infohash_20,
+                            timeout=1.0,
+                            max_total_seconds=0.07,
+                            connection_factory=lambda h, p, timeout=1.0: http.client.HTTPConnection(h, p, timeout=timeout),
+                        )
+                finally:
+                    th_stop.set()
+                    th_sock.close()
+
+                # (b) Successive delayed HTTPS redirects exceeding max_total_seconds
+                def _delayed_redirect_handler(conn_s):
+                    try:
+                        conn_s.recv(1024)
+                        time.sleep(0.035)
+                        resp_bytes = (
+                            f"HTTP/1.1 302 Found\r\n"
+                            f"Location: https://127.0.0.1:{dr_port}/seed/next\r\n"
+                            f"Content-Length: 0\r\n"
+                            f"Connection: close\r\n\r\n"
+                        ).encode("ascii")
+                        conn_s.sendall(resp_bytes)
+                    except Exception:
+                        pass
+                    finally:
+                        try:
+                            conn_s.close()
+                        except Exception:
+                            pass
+
+                dr_sock, dr_port, dr_stop = _run_raw_http_server(_delayed_redirect_handler)
+                try:
+                    with self.assertRaisesRegex(TimeoutError, "webseed_total_deadline_exceeded"):
+                        fetch_bundle_via_bep19_webseed(
+                            strict_bundle.info_bytes,
+                            f"https://127.0.0.1:{dr_port}/seed",
+                            expected_infohash_20=strict_bundle.infohash_20,
+                            timeout=1.0,
+                            max_total_seconds=0.07,
+                            connection_factory=lambda h, p, timeout=1.0: http.client.HTTPConnection(h, p, timeout=timeout),
+                        )
+                finally:
+                    dr_stop.set()
+                    dr_sock.close()
             finally:
                 dht.close()
 

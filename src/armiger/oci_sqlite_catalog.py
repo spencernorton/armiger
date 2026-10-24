@@ -920,6 +920,182 @@ async def fetch_bundle_via_peer_wire(
             pass
 
 
+def _https_get_with_deadline(
+    url: str,
+    max_bytes: int,
+    timeout: float,
+    deadline: float,
+    max_redirects: int = 5,
+    connection_factory: Optional[Callable[..., Any]] = None,
+) -> bytes:
+    """Perform an HTTPS GET bounded by an enforceable overall monotonic `deadline` covering
+    connection setup, TLS handshake, HTTP response headers, redirects, and body reads.
+    When `deadline` expires, a watchdog timer shuts down and closes the underlying socket.
+    """
+    import http.client
+    import socket
+    import time
+    import urllib.parse
+
+    if not url.lower().startswith("https://"):
+        raise ValueError("bep19_webseed_requires_https")
+
+    timed_out = [False]
+    active_lock = threading.Lock()
+    active_objs: List[Any] = []
+
+    def _register_obj(obj: Any) -> None:
+        if obj is None:
+            return
+        with active_lock:
+            active_objs.append(obj)
+            is_expired = timed_out[0]
+        if is_expired:
+            _force_close(obj)
+
+    def _force_close(obj: Any) -> None:
+        try:
+            sock = getattr(obj, "sock", None)
+            if sock is not None:
+                try:
+                    sock.shutdown(socket.SHUT_RDWR)
+                except Exception:
+                    pass
+                try:
+                    sock.close()
+                except Exception:
+                    pass
+        except Exception:
+            pass
+        try:
+            if hasattr(obj, "shutdown"):
+                obj.shutdown(socket.SHUT_RDWR)
+        except Exception:
+            pass
+        try:
+            obj.close()
+        except Exception:
+            pass
+
+    def _on_deadline() -> None:
+        with active_lock:
+            timed_out[0] = True
+            objs = list(active_objs)
+        for obj in objs:
+            _force_close(obj)
+
+    def _rem_timeout() -> float:
+        rem = deadline - time.monotonic()
+        if rem <= 0 or timed_out[0]:
+            raise TimeoutError("webseed_total_deadline_exceeded")
+        return min(float(timeout), rem)
+
+    class _DeadlineHTTPSConnection(http.client.HTTPSConnection):
+        def connect(self) -> None:
+            rem = _rem_timeout()
+            self.timeout = rem
+            raw_sock = socket.create_connection((self.host, self.port), rem, self.source_address)
+            _register_obj(raw_sock)
+            self.sock = raw_sock
+            if self._tunnel_host:
+                self._tunnel()
+            rem_tls = _rem_timeout()
+            raw_sock.settimeout(rem_tls)
+            self.sock = self._context.wrap_socket(raw_sock, server_hostname=self.host)
+            _register_obj(self.sock)
+
+    rem_initial = _rem_timeout()
+    watchdog = threading.Timer(rem_initial, _on_deadline)
+    watchdog.daemon = True
+    watchdog.start()
+    current_url = url
+    try:
+        for hop in range(max_redirects + 1):
+            hop_timeout = _rem_timeout()
+            parsed = urllib.parse.urlsplit(current_url)
+            if parsed.scheme.lower() != "https" or not parsed.hostname:
+                raise ValueError("bep19_webseed_requires_https")
+            port = parsed.port or 443
+            target_path = parsed.path or "/"
+            if parsed.query:
+                target_path = f"{target_path}?{parsed.query}"
+            factory = connection_factory or _DeadlineHTTPSConnection
+            conn = factory(parsed.hostname, port, timeout=hop_timeout)
+            _register_obj(conn)
+            try:
+                conn.request(
+                    "GET",
+                    target_path,
+                    headers={"User-Agent": "armiger-bep19-verifier/2.1.0", "Connection": "close"},
+                )
+                if getattr(conn, "sock", None) is not None:
+                    _register_obj(conn.sock)
+                    conn.sock.settimeout(_rem_timeout())
+                resp = conn.getresponse()
+                _rem_timeout()
+                status = int(getattr(resp, "status", 0))
+                if status in (301, 302, 303, 307, 308):
+                    if hop >= max_redirects:
+                        raise ValueError("bep19_webseed_too_many_redirects")
+                    loc = resp.getheader("Location") if hasattr(resp, "getheader") else None
+                    if not loc:
+                        raise ValueError("bep19_webseed_redirect_missing_location")
+                    resolved = urllib.parse.urljoin(current_url, str(loc))
+                    if not resolved.lower().startswith("https://"):
+                        raise ValueError("bep19_webseed_redirect_requires_https")
+                    current_url = resolved
+                    continue
+                if status != 200:
+                    raise ValueError(f"bep19_http_status_{status}")
+                cl = resp.getheader("Content-Length") if hasattr(resp, "getheader") else None
+                if cl is not None:
+                    try:
+                        if int(cl) > max_bytes:
+                            raise ValueError("bep19_content_length_exceeds_expected")
+                    except ValueError as exc:
+                        if "bep19_content_length_exceeds_expected" in str(exc):
+                            raise
+                chunks = bytearray()
+                while True:
+                    rem = _rem_timeout()
+                    if getattr(conn, "sock", None) is not None:
+                        try:
+                            conn.sock.settimeout(rem)
+                        except Exception:
+                            pass
+                    read_limit = min(16384, max_bytes + 1 - len(chunks))
+                    if hasattr(resp, "read1"):
+                        chunk = resp.read1(read_limit)
+                    elif hasattr(getattr(resp, "fp", None), "read1"):
+                        chunk = resp.fp.read1(read_limit)
+                    else:
+                        chunk = resp.read(min(4096, read_limit))
+                    if not chunk:
+                        break
+                    chunks.extend(chunk)
+                    if len(chunks) > max_bytes:
+                        raise ValueError("bep19_response_exceeds_expected_length")
+                _rem_timeout()
+                return bytes(chunks)
+            finally:
+                _force_close(conn)
+        raise ValueError("bep19_webseed_too_many_redirects")
+    except TimeoutError:
+        raise TimeoutError("webseed_total_deadline_exceeded")
+    except ValueError:
+        if timed_out[0] or time.monotonic() >= deadline:
+            raise TimeoutError("webseed_total_deadline_exceeded")
+        raise
+    except Exception as exc:
+        if timed_out[0] or time.monotonic() >= deadline:
+            raise TimeoutError("webseed_total_deadline_exceeded") from exc
+        if isinstance(exc, socket.timeout):
+            raise TimeoutError("webseed_socket_timeout") from exc
+        raise
+    finally:
+        watchdog.cancel()
+
+
 def fetch_bundle_via_bep19_webseed(
     info_bytes: bytes,
     webseed_base_url: str,
@@ -928,16 +1104,15 @@ def fetch_bundle_via_bep19_webseed(
     max_payload_bytes: int = 67108864,
     timeout: float = 10.0,
     max_total_seconds: Optional[float] = None,
+    connection_factory: Optional[Callable[..., Any]] = None,
 ) -> Dict[str, Any]:
     """Download bundle files via BEP-19 HTTP/HTTPS webseed (`<base>/<bundle_name>/<file_path>`
     or flat root fallback) with strict per-file, aggregate byte, and overall transfer deadline limits,
     then verify every SHA-1 piece, SHA-256 Merkle root, and file SHA-256.
     """
     import inspect
-    import socket
     import time
     import urllib.parse
-    import urllib.request
     from armiger.oci_vpn_guard import bdecode
     if max_payload_bytes <= 0:
         raise ValueError("invalid_max_payload_bytes")
@@ -968,59 +1143,14 @@ def fetch_bundle_via_bep19_webseed(
             raise TimeoutError("webseed_total_deadline_exceeded")
         return min(float(timeout), rem)
 
-    class _HTTPSOnlyRedirectHandler(urllib.request.HTTPRedirectHandler):
-        def redirect_request(self, req, fp, code, msg, headers, newurl):
-            resolved_url = urllib.parse.urljoin(req.full_url, str(newurl))
-            if not resolved_url.lower().startswith("https://"):
-                raise ValueError("bep19_webseed_redirect_requires_https")
-            return super().redirect_request(req, fp, code, msg, headers, resolved_url)
-
-    opener = urllib.request.build_opener(_HTTPSOnlyRedirectHandler())
-
     def _default_get(url: str, max_bytes: int) -> bytes:
-        if not url.lower().startswith("https://"):
-            raise ValueError("bep19_webseed_requires_https")
-        req = urllib.request.Request(url, headers={"User-Agent": "armiger-bep19-verifier/2.1.0"})
-        try:
-            with opener.open(req, timeout=_rem_ws_timeout()) as resp:
-                final_url = resp.geturl() if hasattr(resp, "geturl") else url
-                if not str(final_url).lower().startswith("https://"):
-                    raise ValueError("bep19_webseed_redirect_requires_https")
-                cl = resp.headers.get("Content-Length") if hasattr(resp, "headers") and resp.headers else None
-                if cl is not None:
-                    try:
-                        if int(cl) > max_bytes:
-                            raise ValueError("bep19_content_length_exceeds_expected")
-                    except ValueError as exc:
-                        if "bep19_content_length_exceeds_expected" in str(exc):
-                            raise
-                chunks = bytearray()
-                while True:
-                    rem = _rem_ws_timeout()
-                    try:
-                        raw_sock = getattr(getattr(getattr(resp, "fp", None), "raw", None), "_sock", None)
-                        if raw_sock is not None:
-                            raw_sock.settimeout(rem)
-                    except Exception:
-                        pass
-                    read_limit = min(16384, max_bytes + 1 - len(chunks))
-                    if hasattr(resp, "read1"):
-                        chunk = resp.read1(read_limit)
-                    elif hasattr(getattr(resp, "fp", None), "read1"):
-                        chunk = resp.fp.read1(read_limit)
-                    else:
-                        chunk = resp.read(min(4096, read_limit))
-                    if not chunk:
-                        break
-                    chunks.extend(chunk)
-                    if len(chunks) > max_bytes:
-                        raise ValueError("bep19_response_exceeds_expected_length")
-                _rem_ws_timeout()
-                return bytes(chunks)
-        except socket.timeout as exc:
-            if time.monotonic() >= ws_deadline:
-                raise TimeoutError("webseed_total_deadline_exceeded") from exc
-            raise TimeoutError("webseed_socket_timeout") from exc
+        return _https_get_with_deadline(
+            url=url,
+            max_bytes=max_bytes,
+            timeout=timeout,
+            deadline=ws_deadline,
+            connection_factory=connection_factory,
+        )
 
     def _call_fetcher(url: str, exp_len: int) -> bytes:
         _rem_ws_timeout()

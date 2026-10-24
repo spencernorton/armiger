@@ -220,15 +220,10 @@ def _fetch_webseed_metadata(
             raise TimeoutError("webseed_metadata_total_deadline_exceeded")
         return min(float(timeout), rem)
 
-    class _MetaHTTPSRedirect(urllib.request.HTTPRedirectHandler):
-        def redirect_request(self, req, fp, code, msg, headers, newurl):
-            _rem_meta_timeout()
-            resolved_url = urllib.parse.urljoin(req.full_url, str(newurl))
-            if not resolved_url.lower().startswith("https://"):
-                raise ValueError("bep19_webseed_redirect_requires_https")
-            return super().redirect_request(req, fp, code, msg, headers, resolved_url)
-
-    opener = urllib.request.build_opener(_MetaHTTPSRedirect())
+    try:
+        from armiger.oci_sqlite_catalog import _https_get_with_deadline
+    except ImportError:
+        from oci_sqlite_catalog import _https_get_with_deadline  # type: ignore[no-redef]
 
     for candidate_url in (f"{base}/{ih_hex}.torrent", f"{base}/bundle.torrent"):
         if time.monotonic() >= meta_deadline:
@@ -241,41 +236,12 @@ def _fetch_webseed_metadata(
             else:
                 if not candidate_url.lower().startswith("https://"):
                     continue
-                req = urllib.request.Request(candidate_url, headers={"User-Agent": "armiger-bep19-verifier/2.1.0"})
-                with opener.open(req, timeout=_rem_meta_timeout()) as resp:
-                    final_url = resp.geturl() if hasattr(resp, "geturl") else candidate_url
-                    if not str(final_url).lower().startswith("https://"):
-                        raise ValueError("bep19_webseed_redirect_requires_https")
-                    cl = resp.headers.get("Content-Length") if hasattr(resp, "headers") and resp.headers else None
-                    if cl is not None:
-                        try:
-                            if int(cl) > MAX_TORRENT_META_BYTES:
-                                continue
-                        except ValueError:
-                            pass
-                    chunks = bytearray()
-                    while True:
-                        rem = _rem_meta_timeout()
-                        try:
-                            raw_sock = getattr(getattr(getattr(resp, "fp", None), "raw", None), "_sock", None)
-                            if raw_sock is not None:
-                                raw_sock.settimeout(rem)
-                        except Exception:
-                            pass
-                        read_limit = min(16384, MAX_TORRENT_META_BYTES + 1 - len(chunks))
-                        if hasattr(resp, "read1"):
-                            chunk = resp.read1(read_limit)
-                        elif hasattr(getattr(resp, "fp", None), "read1"):
-                            chunk = resp.fp.read1(read_limit)
-                        else:
-                            chunk = resp.read(min(4096, read_limit))
-                        if not chunk:
-                            break
-                        chunks.extend(chunk)
-                        if len(chunks) > MAX_TORRENT_META_BYTES:
-                            break
-                    _rem_meta_timeout()
-                    raw = bytes(chunks)
+                raw = _https_get_with_deadline(
+                    url=candidate_url,
+                    max_bytes=MAX_TORRENT_META_BYTES,
+                    timeout=timeout,
+                    deadline=meta_deadline,
+                )
             if len(raw) > MAX_TORRENT_META_BYTES:
                 continue
             return extract_info_bytes_from_file(raw, expected_infohash_20=infohash_20)

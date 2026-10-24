@@ -1396,17 +1396,30 @@ class AcyclicProvenanceVerifier:
             wots_priv_seed, wots_pub_bytes = WOTSPlusSHAKE256.derive_keypair_from_ed25519_priv(raw_ed)
         else:
             wots_priv_seed, wots_pub_bytes = WOTSPlusSHAKE256._normalize_root_priv(wots_priv_seed)
+        if not isinstance(canary_metrics, Mapping) or not canary_metrics:
+            raise ValueError("missing_canary_metrics")
+        if "passed" not in canary_metrics or not isinstance(canary_metrics["passed"], bool):
+            raise ValueError("missing_or_invalid_passed_flag")
+        raw_acc = canary_metrics.get("accuracy", canary_metrics.get("category_accuracy"))
+        if isinstance(raw_acc, bool) or not isinstance(raw_acc, (int, float)) or not math.isfinite(float(raw_acc)) or not (0.0 <= float(raw_acc) <= 1.0):
+            raise ValueError("missing_or_invalid_accuracy")
+        for req_key in ("ece", "macro_f1", "mondrian_coverage", "max_false_accept_rate"):
+            if req_key not in canary_metrics:
+                raise ValueError(f"missing_canary_metric:{req_key}")
+            req_val = canary_metrics[req_key]
+            if isinstance(req_val, bool) or not isinstance(req_val, (int, float)) or not math.isfinite(float(req_val)) or not (0.0 <= float(req_val) <= 1.0):
+                raise ValueError(f"invalid_canary_metric:{req_key}")
         clean_metrics: Dict[str, Union[float, bool]] = {}
         for k, v in canary_metrics.items():
             key_str = str(k)
             if isinstance(v, bool):
+                if key_str != "passed":
+                    raise ValueError(f"unexpected_boolean_canary_metric:{key_str}")
                 clean_metrics[key_str] = bool(v)
-            else:
+            elif isinstance(v, (int, float)) and math.isfinite(float(v)):
                 clean_metrics[key_str] = float(v)
-        if clean_metrics:
-            clean_metrics.setdefault("passed", True)
-            clean_metrics.setdefault("mondrian_coverage", 0.96)
-            clean_metrics.setdefault("max_false_accept_rate", 0.0)
+            else:
+                raise ValueError(f"invalid_canary_metric:{key_str}")
         unsigned = BenchmarkAttestationPredicate(
             peer_id=peer_id,
             asn=int(asn),
