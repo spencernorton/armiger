@@ -351,13 +351,21 @@ class GatedBEP44UDPNode:
             def _dns_worker() -> None:
                 try:
                     ip_res = str(resolver_cb(host_str))
-                    loop.call_soon_threadsafe(
-                        lambda: None if dns_fut.done() else dns_fut.set_result(ip_res)
-                    )
+                    if not loop.is_closed():
+                        try:
+                            loop.call_soon_threadsafe(
+                                lambda: None if dns_fut.done() else dns_fut.set_result(ip_res)
+                            )
+                        except RuntimeError:
+                            pass
                 except Exception as exc:
-                    loop.call_soon_threadsafe(
-                        lambda e=exc: None if dns_fut.done() else dns_fut.set_exception(e)
-                    )
+                    if not loop.is_closed():
+                        try:
+                            loop.call_soon_threadsafe(
+                                lambda e=exc: None if dns_fut.done() else dns_fut.set_exception(e)
+                            )
+                        except RuntimeError:
+                            pass
                 finally:
                     _KRPC_DNS_SEMAPHORE.release()
 
