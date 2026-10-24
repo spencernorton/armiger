@@ -19,38 +19,64 @@ import urllib.request
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 
 ROOT = Path(__file__).resolve().parents[2]
-OCI = ROOT / "deploy" / "oci-dht"
-ARMIGER = (ROOT / "src" / "armiger") if (ROOT / "src" / "armiger").exists() else (ROOT / "armiger")
 SRC = ROOT / "src"
-for p in (OCI, ARMIGER, SRC, ROOT):
-    if str(p) not in sys.path:
-        sys.path.insert(0, str(p))
+OCI = ROOT / "deploy" / "oci-dht"
+for p_dir in (SRC, OCI, ROOT):
+    if p_dir.exists() and str(p_dir) not in sys.path:
+        sys.path.insert(0, str(p_dir))
 
-from oci_vpn_guard import (  # noqa: E402
-    AnonymityGuard,
-    _sign_bep44,
-    bdecode,
-    bdecode_krpc,
-    bencode,
-    bep44_signing_buffer,
-    compute_bep44_target,
-    generate_bep42_node_id,
-    verify_bep42_node_id,
-)
-from oci_dht_seeder import BitTorrentPeerWireSeeder, GatedBEP44UDPNode  # noqa: E402
-from oci_sqlite_catalog import (  # noqa: E402
-    BT_EXT_HANDSHAKE_ID,
-    BT_MSG_EXTENDED,
-    BT_PROTOCOL_HEADER,
-    BT_RESERVED_BEP10,
-    BT_UT_METADATA_ID,
-    _CatalogJSONStream,
-    build_sqlite_zero_cue_catalog,
-    build_torrent_bundle,
-    fetch_bundle_via_bep19_webseed,
-    fetch_bundle_via_peer_wire,
-    verify_torrent_payload,
-)
+try:
+    from armiger.oci_vpn_guard import (  # noqa: E402
+        AnonymityGuard,
+        _sign_bep44,
+        bdecode,
+        bdecode_krpc,
+        bencode,
+        bep44_signing_buffer,
+        compute_bep44_target,
+        generate_bep42_node_id,
+        verify_bep42_node_id,
+    )
+    from armiger.oci_dht_seeder import BitTorrentPeerWireSeeder, GatedBEP44UDPNode  # noqa: E402
+    from armiger.oci_sqlite_catalog import (  # noqa: E402
+        BT_EXT_HANDSHAKE_ID,
+        BT_MSG_EXTENDED,
+        BT_PROTOCOL_HEADER,
+        BT_RESERVED_BEP10,
+        BT_UT_METADATA_ID,
+        _CatalogJSONStream,
+        build_sqlite_zero_cue_catalog,
+        build_torrent_bundle,
+        fetch_bundle_via_bep19_webseed,
+        fetch_bundle_via_peer_wire,
+        verify_torrent_payload,
+    )
+except ImportError:
+    from oci_vpn_guard import (  # noqa: E402
+        AnonymityGuard,
+        _sign_bep44,
+        bdecode,
+        bdecode_krpc,
+        bencode,
+        bep44_signing_buffer,
+        compute_bep44_target,
+        generate_bep42_node_id,
+        verify_bep42_node_id,
+    )
+    from oci_dht_seeder import BitTorrentPeerWireSeeder, GatedBEP44UDPNode  # noqa: E402
+    from oci_sqlite_catalog import (  # noqa: E402
+        BT_EXT_HANDSHAKE_ID,
+        BT_MSG_EXTENDED,
+        BT_PROTOCOL_HEADER,
+        BT_RESERVED_BEP10,
+        BT_UT_METADATA_ID,
+        _CatalogJSONStream,
+        build_sqlite_zero_cue_catalog,
+        build_torrent_bundle,
+        fetch_bundle_via_bep19_webseed,
+        fetch_bundle_via_peer_wire,
+        verify_torrent_payload,
+    )
 from armiger.armiger_dht_rsi import (  # noqa: E402
     AcyclicProvenanceVerifier,
     AcyclicReleaseEnvelope,
@@ -698,7 +724,7 @@ class TestSession9IngressAndBEP46Hardening(unittest.TestCase):
                 self.assertIn("cyclic_provenance_violation:evaluator_in_release_signers", reason_mix)
 
                 # 6. ArmigerDHTRSIEngine.verify_and_stage_update rejects authenticated_baseline with mismatched parent or suite hash
-                from armiger_dht_rsi import ArmigerDHTRSIEngine
+                from armiger.armiger_dht_rsi import ArmigerDHTRSIEngine
                 eng = ArmigerDHTRSIEngine(trusted_signers=trusted_rel, threshold_m=2, min_distinct_asns=1)
                 eng_ok_p, eng_reason_p, _ = eng.verify_and_stage_update(
                     manifest=manifest,

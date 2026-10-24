@@ -10,7 +10,7 @@ import struct
 import time
 from typing import Any, Dict, List, Mapping, Optional, Sequence, Set, Tuple, Union
 
-from oci_sqlite_catalog import (  # noqa: F401
+from armiger.oci_sqlite_catalog import (  # noqa: F401
     BT_EXT_HANDSHAKE_ID,
     BT_METADATA_PIECE_SIZE,
     BT_MSG_BITFIELD,
@@ -27,7 +27,7 @@ from oci_sqlite_catalog import (  # noqa: F401
     fetch_bundle_via_bep19_webseed,
     fetch_bundle_via_peer_wire,
 )
-from oci_vpn_guard import (
+from armiger.oci_vpn_guard import (
     AnonymityGuard,
     VPNEgressGuard,
     _sign_bep44,

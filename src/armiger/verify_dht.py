@@ -28,21 +28,30 @@ import sys
 from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple
 import urllib.request
 
-_THIS_DIR = Path(__file__).resolve().parent
-if str(_THIS_DIR) not in sys.path:
-    sys.path.insert(0, str(_THIS_DIR))
-
-from oci_dht_node import (  # noqa: E402
-    DEFAULT_DHT_BOOTSTRAP_NODES,
-    bdecode,
-    bdecode_krpc,
-    bencode,
-    compute_bep44_target,
-    fetch_bundle_via_bep19_webseed,
-    fetch_bundle_via_peer_wire,
-    parse_bootstrap_nodes,
-)
-from oci_vpn_guard import _verify_bep44, bep44_signing_buffer  # noqa: E402
+try:
+    from armiger.oci_dht_node import (
+        DEFAULT_DHT_BOOTSTRAP_NODES,
+        bdecode,
+        bdecode_krpc,
+        bencode,
+        compute_bep44_target,
+        fetch_bundle_via_bep19_webseed,
+        fetch_bundle_via_peer_wire,
+        parse_bootstrap_nodes,
+    )
+    from armiger.oci_vpn_guard import _verify_bep44, bep44_signing_buffer
+except ImportError:
+    from oci_dht_node import (  # type: ignore[no-redef]
+        DEFAULT_DHT_BOOTSTRAP_NODES,
+        bdecode,
+        bdecode_krpc,
+        bencode,
+        compute_bep44_target,
+        fetch_bundle_via_bep19_webseed,
+        fetch_bundle_via_peer_wire,
+        parse_bootstrap_nodes,
+    )
+    from oci_vpn_guard import _verify_bep44, bep44_signing_buffer  # type: ignore[no-redef]
 
 MAX_TORRENT_META_BYTES = 1048576
 
