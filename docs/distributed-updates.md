@@ -15,13 +15,13 @@ The goal is to make shared improvements available locally. An update's effect on
 
 ## How it works
 
-This is a feedback loop: participating instances supply evidence or candidate changes, an aggregator builds a proposed update, and other instances validate it before use. The **DHT** (distributed hash table) is the peer network used to exchange update data.
+This is a feedback loop: participating instances supply evidence or candidate changes, an aggregator builds a proposed update, and other instances validate it before use. The **DHT** (distributed hash table) carries small update announcements; the larger update bundle is fetched separately. BEP 44 and BEP 46 explain this update-discovery pattern.
 
 ```mermaid
 flowchart LR
     feedback["Participating instances<br/>verified feedback or changes"] --> build["Aggregate evidence<br/>propose an update"]
     build --> review["Peers validate<br/>trusted signers publish"]
-    review -->|DHT| receive["Other instances<br/>test, then apply or reject"]
+    review -->|BEP 44 / 46| receive["Other instances<br/>test, then apply or reject"]
     receive -. "New verified feedback<br/>only when opted in" .-> feedback
 ```
 
@@ -31,6 +31,15 @@ The dotted arrow closes the loop: a receiver can also contribute its own verifie
 2. **Combine and learn.** Aggregators authenticate contributions and combine evidence into candidate catalog, calibration or adapter updates. A single contribution does not automatically become a published update.
 3. **Review and publish.** Reviewing peers check the candidate against local verified records and regression checks. Trusted signers authorize an update for distribution.
 4. **Test, apply and repeat.** Receivers check signatures, payload hashes, version order, attestations and formats, then test the candidate locally. Ultra commits a passing candidate or rolls back a regression. Further verified feedback can feed the next round.
+
+### Where BEP 44 and BEP 46 fit
+
+**BEP** means BitTorrent Enhancement Proposal. These two proposals describe update storage and discovery:
+
+- **[BEP 44: signed DHT records](https://www.bittorrent.org/beps/bep_0044.html).** Its mutable items let a publisher update a small record at a stable lookup address. Ed25519 signatures authenticate the record, and increasing sequence numbers distinguish newer announcements from older ones. This is the small “an update is available” record, rather than the model weights themselves.
+- **[BEP 46: finding the current torrent](https://www.bittorrent.org/beps/bep_0046.html).** It builds on BEP 44 by putting a torrent's infohash in that mutable record. Subscribers following the publisher's public key and optional salt can discover which torrent currently carries the content, then fetch that content separately.
+
+Armiger adds the learning-specific layer: contribution validation, aggregation, trusted signers, payload hashes and local regression checks. BEP 44 and BEP 46 do not decide whether a model change improves accuracy. The diagram labels this discovery layer; see **Protocol implementation scope** in the expandable technical reference below for the local test transport's limits.
 
 ### How improvements are evaluated
 
@@ -73,6 +82,14 @@ Ultra's update path uses **baseline-relative regression checks**: it compares th
 
 <details>
 <summary>Technical details and verification</summary>
+
+### Protocol implementation scope
+
+Armiger uses the small signed announcement plus separate bundle pattern, with its own manifests and payload schemas. These application formats extend beyond the BEPs.
+
+The [local wire harness](../tests/bep44_udp_wire_harness.py) implements BEP 44 mutable `get`/`put` operations and uses custom `put_bundle`/`get_bundle` UDP messages for larger bundles. Those custom messages are not defined by BEP 46. The [update bridge's `sign_manifest()` contract](../src/armiger/ultra_pipeline_update_bridge.py) also leaves BEP 46 mutable-item target derivation out of scope and uses SHA-1 of the payload as its content identifier. That identifier is not, by itself, a generated torrent's infohash.
+
+The protocol references explain the design and discovery roles. Local harness results do not establish interoperability with arbitrary BEP 46 torrent clients.
 
 ### Default contribution protections
 
