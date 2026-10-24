@@ -413,14 +413,22 @@ class GatedBEP44UDPNode:
                         resp = await self.rpc_call(addr, b"get_peers", {b"info_hash": target_20})
                     else:
                         resp = await self.rpc_call(addr, b"get", {b"target": target_20})
-                    r_dict = resp.get(b"r") if isinstance(resp.get(b"r"), dict) else {}
+                    if resp.get(b"y") != b"r" or not isinstance(resp.get(b"r"), dict):
+                        return
+                    r_dict = resp[b"r"]
                     r_id = r_dict.get(b"id")
                     if not (isinstance(r_id, bytes) and len(r_id) == 20):
-                        r_id = candidates.get(addr) or hashlib.sha1(f"{addr[0]}:{addr[1]}".encode("utf-8")).digest()
+                        return
                     candidates[addr] = r_id
                     self.add_routing_node(r_id, addr[0], addr[1])
                     for entry in r_dict.get(b"nodes_list", []):
-                        if isinstance(entry, list) and len(entry) == 3 and isinstance(entry[0], bytes) and isinstance(entry[1], bytes):
+                        if (
+                            isinstance(entry, list)
+                            and len(entry) == 3
+                            and isinstance(entry[0], bytes)
+                            and len(entry[0]) == 20
+                            and isinstance(entry[1], bytes)
+                        ):
                             c_addr = (entry[1].decode("ascii", errors="ignore"), int(entry[2]))
                             candidates.setdefault(c_addr, entry[0])
                             self.add_routing_node(entry[0], c_addr[0], c_addr[1])
@@ -443,7 +451,10 @@ class GatedBEP44UDPNode:
 
             await asyncio.gather(*(_probe(a) for a in batch))
 
-        ranked = sorted(responders.values(), key=lambda item: _xor_distance(item["node_id"], target_20))
+        ranked = sorted(
+            responders.values(),
+            key=lambda item: (0 if item["token"] else 1, _xor_distance(item["node_id"], target_20)),
+        )
         return ranked[:max(1, int(k))]
 
     async def bootstrap_and_publish(
@@ -482,13 +493,20 @@ class GatedBEP44UDPNode:
             try:
                 resp = await self.rpc_call(target_addr, b"find_node", {b"target": self.node_id})
                 contacted.add(target_addr)
-                r_dict = resp.get(b"r", {}) if isinstance(resp.get(b"r"), dict) else {}
+                if resp.get(b"y") != b"r" or not isinstance(resp.get(b"r"), dict):
+                    continue
+                r_dict = resp[b"r"]
                 r_id = r_dict.get(b"id")
-                if not (isinstance(r_id, bytes) and len(r_id) == 20):
-                    r_id = hashlib.sha1(f"{resolved_ip}:{b_port}".encode("utf-8")).digest()
-                self.add_routing_node(r_id, resolved_ip, int(b_port))
+                if isinstance(r_id, bytes) and len(r_id) == 20:
+                    self.add_routing_node(r_id, resolved_ip, int(b_port))
                 for entry in r_dict.get(b"nodes_list", []):
-                    if isinstance(entry, list) and len(entry) == 3 and isinstance(entry[0], bytes) and isinstance(entry[1], bytes):
+                    if (
+                        isinstance(entry, list)
+                        and len(entry) == 3
+                        and isinstance(entry[0], bytes)
+                        and len(entry[0]) == 20
+                        and isinstance(entry[1], bytes)
+                    ):
                         self.add_routing_node(entry[0], entry[1].decode("ascii", errors="ignore"), int(entry[2]))
                 for nid, nip, npt in _parse_compact_nodes(r_dict.get(b"nodes", b"")):
                     self.add_routing_node(nid, nip, npt)

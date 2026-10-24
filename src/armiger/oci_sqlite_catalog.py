@@ -1062,8 +1062,10 @@ def _https_get_with_deadline(
                 self.sock = self._context.wrap_socket(connected_sock, server_hostname=self.host)
                 _register_obj(self.sock)
 
-    rem_initial = _rem_timeout()
-    watchdog = threading.Timer(rem_initial, _on_deadline)
+    rem_total = deadline - time.monotonic()
+    if rem_total <= 0:
+        raise TimeoutError("webseed_total_deadline_exceeded")
+    watchdog = threading.Timer(rem_total, _on_deadline)
     watchdog.daemon = True
     watchdog.start()
     current_url = url
@@ -1138,8 +1140,12 @@ def _https_get_with_deadline(
             finally:
                 _force_close(conn)
         raise ValueError("bep19_webseed_too_many_redirects")
-    except TimeoutError:
-        raise TimeoutError("webseed_total_deadline_exceeded")
+    except TimeoutError as exc:
+        if timed_out[0] or time.monotonic() >= deadline or str(exc) == "webseed_total_deadline_exceeded":
+            raise TimeoutError("webseed_total_deadline_exceeded") from exc
+        if str(exc) in ("webseed_dns_timeout", "webseed_socket_timeout"):
+            raise
+        raise TimeoutError("webseed_socket_timeout") from exc
     except ValueError:
         if timed_out[0] or time.monotonic() >= deadline:
             raise TimeoutError("webseed_total_deadline_exceeded")

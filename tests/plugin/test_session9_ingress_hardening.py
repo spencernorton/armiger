@@ -766,7 +766,8 @@ class TestSession9IngressAndBEP46Hardening(unittest.TestCase):
 
                 # 6. ArmigerDHTRSIEngine.verify_and_stage_update rejects authenticated_baseline with mismatched parent or suite hash,
                 #    and enforces AcyclicReleaseEnvelope verification before staging updates.
-                from armiger.armiger_dht_rsi import ArmigerDHTRSIEngine, PeerAttestation
+                from armiger.armiger_dht_rsi import ArmigerDHTRSIEngine
+                from armiger.dht_rsi_models_and_privacy import PeerAttestation
                 eng = ArmigerDHTRSIEngine(
                     trusted_signers=trusted_rel,
                     trusted_evaluator_signers=trusted_eval,
@@ -1724,6 +1725,96 @@ class TestSession9IngressAndBEP46Hardening(unittest.TestCase):
                         tls_wrap=False,
                     )
                 self.assertLessEqual(connect_attempts, 3)
+
+                # (e) Healthy multi-chunk transfer exceeding per-socket `timeout` (0.06s) but within `max_total_seconds` (0.45s) succeeds
+                def _progressing_chunk_handler(conn_s):
+                    try:
+                        conn_s.recv(1024)
+                        payload_body = strict_files["big.bin"]
+                        hdr_bytes = (
+                            f"HTTP/1.1 200 OK\r\n"
+                            f"Content-Length: {len(payload_body)}\r\n"
+                            f"Connection: close\r\n\r\n"
+                        ).encode("ascii")
+                        conn_s.sendall(hdr_bytes)
+                        step = 10000
+                        for off in range(0, len(payload_body), step):
+                            time.sleep(0.025)
+                            conn_s.sendall(payload_body[off : off + step])
+                    except Exception:
+                        pass
+                    finally:
+                        try:
+                            conn_s.close()
+                        except Exception:
+                            pass
+
+                pc_sock, pc_port, pc_stop = _run_raw_http_server(_progressing_chunk_handler)
+                try:
+                    prog_res = fetch_bundle_via_bep19_webseed(
+                        strict_bundle.info_bytes,
+                        f"https://127.0.0.1:{pc_port}/seed",
+                        expected_infohash_20=strict_bundle.infohash_20,
+                        timeout=0.06,
+                        max_total_seconds=0.45,
+                        tls_wrap=False,
+                    )
+                    self.assertEqual(prog_res["files"], strict_files)
+                finally:
+                    pc_stop.set()
+                    pc_sock.close()
+
+                # (f) iterative_find_closest and bootstrap_and_publish ignore KRPC errors / missing node IDs and rank token-bearing nodes first
+                target_20 = compute_bep44_target(pub_32, salt)
+                k_node = GatedBEP44UDPNode(vpn, anonymity_guard=AnonymityGuard(True))
+                err_addr = ("127.0.0.1", 50001)
+                notok_addr = ("127.0.0.1", 50002)
+                tok_addr = ("127.0.0.1", 50003)
+                # Make notok_addr XOR-closer to target_20 than tok_addr, while err_addr returns y=e
+                close_id = target_20
+                far_id = bytes([target_20[0] ^ 0xFF]) + target_20[1:]
+
+                async def _mock_rpc(addr, q, a, timeout=1.5):
+                    if addr == err_addr:
+                        return {b"t": b"aa", b"y": b"e", b"e": [201, b"Generic Error"]}
+                    if addr == notok_addr:
+                        return {
+                            b"t": b"ab",
+                            b"y": b"r",
+                            b"r": {
+                                b"id": close_id,
+                                b"nodes_list": [[far_id, b"127.0.0.1", 50003]],
+                            },
+                        }
+                    if addr == tok_addr:
+                        return {
+                            b"t": b"ac",
+                            b"y": b"r",
+                            b"r": {
+                                b"id": far_id,
+                                b"token": b"valid-tok",
+                                b"seq": 4,
+                            },
+                        }
+                    raise TimeoutError("unreachable")
+
+                k_node.rpc_call = _mock_rpc  # type: ignore[method-assign]
+                closest_k1 = await k_node.iterative_find_closest(
+                    target_20,
+                    [err_addr, notok_addr],
+                    mode="get",
+                    alpha=2,
+                    k=1,
+                    max_rounds=3,
+                )
+                self.assertEqual(len(closest_k1), 1)
+                self.assertEqual(closest_k1[0]["addr"], tok_addr)
+                self.assertEqual(closest_k1[0]["token"], b"valid-tok")
+                # Error responder must not be added to routing_table
+                routed_ports = {pt for _nid, _ip, pt in k_node.routing_table}
+                self.assertNotIn(50001, routed_ports)
+                self.assertIn(50002, routed_ports)
+                self.assertIn(50003, routed_ports)
             finally:
                 dht.close()
 
