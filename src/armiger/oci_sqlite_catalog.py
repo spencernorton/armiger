@@ -927,12 +927,17 @@ def _https_get_with_deadline(
     deadline: float,
     max_redirects: int = 5,
     connection_factory: Optional[Callable[..., Any]] = None,
+    resolver_fn: Optional[Callable[[str, int], Sequence[Any]]] = None,
+    socket_factory: Optional[Callable[[int, int, int], Any]] = None,
+    tls_wrap: bool = True,
 ) -> bytes:
     """Perform an HTTPS GET bounded by an enforceable overall monotonic `deadline` covering
-    connection setup, TLS handshake, HTTP response headers, redirects, and body reads.
-    When `deadline` expires, a watchdog timer shuts down and closes the underlying socket.
+    DNS resolution, per-address TCP connection setup, TLS handshake, HTTP response headers,
+    redirects, and body reads. When `deadline` expires, a watchdog timer shuts down and closes
+    any registered socket immediately.
     """
     import http.client
+    import queue
     import socket
     import time
     import urllib.parse
@@ -990,19 +995,72 @@ def _https_get_with_deadline(
             raise TimeoutError("webseed_total_deadline_exceeded")
         return min(float(timeout), rem)
 
+    def _resolve_with_deadline(host: str, port: int) -> Sequence[Any]:
+        rem_dns = _rem_timeout()
+        eff_resolver = resolver_fn or (
+            lambda h, p: socket.getaddrinfo(h, p, socket.AF_UNSPEC, socket.SOCK_STREAM)
+        )
+        res_q: "queue.Queue[Tuple[bool, Any]]" = queue.Queue(maxsize=1)
+
+        def _dns_worker() -> None:
+            try:
+                infos = eff_resolver(host, port)
+                res_q.put((True, infos))
+            except Exception as exc:
+                res_q.put((False, exc))
+
+        t_dns = threading.Thread(target=_dns_worker, daemon=True)
+        t_dns.start()
+        try:
+            ok, payload = res_q.get(timeout=rem_dns)
+        except queue.Empty as exc:
+            if time.monotonic() >= deadline or timed_out[0]:
+                raise TimeoutError("webseed_total_deadline_exceeded") from exc
+            raise TimeoutError("webseed_dns_timeout") from exc
+        _rem_timeout()
+        if not ok:
+            raise payload
+        if not payload:
+            raise OSError("dns_resolution_empty")
+        return payload
+
     class _DeadlineHTTPSConnection(http.client.HTTPSConnection):
         def connect(self) -> None:
-            rem = _rem_timeout()
-            self.timeout = rem
-            raw_sock = socket.create_connection((self.host, self.port), rem, self.source_address)
-            _register_obj(raw_sock)
-            self.sock = raw_sock
+            addrinfos = _resolve_with_deadline(self.host, self.port)
+            eff_sock_factory = socket_factory or socket.socket
+            last_err: Optional[Exception] = None
+            connected_sock = None
+            for res in addrinfos:
+                af, socktype, proto, _canonname, sa = res
+                rem_addr = _rem_timeout()
+                raw_sock = eff_sock_factory(af, socktype, proto)
+                _register_obj(raw_sock)
+                try:
+                    raw_sock.settimeout(rem_addr)
+                    if self.source_address:
+                        raw_sock.bind(self.source_address)
+                    raw_sock.connect(sa)
+                    connected_sock = raw_sock
+                    break
+                except Exception as exc:
+                    last_err = exc
+                    _force_close(raw_sock)
+                    if timed_out[0] or time.monotonic() >= deadline:
+                        raise TimeoutError("webseed_total_deadline_exceeded") from exc
+            if connected_sock is None:
+                if timed_out[0] or time.monotonic() >= deadline:
+                    raise TimeoutError("webseed_total_deadline_exceeded")
+                if last_err is not None:
+                    raise last_err
+                raise OSError("connect_failed")
+            self.sock = connected_sock
             if self._tunnel_host:
                 self._tunnel()
             rem_tls = _rem_timeout()
-            raw_sock.settimeout(rem_tls)
-            self.sock = self._context.wrap_socket(raw_sock, server_hostname=self.host)
-            _register_obj(self.sock)
+            connected_sock.settimeout(rem_tls)
+            if tls_wrap:
+                self.sock = self._context.wrap_socket(connected_sock, server_hostname=self.host)
+                _register_obj(self.sock)
 
     rem_initial = _rem_timeout()
     watchdog = threading.Timer(rem_initial, _on_deadline)
@@ -1105,6 +1163,9 @@ def fetch_bundle_via_bep19_webseed(
     timeout: float = 10.0,
     max_total_seconds: Optional[float] = None,
     connection_factory: Optional[Callable[..., Any]] = None,
+    resolver_fn: Optional[Callable[[str, int], Sequence[Any]]] = None,
+    socket_factory: Optional[Callable[[int, int, int], Any]] = None,
+    tls_wrap: bool = True,
 ) -> Dict[str, Any]:
     """Download bundle files via BEP-19 HTTP/HTTPS webseed (`<base>/<bundle_name>/<file_path>`
     or flat root fallback) with strict per-file, aggregate byte, and overall transfer deadline limits,
@@ -1150,6 +1211,9 @@ def fetch_bundle_via_bep19_webseed(
             timeout=timeout,
             deadline=ws_deadline,
             connection_factory=connection_factory,
+            resolver_fn=resolver_fn,
+            socket_factory=socket_factory,
+            tls_wrap=tls_wrap,
         )
 
     def _call_fetcher(url: str, exp_len: int) -> bytes:

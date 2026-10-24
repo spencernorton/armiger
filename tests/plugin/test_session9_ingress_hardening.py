@@ -600,6 +600,8 @@ class TestSession9IngressAndBEP46Hardening(unittest.TestCase):
                     trusted_rel[r_pub] = f"release-signer-{idx}"
                     asn_verifier.register_pinned_key(r_pub, rel_asns[idx], pq_root_pubkey_hex=r_wots_pub)
 
+                trusted_contrib = {contrib_pub: "contributor-0"}
+
                 manifest = ThresholdDHTManifest(
                     seq=1001,
                     version="2.12.2",
@@ -625,6 +627,7 @@ class TestSession9IngressAndBEP46Hardening(unittest.TestCase):
                     envelope,
                     trusted_release_signers=trusted_rel,
                     trusted_evaluator_signers=trusted_eval,
+                    trusted_contributor_signers=trusted_contrib,
                     threshold_m=2,
                     min_evaluator_asns=3,
                     current_seq=0,
@@ -653,6 +656,7 @@ class TestSession9IngressAndBEP46Hardening(unittest.TestCase):
                     tampered_contrib,
                     trusted_release_signers=trusted_rel,
                     trusted_evaluator_signers=trusted_eval,
+                    trusted_contributor_signers=trusted_contrib,
                     threshold_m=2,
                     min_evaluator_asns=3,
                     current_seq=0,
@@ -666,6 +670,7 @@ class TestSession9IngressAndBEP46Hardening(unittest.TestCase):
                     stripped_contrib,
                     trusted_release_signers=trusted_rel,
                     trusted_evaluator_signers=trusted_eval,
+                    trusted_contributor_signers=trusted_contrib,
                     threshold_m=2,
                     min_evaluator_asns=3,
                     current_seq=0,
@@ -681,6 +686,7 @@ class TestSession9IngressAndBEP46Hardening(unittest.TestCase):
                     envelope,
                     trusted_release_signers=trusted_rel,
                     trusted_evaluator_signers=trusted_eval,
+                    trusted_contributor_signers=trusted_contrib,
                     threshold_m=2,
                     min_evaluator_asns=3,
                     current_seq=0,
@@ -699,6 +705,7 @@ class TestSession9IngressAndBEP46Hardening(unittest.TestCase):
                     bad_envelope,
                     trusted_release_signers=trusted_rel,
                     trusted_evaluator_signers=trusted_eval,
+                    trusted_contributor_signers={eval_signers[0][1]: "contributor-0"},
                     threshold_m=2,
                     min_evaluator_asns=3,
                     current_seq=0,
@@ -719,6 +726,7 @@ class TestSession9IngressAndBEP46Hardening(unittest.TestCase):
                     env_with_eval_sig,
                     trusted_release_signers=mixed_rel_trust,
                     trusted_evaluator_signers=trusted_eval,
+                    trusted_contributor_signers=trusted_contrib,
                     threshold_m=2,
                     min_evaluator_asns=3,
                     current_seq=0,
@@ -746,6 +754,7 @@ class TestSession9IngressAndBEP46Hardening(unittest.TestCase):
                     alias_env,
                     trusted_release_signers=alias_rel_trust,
                     trusted_evaluator_signers=trusted_eval,
+                    trusted_contributor_signers=trusted_contrib,
                     threshold_m=2,
                     min_evaluator_asns=3,
                     current_seq=0,
@@ -761,6 +770,7 @@ class TestSession9IngressAndBEP46Hardening(unittest.TestCase):
                 eng = ArmigerDHTRSIEngine(
                     trusted_signers=trusted_rel,
                     trusted_evaluator_signers=trusted_eval,
+                    trusted_contributor_signers=trusted_contrib,
                     threshold_m=2,
                     min_distinct_asns=2,
                 )
@@ -881,6 +891,7 @@ class TestSession9IngressAndBEP46Hardening(unittest.TestCase):
                         envelope,
                         trusted_release_signers=trusted_rel,
                         trusted_evaluator_signers=trusted_eval,
+                        trusted_contributor_signers=trusted_contrib,
                         trusted_release_pq_signers=rel_pq_trust,
                         trusted_evaluator_pq_signers=eval_pq_trust,
                         threshold_m=2,
@@ -938,6 +949,7 @@ class TestSession9IngressAndBEP46Hardening(unittest.TestCase):
                     env_empty_m,
                     trusted_release_signers=trusted_rel,
                     trusted_evaluator_signers=trusted_eval,
+                    trusted_contributor_signers=trusted_contrib,
                     threshold_m=2,
                     min_evaluator_asns=3,
                     current_seq=0,
@@ -968,6 +980,7 @@ class TestSession9IngressAndBEP46Hardening(unittest.TestCase):
                     env_fail_m,
                     trusted_release_signers=trusted_rel,
                     trusted_evaluator_signers=trusted_eval,
+                    trusted_contributor_signers=trusted_contrib,
                     threshold_m=2,
                     min_evaluator_asns=3,
                     current_seq=0,
@@ -1000,6 +1013,7 @@ class TestSession9IngressAndBEP46Hardening(unittest.TestCase):
                     env_fp,
                     trusted_release_signers=trusted_rel,
                     trusted_evaluator_signers=trusted_eval,
+                    trusted_contributor_signers=trusted_contrib,
                     threshold_m=2,
                     min_evaluator_asns=3,
                     current_seq=0,
@@ -1029,6 +1043,7 @@ class TestSession9IngressAndBEP46Hardening(unittest.TestCase):
                     env_sp,
                     trusted_release_signers=trusted_rel,
                     trusted_evaluator_signers=trusted_eval,
+                    trusted_contributor_signers=trusted_contrib,
                     threshold_m=2,
                     min_evaluator_asns=3,
                     current_seq=0,
@@ -1059,6 +1074,7 @@ class TestSession9IngressAndBEP46Hardening(unittest.TestCase):
                     env_no_ece,
                     trusted_release_signers=trusted_rel,
                     trusted_evaluator_signers=trusted_eval,
+                    trusted_contributor_signers=trusted_contrib,
                     threshold_m=2,
                     min_evaluator_asns=3,
                     current_seq=0,
@@ -1090,6 +1106,7 @@ class TestSession9IngressAndBEP46Hardening(unittest.TestCase):
                     env_low_cov,
                     trusted_release_signers=trusted_rel,
                     trusted_evaluator_signers=trusted_eval,
+                    trusted_contributor_signers=trusted_contrib,
                     threshold_m=2,
                     min_evaluator_asns=3,
                     current_seq=0,
@@ -1099,21 +1116,54 @@ class TestSession9IngressAndBEP46Hardening(unittest.TestCase):
                 self.assertFalse(ok_lc)
                 self.assertEqual(reason_lc, "attestation_mondrian_coverage_below_threshold")
 
-                # 11. Distinct contributor and release/evaluator keys mapped to the same principal identity must fail
-                trusted_rel_alias = dict(trusted_rel)
-                trusted_rel_alias[contrib_pub] = "release-signer-0"
-                ok_ca, reason_ca = AcyclicProvenanceVerifier.verify_envelope(
+                # 11. Distinct contributor and release/evaluator keys mapped to the same principal identity must fail,
+                #     and unregistered contributor keys (not in trusted_contributor_signers) must fail closed.
+                ok_no_c, reason_no_c = AcyclicProvenanceVerifier.verify_envelope(
                     envelope,
-                    trusted_release_signers=trusted_rel_alias,
+                    trusted_release_signers=trusted_rel,
                     trusted_evaluator_signers=trusted_eval,
+                    trusted_contributor_signers={},
                     threshold_m=2,
                     min_evaluator_asns=3,
                     current_seq=0,
                     bootstrap_checkpoint_seq=1000,
                     asn_verifier=asn_verifier,
                 )
-                self.assertFalse(ok_ca)
-                self.assertEqual(reason_ca, "cyclic_provenance_violation:contributor_identity_in_release_signers:release-signer-0")
+                self.assertFalse(ok_no_c)
+                self.assertEqual(reason_no_c, "empty_trusted_contributor_signers")
+
+                _, unreg_contrib_pub, _, _ = ThresholdSignatureVerifier.generate_hybrid_signer()
+                unreg_env = AcyclicProvenanceVerifier.sign_release_envelope(
+                    dataclasses.replace(unsigned_envelope, contributor_pubkeys=(unreg_contrib_pub,)),
+                    rel_signers,
+                )
+                ok_unreg, reason_unreg = AcyclicProvenanceVerifier.verify_envelope(
+                    unreg_env,
+                    trusted_release_signers=trusted_rel,
+                    trusted_evaluator_signers=trusted_eval,
+                    trusted_contributor_signers=trusted_contrib,
+                    threshold_m=2,
+                    min_evaluator_asns=3,
+                    current_seq=0,
+                    bootstrap_checkpoint_seq=1000,
+                    asn_verifier=asn_verifier,
+                )
+                self.assertFalse(ok_unreg)
+                self.assertTrue(reason_unreg.startswith("untrusted_contributor_pubkey:"))
+
+                ok_cr, reason_cr = AcyclicProvenanceVerifier.verify_envelope(
+                    envelope,
+                    trusted_release_signers=trusted_rel,
+                    trusted_evaluator_signers=trusted_eval,
+                    trusted_contributor_signers={contrib_pub: "release-signer-0"},
+                    threshold_m=2,
+                    min_evaluator_asns=3,
+                    current_seq=0,
+                    bootstrap_checkpoint_seq=1000,
+                    asn_verifier=asn_verifier,
+                )
+                self.assertFalse(ok_cr)
+                self.assertEqual(reason_cr, "cyclic_provenance_violation:contributor_identity_in_release_signers:release-signer-0")
 
                 ok_ce, reason_ce = AcyclicProvenanceVerifier.verify_envelope(
                     envelope,
@@ -1581,7 +1631,7 @@ class TestSession9IngressAndBEP46Hardening(unittest.TestCase):
                             expected_infohash_20=strict_bundle.infohash_20,
                             timeout=1.0,
                             max_total_seconds=0.07,
-                            connection_factory=lambda h, p, timeout=1.0: http.client.HTTPConnection(h, p, timeout=timeout),
+                            tls_wrap=False,
                         )
                 finally:
                     th_stop.set()
@@ -1616,11 +1666,64 @@ class TestSession9IngressAndBEP46Hardening(unittest.TestCase):
                             expected_infohash_20=strict_bundle.infohash_20,
                             timeout=1.0,
                             max_total_seconds=0.07,
-                            connection_factory=lambda h, p, timeout=1.0: http.client.HTTPConnection(h, p, timeout=timeout),
+                            tls_wrap=False,
                         )
                 finally:
                     dr_stop.set()
                     dr_sock.close()
+
+                # (c) Stalled DNS resolution in _DeadlineHTTPSConnection.connect() is bounded by max_total_seconds
+                def _stalled_resolver(host: str, port: int):
+                    time.sleep(0.25)
+                    return [(_sock_mod.AF_INET, _sock_mod.SOCK_STREAM, 6, "", ("127.0.0.1", 443))]
+
+                t0_dns = time.monotonic()
+                with self.assertRaisesRegex(TimeoutError, "webseed_total_deadline_exceeded"):
+                    fetch_bundle_via_bep19_webseed(
+                        strict_bundle.info_bytes,
+                        "https://stalled.example.org/seed",
+                        expected_infohash_20=strict_bundle.infohash_20,
+                        timeout=1.0,
+                        max_total_seconds=0.06,
+                        resolver_fn=_stalled_resolver,
+                    )
+                self.assertLess(time.monotonic() - t0_dns, 0.22)
+
+                # (d) Multiple failing address attempts in _DeadlineHTTPSConnection.connect() stop when max_total_seconds expires
+                connect_attempts = 0
+                class _SlowFailingSocket:
+                    def __init__(self, af, socktype, proto):
+                        self.timeout = None
+                    def settimeout(self, t):
+                        self.timeout = t
+                    def bind(self, addr):
+                        pass
+                    def connect(self, sa):
+                        nonlocal connect_attempts
+                        connect_attempts += 1
+                        time.sleep(0.03)
+                        raise OSError("simulated_address_unreachable")
+                    def shutdown(self, how):
+                        pass
+                    def close(self):
+                        pass
+
+                five_addrs = [
+                    (_sock_mod.AF_INET, _sock_mod.SOCK_STREAM, 6, "", (f"192.0.2.{i}", 443))
+                    for i in range(1, 6)
+                ]
+                with self.assertRaisesRegex(TimeoutError, "webseed_total_deadline_exceeded"):
+                    fetch_bundle_via_bep19_webseed(
+                        strict_bundle.info_bytes,
+                        "https://multi.example.org/seed",
+                        expected_infohash_20=strict_bundle.infohash_20,
+                        timeout=1.0,
+                        max_total_seconds=0.065,
+                        resolver_fn=lambda h, p: five_addrs,
+                        socket_factory=_SlowFailingSocket,
+                        tls_wrap=False,
+                    )
+                self.assertLessEqual(connect_attempts, 3)
             finally:
                 dht.close()
 

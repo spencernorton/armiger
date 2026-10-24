@@ -1573,22 +1573,28 @@ class AcyclicProvenanceVerifier:
             for wots_pk_hex in WOTSPlusSHAKE256._ED25519_TO_WOTS_PUBS.get(norm_ed, ()):
                 eff_pq_signers[wots_pk_hex] = identity
 
+        if not trusted_contributor_signers:
+            return False, "empty_trusted_contributor_signers"
         norm_contrib_trust: Dict[str, str] = {}
-        if trusted_contributor_signers:
-            for c_k, c_id in trusted_contributor_signers.items():
-                norm_ck = ThresholdDHTManifest._normalize_pubkey_id(c_k)
-                if len(norm_ck) == 64:
-                    norm_contrib_trust[norm_ck] = str(c_id)
-                raw_ck = str(c_k).strip().lower()
-                if ":" in raw_ck:
-                    _, pq_part = raw_ck.split(":", 1)
-                    norm_pq_part = ThresholdDHTManifest._normalize_pubkey_id(pq_part)
-                    if len(norm_pq_part) == 64:
-                        norm_contrib_trust[norm_pq_part] = str(c_id)
+        for c_k, c_id in trusted_contributor_signers.items():
+            norm_ck = ThresholdDHTManifest._normalize_pubkey_id(c_k)
+            if len(norm_ck) == 64 and str(c_id).strip():
+                norm_contrib_trust[norm_ck] = str(c_id).strip()
+            raw_ck = str(c_k).strip().lower()
+            if ":" in raw_ck:
+                _, pq_part = raw_ck.split(":", 1)
+                norm_pq_part = ThresholdDHTManifest._normalize_pubkey_id(pq_part)
+                if len(norm_pq_part) == 64 and str(c_id).strip():
+                    norm_contrib_trust[norm_pq_part] = str(c_id).strip()
+        if not norm_contrib_trust:
+            return False, "empty_trusted_contributor_signers"
 
         contributor_ids: Set[str] = set()
-        for c_pk in contributors:
-            for mapping in (norm_contrib_trust, norm_eval_trust, eval_id_by_pq, norm_rel_trust, eff_pq_signers):
+        for c_pk in sorted(contributors):
+            if c_pk not in norm_contrib_trust:
+                return False, f"untrusted_contributor_pubkey:{c_pk[:16]}"
+            contributor_ids.add(norm_contrib_trust[c_pk])
+            for mapping in (norm_eval_trust, eval_id_by_pq, norm_rel_trust, eff_pq_signers):
                 mapped_id = mapping.get(c_pk)
                 if mapped_id is not None:
                     contributor_ids.add(str(mapped_id))
