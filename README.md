@@ -11,9 +11,9 @@
 
 Armiger helps Bitmagnet and Rats Search label torrents by type and language, using names and file lists. **Armiger Ultra** also adds title matching, audio-language checks and estimates of download availability. It runs on a CPU; no GPU or paid API is required.
 
-![Armiger Ultra compared with cloud teacher models across six dimensions, in dark mode](docs/assets/armiger_vs_llms_overall_and_6dims.png)
+![Armiger Ultra compared with MIMMO and Bitmagnet by content category, with title matching, audio language, junk checks and seed availability](docs/assets/armiger_overview.png)
 
-*Model v3.0.0 results. See [evaluation, cohorts and limitations](docs/evaluation.md).*
+*Measured model v3.0.0 results, rounded for readability. [Full results and limitations](docs/evaluation.md).*
 
 ## Choose your setup
 

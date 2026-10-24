@@ -1,3 +1,12 @@
+## 2026-10-23 — plain-language comparison overview
+
+- **Branch:** codex/readme-comparison-overview
+- **What changed:** Show a dark category comparison with MIMMO and Bitmagnet, plus readable Ultra cards for title matching, audio language, junk detection and seed availability. Keep full methodology in the evaluation guide.
+- **Evidence:** Derive values from the canonical benchmark manifest; the overview record retains full precision and source, renderer and image hashes. Seed ranking and balanced junk scores retain their distinct meanings and cohorts.
+- **Validation:** Compare category values with individual prediction vectors, reject mixed metrics/denominators, verify provenance and inspect the rendered figure and README.
+- **Deployment:** Presentation only; package, model and runtime versions remain unchanged.
+- **Status file updated:** Record the public PR and verification in the private project handoff.
+
 ## 2026-10-23 — dark headline chart below the description
 
 - **Branch:** codex/readme-headline-chart
