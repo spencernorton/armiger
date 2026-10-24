@@ -16,7 +16,7 @@ import os
 import struct
 from typing import Any, Callable, Dict, List, Mapping, Optional, Sequence, Set, Tuple
 
-from oci_vpn_guard import VPNEgressGuard, bencode, compute_bep44_target
+from armiger.oci_vpn_guard import VPNEgressGuard, bencode, compute_bep44_target
 
 # ---------------------------------------------------------------------------
 # 2. Low-Memory SQLite Zero-Cue Catalog (`<=4 MiB` cache for Tier B 1-CPU nodes)
@@ -470,7 +470,7 @@ class BitTorrentPeerWireSeeder:
                     writer.write(struct.pack("!IB", 1, BT_MSG_UNCHOKE))
                     await writer.drain()
                 elif msg_id == BT_MSG_EXTENDED and len(body) >= 2:
-                    from oci_vpn_guard import _bdecode_at, bdecode_krpc
+                    from armiger.oci_vpn_guard import _bdecode_at, bdecode_krpc
                     ext_id = body[1]
                     if ext_id == BT_EXT_HANDSHAKE_ID:
                         try:
@@ -596,7 +596,7 @@ def verify_info_and_payload(
     """Verify raw `info` dictionary bytes against `expected_infohash_20`, every SHA-1 piece,
     the SHA-256 Merkle root, and each file's SHA-256 digest without materializing chunk copies.
     """
-    from oci_vpn_guard import bdecode
+    from armiger.oci_vpn_guard import bdecode
     computed_ih = hashlib.sha1(info_bytes).digest()
     if expected_infohash_20 is not None and computed_ih != expected_infohash_20:
         raise ValueError("infohash_mismatch")
@@ -655,7 +655,7 @@ def verify_torrent_payload(
 
     The caller must pin metainfo to the authenticated pointer's infohash before using this check.
     """
-    from oci_vpn_guard import bdecode
+    from armiger.oci_vpn_guard import bdecode
     meta = bdecode(torrent_bytes)
     info = meta[b"info"]
     raw_info = bencode(info)
@@ -676,7 +676,7 @@ async def fetch_bundle_via_peer_wire(
     BEP-10 + BEP-9 (`ut_metadata`) to fetch and authenticate `info_bytes`, followed by
     BEP-3 piece requests and full SHA-1 / SHA-256 Merkle verification.
     """
-    from oci_vpn_guard import _bdecode_at, bdecode, bdecode_krpc
+    from armiger.oci_vpn_guard import _bdecode_at, bdecode, bdecode_krpc
     if not isinstance(infohash_20, (bytes, bytearray)) or len(infohash_20) != 20:
         raise ValueError("infohash_20 must be 20 bytes")
     loop = asyncio.get_running_loop()
@@ -938,7 +938,7 @@ def fetch_bundle_via_bep19_webseed(
     import time
     import urllib.parse
     import urllib.request
-    from oci_vpn_guard import bdecode
+    from armiger.oci_vpn_guard import bdecode
     if max_payload_bytes <= 0:
         raise ValueError("invalid_max_payload_bytes")
     computed_ih = hashlib.sha1(info_bytes).digest()

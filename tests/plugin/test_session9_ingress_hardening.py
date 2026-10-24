@@ -19,38 +19,66 @@ import urllib.request
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 
 ROOT = Path(__file__).resolve().parents[2]
+SRC = ROOT / "src"
 OCI = ROOT / "deploy" / "oci-dht"
-ARMIGER = ROOT / "armiger"
-for p in (OCI, ARMIGER, ROOT):
-    if str(p) not in sys.path:
-        sys.path.insert(0, str(p))
+for p_dir in (SRC, OCI, ROOT):
+    if p_dir.exists() and str(p_dir) not in sys.path:
+        sys.path.insert(0, str(p_dir))
 
-from oci_vpn_guard import (  # noqa: E402
-    AnonymityGuard,
-    _sign_bep44,
-    bdecode,
-    bdecode_krpc,
-    bencode,
-    bep44_signing_buffer,
-    compute_bep44_target,
-    generate_bep42_node_id,
-    verify_bep42_node_id,
-)
-from oci_dht_seeder import BitTorrentPeerWireSeeder, GatedBEP44UDPNode  # noqa: E402
-from oci_sqlite_catalog import (  # noqa: E402
-    BT_EXT_HANDSHAKE_ID,
-    BT_MSG_EXTENDED,
-    BT_PROTOCOL_HEADER,
-    BT_RESERVED_BEP10,
-    BT_UT_METADATA_ID,
-    _CatalogJSONStream,
-    build_sqlite_zero_cue_catalog,
-    build_torrent_bundle,
-    fetch_bundle_via_bep19_webseed,
-    fetch_bundle_via_peer_wire,
-    verify_info_and_payload,
-    verify_torrent_payload,
-)
+try:
+    from armiger.oci_vpn_guard import (  # noqa: E402
+        AnonymityGuard,
+        _sign_bep44,
+        bdecode,
+        bdecode_krpc,
+        bencode,
+        bep44_signing_buffer,
+        compute_bep44_target,
+        generate_bep42_node_id,
+        verify_bep42_node_id,
+    )
+    from armiger.oci_dht_seeder import BitTorrentPeerWireSeeder, GatedBEP44UDPNode  # noqa: E402
+    from armiger.oci_sqlite_catalog import (  # noqa: E402
+        BT_EXT_HANDSHAKE_ID,
+        BT_MSG_EXTENDED,
+        BT_PROTOCOL_HEADER,
+        BT_RESERVED_BEP10,
+        BT_UT_METADATA_ID,
+        _CatalogJSONStream,
+        build_sqlite_zero_cue_catalog,
+        build_torrent_bundle,
+        fetch_bundle_via_bep19_webseed,
+        fetch_bundle_via_peer_wire,
+        verify_info_and_payload,
+        verify_torrent_payload,
+    )
+except ImportError:
+    from oci_vpn_guard import (  # noqa: E402
+        AnonymityGuard,
+        _sign_bep44,
+        bdecode,
+        bdecode_krpc,
+        bencode,
+        bep44_signing_buffer,
+        compute_bep44_target,
+        generate_bep42_node_id,
+        verify_bep42_node_id,
+    )
+    from oci_dht_seeder import BitTorrentPeerWireSeeder, GatedBEP44UDPNode  # noqa: E402
+    from oci_sqlite_catalog import (  # noqa: E402
+        BT_EXT_HANDSHAKE_ID,
+        BT_MSG_EXTENDED,
+        BT_PROTOCOL_HEADER,
+        BT_RESERVED_BEP10,
+        BT_UT_METADATA_ID,
+        _CatalogJSONStream,
+        build_sqlite_zero_cue_catalog,
+        build_torrent_bundle,
+        fetch_bundle_via_bep19_webseed,
+        fetch_bundle_via_peer_wire,
+        verify_info_and_payload,
+        verify_torrent_payload,
+    )
 from armiger.armiger_dht_rsi import (  # noqa: E402
     AcyclicProvenanceVerifier,
     AcyclicReleaseEnvelope,
@@ -729,8 +757,8 @@ class TestSession9IngressAndBEP46Hardening(unittest.TestCase):
 
                 # 6. ArmigerDHTRSIEngine.verify_and_stage_update rejects authenticated_baseline with mismatched parent or suite hash,
                 #    and enforces AcyclicReleaseEnvelope verification before staging updates.
-                from armiger_dht_rsi import ArmigerDHTRSIEngine
-                from dht_rsi_models_and_privacy import PeerAttestation
+                from armiger.armiger_dht_rsi import ArmigerDHTRSIEngine
+                from armiger.dht_rsi_models_and_privacy import PeerAttestation
                 eng = ArmigerDHTRSIEngine(
                     trusted_signers=trusted_rel,
                     trusted_evaluator_signers=trusted_eval,
@@ -1463,6 +1491,27 @@ class TestSession9IngressAndBEP46Hardening(unittest.TestCase):
                 self.assertFalse(fetcher_called)
                 with self.assertRaisesRegex(ValueError, "invalid_piece_length"):
                     verify_info_and_payload(tiny_ws_info, b"", expected_infohash_20=tiny_ws_ih)
+
+                # _fetch_webseed_metadata enforces monotonic max_total_seconds across candidate URLs
+                from armiger.verify_dht import _fetch_webseed_metadata
+                import armiger.oci_dht_node as _shim_mod
+                self.assertTrue(callable(getattr(_shim_mod, "parse_bootstrap_nodes", None)))
+                meta_calls = 0
+                def _slow_meta_fetcher(url: str) -> bytes:
+                    nonlocal meta_calls
+                    meta_calls += 1
+                    time.sleep(0.08)
+                    return strict_bundle.torrent_bytes
+                self.assertIsNone(
+                    _fetch_webseed_metadata(
+                        "https://example.org/seed",
+                        strict_bundle.infohash_20,
+                        fetcher=_slow_meta_fetcher,
+                        timeout=1.0,
+                        max_total_seconds=0.04,
+                    )
+                )
+                self.assertEqual(meta_calls, 1)
             finally:
                 dht.close()
 

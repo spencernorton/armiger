@@ -27,6 +27,7 @@ import struct
 import time
 import sys
 from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple
+import urllib.parse
 import urllib.request
 
 try:
@@ -202,30 +203,89 @@ def _fetch_webseed_metadata(
     ws_base_url: str,
     infohash_20: bytes,
     fetcher: Optional[Callable[..., bytes]] = None,
+    timeout: float = 10.0,
+    max_total_seconds: Optional[float] = None,
 ) -> Optional[bytes]:
-    """Attempt to fetch `<ws_base_url>/<infohash_hex>.torrent` (or `/bundle.torrent`) with a 1 MiB cap."""
+    """Attempt to fetch `<ws_base_url>/<infohash_hex>.torrent` (or `/bundle.torrent`) with a 1 MiB cap
+    and a strict monotonic total deadline across redirects and both candidate URLs.
+    """
     base = ws_base_url.rstrip("/")
     ih_hex = infohash_20.hex()
+    meta_budget = float(max_total_seconds) if max_total_seconds is not None else max(float(timeout) * 2.0, 10.0)
+    meta_deadline = time.monotonic() + meta_budget
+
+    def _rem_meta_timeout() -> float:
+        rem = meta_deadline - time.monotonic()
+        if rem <= 0:
+            raise TimeoutError("webseed_metadata_total_deadline_exceeded")
+        return min(float(timeout), rem)
+
+    class _MetaHTTPSRedirect(urllib.request.HTTPRedirectHandler):
+        def redirect_request(self, req, fp, code, msg, headers, newurl):
+            _rem_meta_timeout()
+            resolved_url = urllib.parse.urljoin(req.full_url, str(newurl))
+            if not resolved_url.lower().startswith("https://"):
+                raise ValueError("bep19_webseed_redirect_requires_https")
+            return super().redirect_request(req, fp, code, msg, headers, resolved_url)
+
+    opener = urllib.request.build_opener(_MetaHTTPSRedirect())
+
     for candidate_url in (f"{base}/{ih_hex}.torrent", f"{base}/bundle.torrent"):
+        if time.monotonic() >= meta_deadline:
+            break
         try:
+            _rem_meta_timeout()
             if fetcher is not None:
                 raw = fetcher(candidate_url)
+                _rem_meta_timeout()
             else:
-                if not candidate_url.startswith("https://"):
+                if not candidate_url.lower().startswith("https://"):
                     continue
-                class _MetaHTTPSRedirect(urllib.request.HTTPRedirectHandler):
-                    def redirect_request(self, req, fp, code, msg, headers, newurl):
-                        if not str(newurl).lower().startswith("https://"):
-                            raise ValueError("bep19_webseed_redirect_requires_https")
-                        return super().redirect_request(req, fp, code, msg, headers, newurl)
-                opener = urllib.request.build_opener(_MetaHTTPSRedirect())
                 req = urllib.request.Request(candidate_url, headers={"User-Agent": "armiger-bep19-verifier/2.1.0"})
-                with opener.open(req, timeout=10.0) as resp:
-                    raw = resp.read(MAX_TORRENT_META_BYTES + 1)
+                with opener.open(req, timeout=_rem_meta_timeout()) as resp:
+                    final_url = resp.geturl() if hasattr(resp, "geturl") else candidate_url
+                    if not str(final_url).lower().startswith("https://"):
+                        raise ValueError("bep19_webseed_redirect_requires_https")
+                    cl = resp.headers.get("Content-Length") if hasattr(resp, "headers") and resp.headers else None
+                    if cl is not None:
+                        try:
+                            if int(cl) > MAX_TORRENT_META_BYTES:
+                                continue
+                        except ValueError:
+                            pass
+                    chunks = bytearray()
+                    while True:
+                        rem = _rem_meta_timeout()
+                        try:
+                            raw_sock = getattr(getattr(getattr(resp, "fp", None), "raw", None), "_sock", None)
+                            if raw_sock is not None:
+                                raw_sock.settimeout(rem)
+                        except Exception:
+                            pass
+                        read_limit = min(16384, MAX_TORRENT_META_BYTES + 1 - len(chunks))
+                        if hasattr(resp, "read1"):
+                            chunk = resp.read1(read_limit)
+                        elif hasattr(getattr(resp, "fp", None), "read1"):
+                            chunk = resp.fp.read1(read_limit)
+                        else:
+                            chunk = resp.read(min(4096, read_limit))
+                        if not chunk:
+                            break
+                        chunks.extend(chunk)
+                        if len(chunks) > MAX_TORRENT_META_BYTES:
+                            break
+                    _rem_meta_timeout()
+                    raw = bytes(chunks)
             if len(raw) > MAX_TORRENT_META_BYTES:
                 continue
             return extract_info_bytes_from_file(raw, expected_infohash_20=infohash_20)
+        except TimeoutError:
+            if time.monotonic() >= meta_deadline:
+                break
+            continue
         except Exception:
+            if time.monotonic() >= meta_deadline:
+                break
             continue
     return None
 
@@ -454,17 +514,35 @@ def verify_dht_release(
 
     for ws_url in all_webseeds:
         try:
+            ws_budget = max(float(timeout) * 3.0, 15.0)
+            ws_deadline = time.monotonic() + ws_budget
             eff_info = authenticated_info
             if eff_info is None:
-                eff_info = _fetch_webseed_metadata(ws_url, infohash_20, fetcher=webseed_fetcher)
+                rem_meta = ws_deadline - time.monotonic()
+                if rem_meta <= 0:
+                    ws_errors.append(f"{ws_url}:webseed_total_deadline_exceeded")
+                    continue
+                eff_info = _fetch_webseed_metadata(
+                    ws_url,
+                    infohash_20,
+                    fetcher=webseed_fetcher,
+                    timeout=timeout,
+                    max_total_seconds=rem_meta,
+                )
             if eff_info is None:
                 ws_errors.append(f"{ws_url}:missing_authenticated_info_bytes")
+                continue
+            rem_payload = ws_deadline - time.monotonic()
+            if rem_payload <= 0:
+                ws_errors.append(f"{ws_url}:webseed_total_deadline_exceeded")
                 continue
             res = fetch_bundle_via_bep19_webseed(
                 info_bytes=eff_info,
                 webseed_base_url=ws_url,
                 expected_infohash_20=infohash_20,
                 fetcher=webseed_fetcher,
+                timeout=timeout,
+                max_total_seconds=rem_payload,
             )
             return {
                 "verified": True,
