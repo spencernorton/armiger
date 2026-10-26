@@ -88,7 +88,7 @@ The complete pipeline composes these components. Most callers need only `Armiger
 
 ## Compatibility and versions
 
-Library version 3.3.0 and model version 3.0.0 are separate. Existing flat imports such as `armiger_inference` and `armiger_ultra_pipeline` remain compatibility aliases for this release; new code should import from `armiger`. `ArmigerPipeline` aliases `ArmigerUltraPipeline`.
+Library version 3.3.1 and model version 3.0.0 are separate. Existing flat imports such as `armiger_inference` and `armiger_ultra_pipeline` remain compatibility aliases for this release; new code should import from `armiger`. `ArmigerPipeline` aliases `ArmigerUltraPipeline`.
 
 Model weights, vocabulary, calibration, adapter and catalog must be from a compatible bundle. Do not mix assets from different releases. The complete `all` download also includes the PyTorch checkpoint for tooling that needs it.
 
@@ -96,13 +96,13 @@ Model weights, vocabulary, calibration, adapter and catalog must be from a compa
 
 The two-line integration setups use packaged defaults and require Docker Compose 2.34 or newer. For Bitmagnet, keep the two-line file and use a local `compose.override.yaml` to configure Armiger. See the [complete Armiger Ultra environment-variable reference](bitmagnet-configuration.md) for defaults, examples and the effects of each setting.
 
-For older Compose versions, host-port changes through `.env`, or other full-file customisation, save the full [Bitmagnet file](https://raw.githubusercontent.com/spencernorton/armiger/main/examples/bitmagnet/docker-compose.yml) or [Rats Search file](https://raw.githubusercontent.com/spencernorton/armiger/main/examples/rats-search/docker-compose.yml) as `compose.yaml` **in place of** the two-line file. These also pull ready-made images; no build is needed. Armiger's connector variables can be added under `services.armiger-ultra.environment`.
+For Portainer Stacks, older Compose versions, host-port changes through `.env`, or other full-file customisation, save the full [Bitmagnet file](https://raw.githubusercontent.com/spencernorton/armiger/main/examples/bitmagnet/docker-compose.yml) or [Rats Search file](https://raw.githubusercontent.com/spencernorton/armiger/main/examples/rats-search/docker-compose.yml) as `compose.yaml` **in place of** the two-line file. These also pull ready-made images; no build is needed. Armiger's connector variables can be added under `services.armiger-ultra.environment`.
 
 The full files work without a `.env` file. If a port is already in use, create `.env` beside the full `compose.yaml` and put only the setting you need in it, for example `BITMAGNET_HTTP_PORT=3335`. Start again and use that port in your browser.
 
 | Setup | Optional settings (defaults) |
 | --- | --- |
-| Bitmagnet | `BITMAGNET_HTTP_PORT=3333`, `BITMAGNET_DHT_PORT=3334`, `ARMIGER_HTTP_PORT=8096`, `ARMIGER_PROXY_PORT=8097`, `TMDB_API_KEY=` |
+| Bitmagnet | `BITMAGNET_HTTP_PORT=3333`, `BITMAGNET_DHT_PORT=3334`, `ARMIGER_HTTP_PORT=8096`, `ARMIGER_PROXY_PORT=8097`, `BITMAGNET_POLL_SECONDS=5`, `BITMAGNET_BATCH_SIZE=100`, `TMDB_API_KEY=` |
 | Rats Search | `RATS_HTTP_PORT=8095`, `ARMIGER_HTTP_PORT=8098` |
 
 Bitmagnet's database has no published port and uses an internal password. To choose your own, set `POSTGRES_PASSWORD` **before the first start**; keep it unchanged while reusing that database. TMDB enrichment is optional. Automatic deletion of flagged items is disabled.

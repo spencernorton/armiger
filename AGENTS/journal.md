@@ -1,3 +1,11 @@
+## 2026-10-26 — Pin Bitmagnet poller pagination fix and clarify Portainer and polling docs
+
+- **Branch:** fix/bitmagnet-poller-pagination-and-docs
+- **What changed:** Pin `spencernorton/Armiger-Connectors` `58679a4f0fd28de4ebee9133a23a6a10bb6adaf0` (`v1.2.3`) in `examples/Dockerfile` so `BitmagnetConnector.sync_once` paginates past items tagged earlier in an active 60-second Bitmagnet crawl flush (`#37`). Expose `BITMAGNET_POLL_SECONDS` and `BITMAGNET_BATCH_SIZE` in `examples/bitmagnet/docker-compose.yml`, align override examples with the `5`s / `100`-item defaults, document how Bitmagnet's 60-second / 1,000-item `persistTorrents` batching channel interacts with polling and `DHT_CRAWLER_SCALING_FACTOR`, and point Portainer users directly to the self-contained `docker-compose.yml`. Bump version to `3.3.1` to publish updated container images and OCI Compose stacks.
+- **Validation:** Verified Compose manifests (`docker compose config --quiet`), `git diff --check`, and unit test suite.
+- **Deployment:** None; public release `3.3.1` publishes via GitHub Actions on merge.
+- **Status file updated:** Yes.
+
 ## 2026-10-26 — Wire BEP-44/46 auto-update poller, writable overlay hot-swap, and opt-in contribution dispatcher
 
 - **Branch:** feat/dht-autoupdate-and-contribution-loop

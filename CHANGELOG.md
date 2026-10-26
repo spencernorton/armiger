@@ -1,5 +1,13 @@
 # Changelog
 
+## 3.3.1
+
+- Paginate the Bitmagnet poller across multi-batch 60-second crawl flushes (`#37`), expose `BITMAGNET_POLL_SECONDS` and `BITMAGNET_BATCH_SIZE` in the full Bitmagnet Compose file, and document Portainer stack setup and crawler scaling.
+
+## 3.3.0
+
+- Background BEP 44/46 auto-update polling, verified runtime overlay hot-swap, and opt-in contribution push.
+
 ## 3.2.1
 
 - Fix Torznab XML filtering when upstream indexers such as Prowlarr send numeric file counts in the `files` attribute.

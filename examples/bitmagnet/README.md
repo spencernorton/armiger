@@ -8,10 +8,12 @@ Create a folder called `armiger-bitmagnet`. Save this as **`compose.yaml`** insi
 
 ```yaml
 include:
-  - oci://ghcr.io/spencernorton/armiger-bitmagnet-stack:3.3.0
+  - oci://ghcr.io/spencernorton/armiger-bitmagnet-stack:3.3.1
 ```
 
 This loads the complete setup from our versioned package. All connections are already configured.
+
+If you use **Portainer Stacks** or an older Docker Compose version that does not support `include: oci://...`, use the self-contained [`docker-compose.yml`](docker-compose.yml) instead.
 
 ## 2. Start it
 
@@ -31,14 +33,14 @@ To check Armiger itself, open [its status page](http://localhost:8096/healthz). 
 
 ## Configure Armiger Ultra
 
-Save a second file called **`compose.override.yaml`** beside `compose.yaml`. Docker Compose loads it automatically. For example, this checks for new items every ten seconds in batches of fifty:
+Save a second file called **`compose.override.yaml`** beside `compose.yaml`. Docker Compose loads it automatically. For example, this sets the polling interval, batch size and language filter:
 
 ```yaml
 services:
   armiger-ultra:
     environment:
-      BITMAGNET_POLL_SECONDS: "10"
-      BITMAGNET_BATCH_SIZE: "50"
+      BITMAGNET_POLL_SECONDS: "5"
+      BITMAGNET_BATCH_SIZE: "100"
       ARMIGER_REQUIRE_ENGLISH_AUDIO: "false"
       ARMIGER_ALLOW_ENGLISH_SUBS: "true"
 ```
