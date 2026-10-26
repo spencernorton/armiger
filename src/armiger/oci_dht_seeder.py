@@ -4,9 +4,12 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import hmac
+import json
 import os
+from pathlib import Path
 import socket
 import struct
+import sys
 import threading
 import time
 from typing import Any, Dict, List, Mapping, Optional, Sequence, Set, Tuple, Union
@@ -101,6 +104,22 @@ def _xor_distance(a: bytes, b: bytes) -> int:
 _KRPC_DNS_SEMAPHORE = threading.BoundedSemaphore(4)
 
 
+def _create_default_rsi_collector() -> Any:
+    here = Path(__file__).resolve().parent
+    for cand in (here.parent.parent, here.parent.parent / "armiger", here / "armiger", here):
+        if cand.is_dir() and str(cand) not in sys.path:
+            sys.path.insert(0, str(cand))
+    for mod_name in ("armiger.armiger_dht_rsi", "armiger_dht_rsi"):
+        try:
+            mod = __import__(mod_name, fromlist=["ArmigerDHTRSIEngine"])
+            cls = getattr(mod, "ArmigerDHTRSIEngine", None)
+            if cls is not None:
+                return cls(mode="pull_only", opt_in_sharing=False, current_seq=0)
+        except Exception:
+            continue
+    return None
+
+
 class GatedBEP44UDPNode:
     """UDP Kademlia DHT node implementing BEP-44 mutable put/get, BEP-46 bundle storage,
     iterative XOR-distance bootstrap/publication, and `get_peers`/`announce_peer`, strictly
@@ -116,6 +135,7 @@ class GatedBEP44UDPNode:
     MAX_WRITES_PER_IP_PER_MIN = 120
     MAX_TRACKED_WRITE_IPS = 4096
     MAX_CONCURRENT_HANDLERS = 64
+    MAX_CONTRIBUTIONS_FILE_BYTES = 16 * 1024 * 1024
 
     def __init__(
         self,
@@ -126,6 +146,8 @@ class GatedBEP44UDPNode:
         require_write_token: bool = True,
         anonymity_guard: Optional[AnonymityGuard] = None,
         enforce_bep42_routing: bool = False,
+        rsi_collector: Optional[Any] = None,
+        contributions_jsonl_path: Optional[Union[str, Path]] = None,
     ) -> None:
         self.vpn_guard = vpn_guard
         self.anonymity_guard = anonymity_guard or AnonymityGuard()
@@ -134,6 +156,13 @@ class GatedBEP44UDPNode:
         self.node_id: bytes = node_id if (node_id and len(node_id) == 20) else hashlib.sha1(os.urandom(32)).digest()
         self.require_write_token = bool(require_write_token)
         self.enforce_bep42_routing = bool(enforce_bep42_routing)
+        self.rsi_collector = rsi_collector if rsi_collector is not None else _create_default_rsi_collector()
+        self.contributions_jsonl_path: Optional[Path] = (
+            Path(contributions_jsonl_path) if contributions_jsonl_path is not None else None
+        )
+        self._contributions_file_lock = threading.Lock()
+        self.inbound_contributions_accepted: int = 0
+        self.inbound_contributions_rejected: int = 0
         self._token_secret: bytes = os.urandom(32)
         self._store: Dict[bytes, Dict[str, Any]] = {}
         self._bundles: Dict[bytes, Tuple[bytes, float]] = {}
@@ -597,10 +626,11 @@ class GatedBEP44UDPNode:
         announces_ok = 0
         for bname, bobj in bundles.items():
             salt = salts_by_bundle[bname]
+            bundle_seq = int(getattr(bobj, "seq", seq) or seq)
             pubkey_probe, _ = _sign_bep44(privkey_32, b"probe")
             target_20 = compute_bep44_target(pubkey_probe, salt)
             local_item = self._store.get(target_20)
-            if local_item is not None and int(local_item["seq"]) == int(seq):
+            if local_item is not None and int(local_item["seq"]) == bundle_seq:
                 v_payload = local_item["v"]
                 pubkey_32 = local_item["pubkey"]
                 sig_64 = local_item["sig"]
@@ -610,11 +640,11 @@ class GatedBEP44UDPNode:
                         b"bundle": bname.encode("utf-8"),
                         b"ih": bobj.infohash_20,
                         b"merkle_root": bobj.merkle_root_hex.encode("ascii"),
-                        b"seq": int(seq),
+                        b"seq": bundle_seq,
                         b"tier": b"oci",
                     }
                 )
-                sig_buf = bep44_signing_buffer(v=v_payload, seq=seq, salt=salt)
+                sig_buf = bep44_signing_buffer(v=v_payload, seq=bundle_seq, salt=salt)
                 pubkey_32, sig_64 = _sign_bep44(privkey_32, sig_buf)
 
             if announce_peers and int(bt_port) > 0:
@@ -652,13 +682,13 @@ class GatedBEP44UDPNode:
                 put_args: Dict[bytes, Any] = {
                     b"k": pubkey_32,
                     b"salt": salt,
-                    b"seq": int(seq),
+                    b"seq": bundle_seq,
                     b"sig": sig_64,
                     b"token": put_tok,
                     b"v": v_payload,
                 }
                 cur_seq = node_info.get("current_seq")
-                if type(cur_seq) is int and 0 <= cur_seq < int(seq):
+                if type(cur_seq) is int and 0 <= cur_seq < bundle_seq:
                     put_args[b"cas"] = cur_seq
                 try:
                     put_resp = await self.rpc_call(node_info["addr"], b"put", put_args)
@@ -965,16 +995,64 @@ class GatedBEP44UDPNode:
         else:
             self._send_error(t, 204, b"Method Unknown", addr)
 
+    def _persist_accepted_contribution(
+        self,
+        target: bytes,
+        pubkey: bytes,
+        salt: bytes,
+        seq: int,
+        sig: bytes,
+        parsed_delta: Optional[Dict[str, Any]],
+    ) -> None:
+        if self.contributions_jsonl_path is None:
+            return
+        rec_line = (
+            json.dumps(
+                {
+                    "ingested_at_ts": int(time.time()),
+                    "target_hex": target.hex(),
+                    "seq": int(seq),
+                    "salt": salt.decode("utf-8", errors="replace"),
+                    "pubkey_hex": pubkey.hex(),
+                    "sig_hex": sig.hex(),
+                    "delta": parsed_delta or {},
+                },
+                sort_keys=True,
+                separators=(",", ":"),
+            )
+            + "\n"
+        ).encode("utf-8")
+        try:
+            with self._contributions_file_lock:
+                self.contributions_jsonl_path.parent.mkdir(parents=True, exist_ok=True)
+                if (
+                    self.contributions_jsonl_path.exists()
+                    and self.contributions_jsonl_path.stat().st_size + len(rec_line) > self.MAX_CONTRIBUTIONS_FILE_BYTES
+                ):
+                    return
+                with self.contributions_jsonl_path.open("ab") as fh:
+                    fh.write(rec_line)
+                    fh.flush()
+        except OSError:
+            pass
+
     async def _handle_put(self, t: bytes, a: Dict[bytes, Any], addr: Tuple[str, int]) -> None:
+        is_rsi_delta = a.get(b"salt") == b"armiger-rsi-delta"
+
+        def _reject(code: int, message: bytes) -> None:
+            if is_rsi_delta:
+                self.inbound_contributions_rejected += 1
+            self._send_error(t, code, message, addr)
+
         if not self._allow_write_from_ip(addr[0]):
-            self._send_error(t, 202, b"Rate limit exceeded", addr)
+            _reject(202, b"Rate limit exceeded")
             return
         if self.require_write_token and not self.verify_token(addr[0], a.get(b"token")):
-            self._send_error(t, 203, b"Invalid token", addr)
+            _reject(203, b"Invalid token")
             return
         required = {b"k", b"v", b"seq", b"sig"}
         if not required.issubset(a.keys()):
-            self._send_error(t, 203, b"Missing required BEP-44 fields", addr)
+            _reject(203, b"Missing required BEP-44 fields")
             return
         pubkey = a[b"k"]
         salt = a.get(b"salt", b"")
@@ -993,19 +1071,19 @@ class GatedBEP44UDPNode:
             or len(sig) != 64
             or len(salt) > 64
         ):
-            self._send_error(t, 203, b"Invalid BEP-44 argument types", addr)
+            _reject(203, b"Invalid BEP-44 argument types")
             return
         try:
             encoded_v = bencode(v)
         except Exception:
-            self._send_error(t, 203, b"Unencodable BEP-44 value", addr)
+            _reject(203, b"Unencodable BEP-44 value")
             return
         if len(encoded_v) > self.MAX_V_BYTES:
-            self._send_error(t, 205, b"Message (v field) too big", addr)
+            _reject(205, b"Message (v field) too big")
             return
         ok_anon, _reason_anon = self.anonymity_guard.validate_bep44_payload(v, salt)
         if not ok_anon:
-            self._send_error(t, 203, b"Payload rejected by AnonymityGuard", addr)
+            _reject(203, b"Payload rejected by AnonymityGuard")
             return
         cas_int = int(cas) if isinstance(cas, int) else None
         candidates = [
@@ -1013,26 +1091,45 @@ class GatedBEP44UDPNode:
             bep44_signing_buffer(v=v, seq=seq, salt=salt, cas=None),
         ]
         if not _verify_bep44(pubkey, sig, candidates):
-            self._send_error(t, 206, b"Invalid signature", addr)
+            _reject(206, b"Invalid signature")
             return
+        parsed_delta: Optional[Dict[str, Any]] = None
+        if is_rsi_delta and self.rsi_collector is not None:
+            v_for_rsi = bytes(v) if isinstance(v, (bytes, bytearray)) else encoded_v
+            ok_rsi, reason_rsi, parsed_delta = self.rsi_collector.ingest_signed_delta_bundle(
+                {
+                    "v": v_for_rsi,
+                    "seq": int(seq),
+                    "salt": salt,
+                    "k": pubkey,
+                    "sig": sig,
+                }
+            )
+            if not ok_rsi:
+                err_code = 302 if ("stale_or_replayed" in reason_rsi or "replayed_" in reason_rsi) else 203
+                _reject(err_code, reason_rsi.encode("utf-8", errors="ignore")[:120] or b"RSI delta rejected")
+                return
         target = compute_bep44_target(pubkey, salt)
         existing = self._store.get(target)
         if existing is None and len(self._store) >= self.MAX_MUTABLE_ITEMS:
-            self._send_error(t, 202, b"Mutable item table full", addr)
+            _reject(202, b"Mutable item table full")
             return
         if existing is not None:
             if cas_int is not None and cas_int != existing["seq"]:
-                self._send_error(t, 301, b"CAS hash mismatched", addr)
+                _reject(301, b"CAS hash mismatched")
                 return
             if seq < existing["seq"]:
-                self._send_error(t, 302, b"Sequence number less than current", addr)
+                _reject(302, b"Sequence number less than current")
                 return
             if seq == existing["seq"]:
+                if is_rsi_delta:
+                    _reject(302, b"Stale or replayed contribution delta")
+                    return
                 if bencode(v) == bencode(existing["v"]) and sig == existing["sig"]:
                     existing["ts"] = time.time()
                     self._send({b"t": t, b"y": b"r", b"r": {b"id": self.node_id}}, addr)
                     return
-                self._send_error(t, 302, b"Conflicting value at identical sequence number", addr)
+                _reject(302, b"Conflicting value at identical sequence number")
                 return
         self._store[target] = {
             "v": v,
@@ -1043,6 +1140,9 @@ class GatedBEP44UDPNode:
             "ts": time.time(),
             "pinned": bool(existing and existing.get("pinned")),
         }
+        if is_rsi_delta:
+            self.inbound_contributions_accepted += 1
+            self._persist_accepted_contribution(target, pubkey, salt, int(seq), sig, parsed_delta)
         self._send({b"t": t, b"y": b"r", b"r": {b"id": self.node_id}}, addr)
 
 

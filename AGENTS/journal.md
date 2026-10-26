@@ -1,3 +1,10 @@
+## 2026-10-26 — Wire BEP-44/46 auto-update poller, writable overlay hot-swap, and opt-in contribution dispatcher
+
+- **Branch:** feat/dht-autoupdate-and-contribution-loop
+- **What changed:** Pin canonical release Ed25519 public key (`3599362bd52dad8b89398b904d3081c2cb483d13376f7ffb49f3748208731e76`) and default salt (`armiger:weights:ultra`) in `verify_dht.py` and `oci_vpn_guard.py`. Implement background BEP-44/46 auto-update poller (`ARMIGER_DHT_AUTO_UPDATE`, `ARMIGER_DHT_POLL_INTERVAL_SEC`) and atomic writable-overlay hot-swap (`ARMIGER_RUNTIME_CACHE_DIR`) in `ArmigerUltraPipeline`, plus `/healthz` observability fields (`active_seq`, `active_bundle_merkle_root`, `model_source`, `last_dht_check_ts`, `sharing_status()`). Wire opt-in UDP contribution dispatcher (`ARMIGER_DHT_SHARE_OPT_IN`, strictly defaulting to `false` / `pull_only`) in `ArmigerDHTRSIEngine` (`dispatch_contribution_udp`) and collector ingestion (`ingest_signed_delta_bundle`). Pin merged `Armiger-Connectors` `a18596f8a371afcd7df339f3fe6fb288749f55fe` (`v1.2.1`) in `examples/Dockerfile` and bump release version to `3.3.0`.
+- **Validation:** Verified unit and adversarial fault tests (`tests/plugin/test_dht_autoupdate_and_contribution_loop.py`, `tests/test_server.py`, `tests/test_artifacts.py`, `tests/test_armiger_ultra_pipeline.py`, `tests/test_distributed_knowledge_transfer.py`) and Compose manifests.
+- **Follow-ups:** None.
+
 ## 2026-10-24 — Show concrete contributing, attesting and receiving node roles in diagram
 
 - **Branch:** docs/peer-validation-diagram

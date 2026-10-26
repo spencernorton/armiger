@@ -200,6 +200,8 @@ class ArmigerDHTRSIEngine:
         self._outbound_bundles_shared: int = 0
         self._outbound_packets_blocked_opt_out: int = 0
         self._outbound_bytes_shared: int = 0
+        self._outbound_udp_packets_sent: int = 0
+        self._outbound_udp_puts_succeeded: int = 0
         self._telemetry_encryption_errors: int = 0
         self._telemetry_dropped_backlog: int = 0
         self._last_telemetry_error: str = ""
@@ -271,6 +273,8 @@ class ArmigerDHTRSIEngine:
             "outbound_bundles_shared": int(self._outbound_bundles_shared),
             "outbound_packets_blocked_opt_out": int(self._outbound_packets_blocked_opt_out),
             "outbound_bytes_shared": int(self._outbound_bytes_shared),
+            "outbound_udp_packets_sent": int(getattr(self, "_outbound_udp_packets_sent", 0)),
+            "outbound_udp_puts_succeeded": int(getattr(self, "_outbound_udp_puts_succeeded", 0)),
             "ephemeral_identity_enabled": bool(self.anonymity_guard.ephemeral_identity),
             "ephemeral_pubkey_hex": self.anonymity_guard.current_pubkey_hex() if self.opt_in_sharing else None,
             "ephemeral_rotations": int(self.anonymity_guard.rotation_count),
@@ -754,3 +758,276 @@ class ArmigerDHTRSIEngine:
         self.current_seq = manifest.seq
         self.current_bundle_sha256 = actual_sha.lower()
         return True, "update_staged_and_verified", canary_report
+
+    def dispatch_contribution_udp(
+        self,
+        signed_bundle: Optional[Mapping[str, Any]] = None,
+        *,
+        delta_w: Optional[Sequence[float]] = None,
+        delta_b: Optional[Sequence[float]] = None,
+        reliability_bins: Optional[Sequence[Any]] = None,
+        n_samples: int = 25,
+        epoch: Optional[Union[int, float]] = None,
+        seq: Optional[int] = None,
+        model_tier: str = "ultra",
+        salt: bytes = b"armiger-rsi-delta",
+        rotate_key: Optional[bool] = None,
+        dht_nodes: Optional[Sequence[Tuple[str, int]]] = None,
+        collector_nodes: Optional[Sequence[Tuple[str, int]]] = None,
+        discover_collectors: bool = True,
+        release_pubkey_hex: Optional[str] = None,
+        release_salt: Union[bytes, str, None] = None,
+        timeout: float = 2.5,
+        max_dht_puts: int = 8,
+    ) -> Dict[str, Any]:
+        """Publish a signed `< 1,000`-byte BEP-44 delta item over outbound UDP to Mainline DHT
+        (`target = SHA-1(ephemeral_pubkey || "armiger-rsi-delta")`) and directly to collector
+        DHT nodes (`:6881/udp`) discovered via the release pointer.
+
+        Strictly sends 0 packets and opens 0 sockets when `opt_in_sharing=False`.
+        """
+        if not self.opt_in_sharing or self.mode != DHTRSIMode.ANONYMOUS_CONTRIBUTE:
+            self._outbound_packets_blocked_opt_out += 1
+            return {
+                "dispatched": False,
+                "reason": "opt_in_sharing_disabled",
+                "packets_sent": 0,
+                "mainline_puts_ok": 0,
+                "collector_puts_ok": 0,
+            }
+
+        if signed_bundle is None:
+            bundle = self.export_signed_delta_bundle(
+                delta_w=delta_w,
+                delta_b=delta_b,
+                reliability_bins=reliability_bins,
+                n_samples=n_samples,
+                epoch=epoch,
+                seq=seq,
+                model_tier=model_tier,
+                salt=salt,
+                rotate_key=rotate_key,
+            )
+            if bundle is None:
+                return {
+                    "dispatched": False,
+                    "reason": "opt_in_sharing_disabled",
+                    "packets_sent": 0,
+                    "mainline_puts_ok": 0,
+                    "collector_puts_ok": 0,
+                }
+        else:
+            bundle = dict(signed_bundle)
+
+        v_raw = bundle["v"]
+        v_bytes = v_raw.encode("utf-8") if isinstance(v_raw, str) else bytes(v_raw)
+        seq_int = int(bundle["seq"])
+        salt_raw = bundle.get("salt", b"armiger-rsi-delta")
+        salt_bytes = salt_raw.encode("utf-8") if isinstance(salt_raw, str) else bytes(salt_raw)
+        k_raw = bundle.get("k") if bundle.get("k") is not None else bundle.get("pubkey_hex")
+        pub_bytes = bytes.fromhex(k_raw.strip()) if isinstance(k_raw, str) else bytes(k_raw)
+        sig_raw = bundle.get("sig") if bundle.get("sig") is not None else bundle.get("sig_hex")
+        sig_bytes = bytes.fromhex(sig_raw.strip()) if isinstance(sig_raw, str) else bytes(sig_raw)
+
+        # Pre-transmission Canary Firewall & Ed25519 signature verification
+        self.anonymity_guard.inspect_wire_payload(v_bytes)
+        if len(v_bytes) > 1000:
+            raise AnonymityViolationError(f"bep44_value_exceeds_1000_bytes:{len(v_bytes)}")
+        vk = ed25519.Ed25519PublicKey.from_public_bytes(pub_bytes)
+        vk.verify(sig_bytes, _bep44_canonical_sign_buffer(v=v_bytes, seq=seq_int, salt=salt_bytes))
+
+        import socket as _socket
+        try:
+            from verify_dht import (
+                DEFAULT_RELEASE_PUBKEY_HEX,
+                DEFAULT_RELEASE_SALT,
+                _decode_compact_nodes_with_id,
+                _xor_distance,
+                bdecode_krpc,
+                bencode,
+                generate_bep42_node_id,
+                parse_bootstrap_nodes,
+                verify_dht_release,
+            )
+        except ImportError:
+            from armiger.verify_dht import (
+                DEFAULT_RELEASE_PUBKEY_HEX,
+                DEFAULT_RELEASE_SALT,
+                _decode_compact_nodes_with_id,
+                _xor_distance,
+                bdecode_krpc,
+                bencode,
+                generate_bep42_node_id,
+                parse_bootstrap_nodes,
+                verify_dht_release,
+            )
+
+        target_20 = hashlib.sha1(pub_bytes + salt_bytes).digest()
+        eff_dht_nodes: List[Tuple[str, int]] = (
+            list(dht_nodes) if dht_nodes is not None else parse_bootstrap_nodes()
+        )
+        eff_collectors: List[Tuple[str, int]] = list(collector_nodes or ())
+        env_collectors = os.environ.get("ARMIGER_DHT_COLLECTOR_NODES", "").strip()
+        if env_collectors:
+            for c_addr in parse_bootstrap_nodes(env_collectors):
+                if c_addr not in eff_collectors:
+                    eff_collectors.append(c_addr)
+
+        if discover_collectors and eff_dht_nodes:
+            try:
+                ptr_rec = verify_dht_release(
+                    pubkey_hex=release_pubkey_hex or DEFAULT_RELEASE_PUBKEY_HEX,
+                    salt=release_salt or DEFAULT_RELEASE_SALT,
+                    dht_nodes=eff_dht_nodes,
+                    pointer_only=True,
+                    timeout=timeout,
+                    max_dht_queries=16,
+                )
+                for c_item in ptr_rec.get("collector_nodes", []) or []:
+                    if isinstance(c_item, (list, tuple)) and len(c_item) == 2:
+                        c_tup = (str(c_item[0]), int(c_item[1]))
+                        if c_tup not in eff_collectors:
+                            eff_collectors.append(c_tup)
+            except Exception:
+                pass
+
+        packets_sent = 0
+        mainline_puts_ok = 0
+        collector_puts_ok = 0
+        errors: List[str] = []
+        put_attempted_addrs: Set[Tuple[str, int]] = set()
+
+        def _single_socket_get_and_put(addr: Tuple[str, int]) -> Tuple[bool, List[Tuple[bytes, Tuple[str, int]]]]:
+            nonlocal packets_sent
+            host_str, port_int = str(addr[0]).strip(), int(addr[1])
+            try:
+                resolved_ip = _socket.gethostbyname(host_str)
+            except Exception as exc:
+                errors.append(f"{host_str}:{port_int}:resolve:{exc}")
+                return False, []
+            norm_addr = (resolved_ip, port_int)
+            if norm_addr in put_attempted_addrs:
+                return False, []
+            sock = _socket.socket(_socket.AF_INET, _socket.SOCK_DGRAM)
+            refs: List[Tuple[bytes, Tuple[str, int]]] = []
+            try:
+                sock.settimeout(max(0.2, float(timeout)))
+                sock.connect(norm_addr)
+                local_ip = str(sock.getsockname()[0]) or "127.0.0.1"
+                node_id = generate_bep42_node_id(local_ip)
+                q_get = {
+                    b"t": b"cg01",
+                    b"y": b"q",
+                    b"q": b"get",
+                    b"a": {b"id": node_id, b"target": target_20},
+                }
+                sock.send(bencode(q_get))
+                packets_sent += 1
+                self._outbound_udp_packets_sent += 1
+                raw_get = sock.recv(8192)
+                msg_get = bdecode_krpc(raw_get)
+                if not isinstance(msg_get, dict) or msg_get.get(b"y") != b"r":
+                    return False, refs
+                r_body = msg_get.get(b"r")
+                if not isinstance(r_body, dict):
+                    return False, refs
+                refs.extend(_decode_compact_nodes_with_id(r_body.get(b"nodes"), None))
+                for entry in r_body.get(b"nodes_list", []) or []:
+                    if (
+                        isinstance(entry, list)
+                        and len(entry) == 3
+                        and isinstance(entry[0], (bytes, bytearray))
+                        and len(entry[0]) == 20
+                        and isinstance(entry[1], (bytes, bytearray))
+                    ):
+                        refs.append((bytes(entry[0]), ( bytes(entry[1]).decode("ascii", errors="ignore"), int(entry[2]) )))
+                tok = r_body.get(b"token")
+                if not isinstance(tok, (bytes, bytearray)) or not tok:
+                    return False, refs
+                put_attempted_addrs.add(norm_addr)
+                q_put = {
+                    b"t": b"cp01",
+                    b"y": b"q",
+                    b"q": b"put",
+                    b"a": {
+                        b"id": node_id,
+                        b"k": pub_bytes,
+                        b"salt": salt_bytes,
+                        b"seq": int(seq_int),
+                        b"sig": sig_bytes,
+                        b"token": bytes(tok),
+                        b"v": v_bytes,
+                    },
+                }
+                sock.send(bencode(q_put))
+                packets_sent += 1
+                self._outbound_udp_packets_sent += 1
+                raw_put = sock.recv(8192)
+                msg_put = bdecode_krpc(raw_put)
+                if isinstance(msg_put, dict) and msg_put.get(b"y") == b"r":
+                    self._outbound_udp_puts_succeeded += 1
+                    return True, refs
+                err_val = msg_put.get(b"e_detail") or msg_put.get(b"e") if isinstance(msg_put, dict) else "invalid_resp"
+                errors.append(f"{resolved_ip}:{port_int}:put_rejected:{err_val}")
+                return False, refs
+            except Exception as exc:
+                errors.append(f"{resolved_ip}:{port_int}:{exc}")
+                return False, refs
+            finally:
+                sock.close()
+
+        resolved_collector_set: Set[Tuple[str, int]] = set()
+        for c_host, c_port in eff_collectors:
+            try:
+                c_ip = _socket.gethostbyname(str(c_host).strip())
+                resolved_collector_set.add((c_ip, int(c_port)))
+            except Exception:
+                continue
+
+        # 1. Direct BEP-44 put to discovered/configured collector DHT nodes (:6881/udp)
+        for c_addr in eff_collectors:
+            ok_put, _ = _single_socket_get_and_put(c_addr)
+            if ok_put:
+                collector_puts_ok += 1
+
+        # 2. Iterative BEP-44 lookup + put to Mainline DHT nodes
+        frontier: List[Tuple[int, Tuple[str, int]]] = [
+            (_xor_distance(None, target_20), n_addr) for n_addr in eff_dht_nodes
+        ]
+        visited_walk: Set[Tuple[str, int]] = set()
+        while frontier and len(visited_walk) < 16 and mainline_puts_ok < max_dht_puts:
+            frontier.sort(key=lambda item: item[0])
+            _, cur_addr = frontier.pop(0)
+            try:
+                cur_ip = _socket.gethostbyname(str(cur_addr[0]).strip())
+                norm_cur = (cur_ip, int(cur_addr[1]))
+            except Exception:
+                continue
+            if norm_cur in visited_walk:
+                continue
+            visited_walk.add(norm_cur)
+            if norm_cur in put_attempted_addrs:
+                if norm_cur in resolved_collector_set and collector_puts_ok > 0:
+                    mainline_puts_ok += 1
+                continue
+            ok_put, refs = _single_socket_get_and_put(norm_cur)
+            if ok_put:
+                mainline_puts_ok += 1
+                if norm_cur in resolved_collector_set:
+                    collector_puts_ok += 1
+            for ref_nid, ref_addr in refs:
+                if ref_addr not in visited_walk:
+                    frontier.append((_xor_distance(ref_nid, target_20), ref_addr))
+
+        return {
+            "dispatched": (mainline_puts_ok + collector_puts_ok) > 0,
+            "target_hex": target_20.hex(),
+            "pubkey_hex": pub_bytes.hex(),
+            "seq": seq_int,
+            "payload_bytes": len(v_bytes),
+            "packets_sent": packets_sent,
+            "mainline_puts_ok": mainline_puts_ok,
+            "collector_puts_ok": collector_puts_ok,
+            "collector_nodes": [list(c) for c in eff_collectors],
+            "errors": errors,
+        }

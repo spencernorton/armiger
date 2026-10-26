@@ -25,7 +25,10 @@ def service():
 
 
 def test_classification_and_health(service):
-    assert json.load(urllib.request.urlopen(service + "/healthz"))["status"] == "ok"
+    health = json.load(urllib.request.urlopen(service + "/healthz"))
+    assert health["status"] == "ok"
+    for key in ("active_seq", "active_bundle_merkle_root", "model_source", "last_dht_check_ts", "sharing_status"):
+        assert key in health
     request = urllib.request.Request(service + "/v1/classify", data=b'{"name":"Sintel.2010.mkv"}', headers={"Content-Type": "application/json"})
     assert json.load(urllib.request.urlopen(request))["category"] == "movie"
 
