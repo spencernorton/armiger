@@ -722,7 +722,21 @@ class ArmigerUltraPipeline:
     def _run_neural_logits(self, rows: Sequence[Mapping[str, Any]]) -> Dict[str, np.ndarray]:
         """Run the 8-head neural model and return raw logits `[B, C_h]` per head."""
         if self.onnx_session is not None:
-            inputs = build_onnx_batch_inputs(rows)
+            _batch_fn = build_onnx_batch_inputs
+            try:
+                for _inp in self.onnx_session.get_inputs():
+                    if getattr(_inp, "name", "") == "stats":
+                        _sh = getattr(_inp, "shape", None)
+                        if isinstance(_sh, (list, tuple)) and len(_sh) >= 2 and type(_sh[1]) is int and _sh[1] == 41:
+                            try:
+                                from .r13_features import build_onnx_batch_inputs as _r13_batch_fn
+                            except ImportError:
+                                from r13_features import build_onnx_batch_inputs as _r13_batch_fn
+                            _batch_fn = _r13_batch_fn
+                            break
+            except Exception:
+                pass
+            inputs = _batch_fn(rows)
             raw_outs = self.onnx_session.run(self._onnx_output_names, inputs)
             return {name: np.asarray(arr, dtype=np.float64) for name, arr in zip(self._onnx_output_names, raw_outs)}
 
@@ -1367,16 +1381,25 @@ class ArmigerUltraPipeline:
             return int(self.config["dht_seq"])
         if isinstance(self.config.get("seq"), int):
             return int(self.config["seq"])
-        cal_p = target_dir / "calibration.json"
-        if cal_p.is_file():
-            try:
-                cal_sha = hashlib.sha256(cal_p.read_bytes()).hexdigest()
-                if cal_sha == "300387779dc16292dd9e6be038ce9dd60e5bdb0ee929b383dcd4e51715f8b5f8":
-                    return 4
-                if cal_sha == "eb201c12539367aa7f3af8ab55b71113a680ad3f4c57a41a589621dccc957de9":
-                    return 3
-            except OSError:
-                pass
+        for onnx_cand in ("armiger_ultra.fp32.onnx", "armiger.int8.onnx"):
+            onnx_p = target_dir / onnx_cand
+            if onnx_p.is_file():
+                try:
+                    osha = hashlib.sha256(onnx_p.read_bytes()).hexdigest()
+                    if osha in (
+                        "6f94aef676e5bec4968378437769cfdc768fefcc6a21854b8319b33456ebd2ec",
+                        "c0e96936038988c7465b7fe041c4dc3c92df5a8cb4f56c2666271cd4d3e79420",
+                    ):
+                        return 4
+                    if osha in (
+                        "9d8a556ddba4f66052db27bc19cf2a303067a5c537e6a8d084145f665301f536",
+                        "116e3a291a036c667794a028cf5b06441371a76d03edba04da741f11d87882f9",
+                        "ed27945bb6cb024d4486392c2c714df4558c1fc581f86568ab53ace7d40f19f1",
+                        "93ed3d6f0ce8af8f0b788fa75575a07deaeb3cfe23ca2df4275b74eca2237c9f",
+                    ):
+                        return 3
+                except OSError:
+                    pass
         return max(int(self.rsi_engine.current_seq), 3)
 
     def _init_dht_update_bridge(

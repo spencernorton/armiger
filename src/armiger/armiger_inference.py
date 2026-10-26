@@ -130,7 +130,7 @@ def _extract_token_hashes(text: str) -> frozenset[str]:
 
 def _get_vocab_ext_map(vocab_path: Optional[Path] = None) -> Dict[str, int]:
     global _VOCAB_EXT_MAP
-    if _VOCAB_EXT_MAP is not None and len(_VOCAB_EXT_MAP) > 64:
+    if vocab_path is None and _VOCAB_EXT_MAP is not None and len(_VOCAB_EXT_MAP) > 64:
         return _VOCAB_EXT_MAP
     vpath = vocab_path if (vocab_path and vocab_path.exists()) else Path(__file__).resolve().with_name("vocab.json")
     if not vpath.exists() and os.environ.get("ARMIGER_MODEL_DIR"):
