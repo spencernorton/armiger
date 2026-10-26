@@ -1390,6 +1390,7 @@ class ArmigerUltraPipeline:
         offline: bool = False,
     ) -> None:
         self._dht_update_lock = threading.RLock()
+        self._dht_poll_mutex = threading.Lock()
         self._dht_trust: Optional[Dict[str, Any]] = None
         self._dht_canary_items: List[CanaryItem] = generate_golden_canary_suite()
         self._dht_canary_gate = GoldenCanaryRegressionGate(self._dht_canary_items)
@@ -1417,7 +1418,13 @@ class ArmigerUltraPipeline:
         self.active_bundle_merkle_root: str = self._compute_directory_merkle_root(self.model_dir)
         self.model_source: str = "baked_image"
         self.last_dht_check_ts: Optional[float] = None
+        self.last_dht_result: Optional[str] = None
+        self.last_dht_error: Optional[str] = None
+        self.dht_update_failures: int = 0
+        self.contribution_push_failures: int = 0
         self._custom_canary_validator: Optional[Callable[["ArmigerUltraPipeline"], bool]] = canary_validator
+        if initial_seq is None:
+            self._try_restore_persisted_overlay()
         self._offline: bool = bool(offline)
         raw_poll = (
             poll_interval_sec
@@ -2287,6 +2294,37 @@ class ArmigerUltraPipeline:
             pq_signature_hex=pq_sig_bytes.hex(),
         ), review
 
+    def _try_restore_persisted_overlay(self) -> None:
+        """Restore a previously verified DHT live overlay from `self.runtime_cache_dir` on startup if newer than baked artifacts."""
+        ov_state_path = self.runtime_cache_dir / "dht_overlay_state.json"
+        if not ov_state_path.is_file():
+            return
+        try:
+            ov_meta = json.loads(ov_state_path.read_text(encoding="utf-8"))
+            ov_seq = int(ov_meta.get("active_seq", 0))
+            ov_dir = Path(str(ov_meta.get("overlay_dir", "")))
+            if ov_seq <= int(self.active_seq) or not ov_dir.is_dir():
+                return
+            if (ov_dir / "calibration.json").is_file():
+                self.calibrator = ArmigerCalibrator(ov_dir / "calibration.json")
+            if (ov_dir / "config.json").is_file():
+                cfg_obj = json.loads((ov_dir / "config.json").read_text(encoding="utf-8"))
+                if isinstance(cfg_obj, dict):
+                    self.config = cfg_obj
+            if self.onnx_session is not None:
+                loaded_sess, loaded_path = self._load_onnx_session(ov_dir, self.variant, allow_synthetic_fallback=False)
+                if loaded_sess is not None and loaded_path is not None:
+                    self.onnx_session = loaded_sess
+                    self.onnx_path = loaded_path
+                    self._onnx_output_names = [o.name for o in loaded_sess.get_outputs()]
+                    self._onnx_model_sha256 = hashlib.sha256(loaded_path.read_bytes()).hexdigest()
+            self.active_seq = ov_seq
+            self.active_bundle_merkle_root = str(ov_meta.get("active_bundle_merkle_root") or self._compute_directory_merkle_root(ov_dir))
+            self.model_source = "dht_live_overlay"
+            self.active_overlay_dir = ov_dir
+        except Exception as exc:
+            self.last_dht_error = f"overlay_restore_failed:{type(exc).__name__}"
+
     def health_status(self) -> Dict[str, Any]:
         """Return `/healthz` observability dictionary for active DHT release & sharing state."""
         return {
@@ -2294,6 +2332,10 @@ class ArmigerUltraPipeline:
             "active_bundle_merkle_root": str(self.active_bundle_merkle_root),
             "model_source": str(self.model_source),
             "last_dht_check_ts": self.last_dht_check_ts,
+            "last_dht_result": self.last_dht_result,
+            "last_dht_error": self.last_dht_error,
+            "dht_update_failures": int(self.dht_update_failures),
+            "contribution_push_failures": int(self.contribution_push_failures),
             "sharing_status": self.sharing_status(),
         }
 
@@ -2525,10 +2567,14 @@ class ArmigerUltraPipeline:
                 if fname == "zero_cue_catalog.sqlite.zlib":
                     sqlite_bytes = _zlib.decompress(fbytes)
                     sqlite_dest = stage_dir / "zero_cue_catalog.sqlite"
-                    with sqlite_dest.open("wb") as sfh:
+                    if sqlite_dest.is_symlink() or sqlite_dest.exists():
+                        sqlite_dest.unlink()
+                    sqlite_tmp = stage_dir / f".zero_cue_catalog.sqlite.{os.getpid()}.tmp"
+                    with sqlite_tmp.open("wb") as sfh:
                         sfh.write(sqlite_bytes)
                         sfh.flush()
                         os.fsync(sfh.fileno())
+                    os.replace(sqlite_tmp, sqlite_dest)
 
             # Compile and validate candidate artifacts before acquiring hot-swap lock
             cand_config: Dict[str, Any] = dict(self.config)
@@ -2601,6 +2647,8 @@ class ArmigerUltraPipeline:
 
             # Atomic hot-swap + canary verification under _dht_update_lock
             with self._dht_update_lock:
+                if remote_seq <= int(self.active_seq):
+                    raise DHTUpdateRejected(f"stale_remote_seq_under_lock:{remote_seq}<={self.active_seq}")
                 snap = self.snapshot_dht_state()
                 prev_seq = int(self.active_seq)
                 prev_merkle = str(self.active_bundle_merkle_root)
@@ -2717,16 +2765,25 @@ class ArmigerUltraPipeline:
                 return
             while not self._auto_update_stop_event.is_set():
                 try:
-                    self.check_and_apply_dht_release_update()
-                except Exception:
-                    pass
+                    res_up = self.check_and_apply_dht_release_update()
+                    self.last_dht_result = "updated" if res_up.get("updated") else str(res_up.get("reason", "checked"))
+                    if res_up.get("rolled_back"):
+                        self.dht_update_failures += 1
+                        self.last_dht_error = str(res_up.get("reason", "rolled_back"))[:160]
+                except Exception as exc:
+                    self.dht_update_failures += 1
+                    self.last_dht_error = f"{type(exc).__name__}:{str(exc)[:120]}"
                 if self.opt_in_sharing and len(self.rsi_engine.telemetry_queue) >= self.rsi_engine.anonymity_guard.min_k_samples:
                     try:
-                        self.dispatch_opt_in_contribution(
+                        res_push = self.dispatch_opt_in_contribution(
                             n_samples=len(self.rsi_engine.telemetry_queue),
                         )
-                    except Exception:
-                        pass
+                        if not res_push.get("dispatched"):
+                            self.contribution_push_failures += 1
+                            self.last_dht_error = f"contribution_push:{res_push.get('reason', 'failed')}"[:160]
+                    except Exception as exc:
+                        self.contribution_push_failures += 1
+                        self.last_dht_error = f"contribution_push:{type(exc).__name__}"[:160]
                 if self._auto_update_stop_event.wait(self.poll_interval_sec):
                     break
 

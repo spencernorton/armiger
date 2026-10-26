@@ -163,6 +163,7 @@ class GatedBEP44UDPNode:
         self._contributions_file_lock = threading.Lock()
         self.inbound_contributions_accepted: int = 0
         self.inbound_contributions_rejected: int = 0
+        self.inbound_contributions_persistence_failures: int = 0
         self._token_secret: bytes = os.urandom(32)
         self._store: Dict[bytes, Dict[str, Any]] = {}
         self._bundles: Dict[bytes, Tuple[bytes, float]] = {}
@@ -1003,9 +1004,9 @@ class GatedBEP44UDPNode:
         seq: int,
         sig: bytes,
         parsed_delta: Optional[Dict[str, Any]],
-    ) -> None:
+    ) -> bool:
         if self.contributions_jsonl_path is None:
-            return
+            return True
         rec_line = (
             json.dumps(
                 {
@@ -1029,12 +1030,16 @@ class GatedBEP44UDPNode:
                     self.contributions_jsonl_path.exists()
                     and self.contributions_jsonl_path.stat().st_size + len(rec_line) > self.MAX_CONTRIBUTIONS_FILE_BYTES
                 ):
-                    return
+                    rotated = self.contributions_jsonl_path.with_suffix(".jsonl.1")
+                    os.replace(self.contributions_jsonl_path, rotated)
                 with self.contributions_jsonl_path.open("ab") as fh:
                     fh.write(rec_line)
                     fh.flush()
+                    os.fsync(fh.fileno())
+            return True
         except OSError:
-            pass
+            self.inbound_contributions_persistence_failures += 1
+            return False
 
     async def _handle_put(self, t: bytes, a: Dict[bytes, Any], addr: Tuple[str, int]) -> None:
         is_rsi_delta = a.get(b"salt") == b"armiger-rsi-delta"
@@ -1094,7 +1099,10 @@ class GatedBEP44UDPNode:
             _reject(206, b"Invalid signature")
             return
         parsed_delta: Optional[Dict[str, Any]] = None
-        if is_rsi_delta and self.rsi_collector is not None:
+        if is_rsi_delta:
+            if self.rsi_collector is None:
+                _reject(202, b"RSI contribution collector unavailable")
+                return
             v_for_rsi = bytes(v) if isinstance(v, (bytes, bytearray)) else encoded_v
             ok_rsi, reason_rsi, parsed_delta = self.rsi_collector.ingest_signed_delta_bundle(
                 {
@@ -1131,6 +1139,10 @@ class GatedBEP44UDPNode:
                     return
                 _reject(302, b"Conflicting value at identical sequence number")
                 return
+        if is_rsi_delta:
+            if not self._persist_accepted_contribution(target, pubkey, salt, int(seq), sig, parsed_delta):
+                _reject(202, b"Contribution journal persistence failed")
+                return
         self._store[target] = {
             "v": v,
             "seq": int(seq),
@@ -1142,7 +1154,6 @@ class GatedBEP44UDPNode:
         }
         if is_rsi_delta:
             self.inbound_contributions_accepted += 1
-            self._persist_accepted_contribution(target, pubkey, salt, int(seq), sig, parsed_delta)
         self._send({b"t": t, b"y": b"r", b"r": {b"id": self.node_id}}, addr)
 
 
