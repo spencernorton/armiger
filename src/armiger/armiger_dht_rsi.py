@@ -141,6 +141,7 @@ class ArmigerDHTRSIEngine:
         dp_sigma: float = 0.05,
         max_seen_delta_digests: int = 4096,
         max_tracked_senders: int = 1024,
+        max_sender_tombstones: Optional[int] = None,
         delta_freshness_window_seconds: int = 14 * 86400,
         max_telemetry_queue_size: int = 1024,
         max_item_encryption_retries: int = 3,
@@ -181,7 +182,12 @@ class ArmigerDHTRSIEngine:
         self.max_item_encryption_retries = max(int(max_item_encryption_retries), 1)
         self._seen_delta_digests: Dict[str, Tuple[int, Tuple[str, bytes]]] = {}
         self._inbound_sender_seq: Dict[Tuple[str, bytes], Tuple[int, int]] = {}
-        self._evicted_sender_seq_floor: int = int(current_seq)
+        self._evicted_sender_tombstones: Dict[Tuple[str, bytes], Tuple[int, int]] = {}
+        self.max_sender_tombstones: int = (
+            max(int(max_sender_tombstones), 1)
+            if max_sender_tombstones is not None
+            else max(self.max_tracked_senders * 8, 256)
+        )
 
         self.verifier = PhysicalGroundTruthVerifier()
         self.anonymizer = TelemetryAnonymizer(
@@ -200,6 +206,8 @@ class ArmigerDHTRSIEngine:
         self._outbound_bundles_shared: int = 0
         self._outbound_packets_blocked_opt_out: int = 0
         self._outbound_bytes_shared: int = 0
+        self._outbound_udp_packets_sent: int = 0
+        self._outbound_udp_puts_succeeded: int = 0
         self._telemetry_encryption_errors: int = 0
         self._telemetry_dropped_backlog: int = 0
         self._last_telemetry_error: str = ""
@@ -271,6 +279,8 @@ class ArmigerDHTRSIEngine:
             "outbound_bundles_shared": int(self._outbound_bundles_shared),
             "outbound_packets_blocked_opt_out": int(self._outbound_packets_blocked_opt_out),
             "outbound_bytes_shared": int(self._outbound_bytes_shared),
+            "outbound_udp_packets_sent": int(getattr(self, "_outbound_udp_packets_sent", 0)),
+            "outbound_udp_puts_succeeded": int(getattr(self, "_outbound_udp_puts_succeeded", 0)),
             "ephemeral_identity_enabled": bool(self.anonymity_guard.ephemeral_identity),
             "ephemeral_pubkey_hex": self.anonymity_guard.current_pubkey_hex() if self.opt_in_sharing else None,
             "ephemeral_rotations": int(self.anonymity_guard.rotation_count),
@@ -383,28 +393,82 @@ class ArmigerDHTRSIEngine:
         for sk in expired_senders:
             self._inbound_sender_seq.pop(sk, None)
 
+        expired_tombstones = [
+            sk for sk, (_, seen_ts) in self._evicted_sender_tombstones.items() if seen_ts < cutoff
+        ]
+        for sk in expired_tombstones:
+            self._evicted_sender_tombstones.pop(sk, None)
+
     def ingest_signed_delta_bundle(
         self,
         signed_bundle: Mapping[str, Any],
+        *,
+        commit: bool = True,
     ) -> Tuple[bool, str, Optional[Dict[str, Any]]]:
         """Verify Ed25519 signature and AnonymityGuard schema of an inbound delta bundle (works in pull_only mode)."""
         if self.mode == DHTRSIMode.OFF:
             return False, "plugin_mode_off", None
 
+        if not isinstance(signed_bundle, Mapping):
+            return False, "malformed_bundle_envelope:not_mapping", None
+
         try:
             v_raw = signed_bundle["v"]
-            v_bytes = v_raw if isinstance(v_raw, (bytes, bytearray)) else str(v_raw).encode("utf-8")
-            seq = int(signed_bundle["seq"])
+            if isinstance(v_raw, str):
+                if len(v_raw) > 2 * 1024 * 1024:
+                    return False, "malformed_bundle_envelope:v_too_large", None
+                v_bytes = v_raw.encode("utf-8")
+            elif isinstance(v_raw, (bytes, bytearray, memoryview)):
+                if len(v_raw) > 2 * 1024 * 1024:
+                    return False, "malformed_bundle_envelope:v_too_large", None
+                v_bytes = bytes(v_raw)
+            else:
+                return False, f"malformed_bundle_envelope:invalid_v_type:{type(v_raw).__name__}", None
+
+            raw_seq = signed_bundle["seq"]
+            if isinstance(raw_seq, bool) or not isinstance(raw_seq, int) or raw_seq < 1 or raw_seq > (2**63 - 1):
+                return False, f"malformed_bundle_envelope:invalid_seq:{raw_seq!r}", None
+            seq = int(raw_seq)
+
             salt = signed_bundle.get("salt", b"armiger-rsi-delta")
+            if salt is None:
+                salt = b"armiger-rsi-delta"
             if isinstance(salt, str):
-                salt = salt.encode("utf-8")
-            salt_bytes = bytes(salt)
+                if len(salt) > 256:
+                    return False, f"bep44_salt_exceeds_64_bytes:{len(salt)}", None
+                salt_bytes = salt.encode("utf-8")
+            elif isinstance(salt, (bytes, bytearray, memoryview)):
+                if len(salt) > 64:
+                    return False, f"bep44_salt_exceeds_64_bytes:{len(salt)}", None
+                salt_bytes = bytes(salt)
+            else:
+                return False, f"malformed_bundle_envelope:invalid_salt_type:{type(salt).__name__}", None
             if len(salt_bytes) > 64:
                 return False, f"bep44_salt_exceeds_64_bytes:{len(salt_bytes)}", None
-            pub_raw = signed_bundle.get("k") or signed_bundle.get("pubkey_hex")
-            pub_bytes = bytes.fromhex(pub_raw) if isinstance(pub_raw, str) else bytes(pub_raw)
-            sig_raw = signed_bundle.get("sig") or signed_bundle.get("sig_hex")
-            sig_bytes = bytes.fromhex(sig_raw) if isinstance(sig_raw, str) else bytes(sig_raw)
+
+            pub_raw = signed_bundle["k"] if signed_bundle.get("k") is not None else signed_bundle.get("pubkey_hex")
+            if isinstance(pub_raw, str):
+                if len(pub_raw.strip()) != 64:
+                    return False, "malformed_bundle_envelope:invalid_pubkey_hex_length", None
+                pub_bytes = bytes.fromhex(pub_raw.strip())
+            elif isinstance(pub_raw, (bytes, bytearray, memoryview)):
+                if len(pub_raw) != 32:
+                    return False, f"malformed_bundle_envelope:invalid_pubkey_length:{len(pub_raw)}", None
+                pub_bytes = bytes(pub_raw)
+            else:
+                return False, f"malformed_bundle_envelope:invalid_pubkey_type:{type(pub_raw).__name__}", None
+
+            sig_raw = signed_bundle["sig"] if signed_bundle.get("sig") is not None else signed_bundle.get("sig_hex")
+            if isinstance(sig_raw, str):
+                if len(sig_raw.strip()) != 128:
+                    return False, "malformed_bundle_envelope:invalid_sig_hex_length", None
+                sig_bytes = bytes.fromhex(sig_raw.strip())
+            elif isinstance(sig_raw, (bytes, bytearray, memoryview)):
+                if len(sig_raw) != 64:
+                    return False, f"malformed_bundle_envelope:invalid_sig_length:{len(sig_raw)}", None
+                sig_bytes = bytes(sig_raw)
+            else:
+                return False, f"malformed_bundle_envelope:invalid_sig_type:{type(sig_raw).__name__}", None
         except Exception as exc:
             return False, f"malformed_bundle_envelope:{exc}", None
 
@@ -418,10 +482,10 @@ class ArmigerDHTRSIEngine:
         self._prune_inbound_delta_tracking(now_ts)
 
         sender_key = (pub_bytes.hex(), salt_bytes)
-        prev_entry = self._inbound_sender_seq.get(sender_key)
+        prev_entry = self._inbound_sender_seq.get(sender_key) or self._evicted_sender_tombstones.get(sender_key)
         min_seq = max(
             self.current_seq,
-            prev_entry[0] if prev_entry is not None else self._evicted_sender_seq_floor,
+            prev_entry[0] if prev_entry is not None else 0,
         )
         if seq <= min_seq:
             return False, f"stale_or_replayed_delta_seq:{seq}<={min_seq}", None
@@ -439,25 +503,33 @@ class ArmigerDHTRSIEngine:
         if epoch_val <= 0 or abs(now_ts - epoch_val) > self.delta_freshness_window_seconds:
             return False, f"stale_or_future_delta_epoch:{epoch_val}", None
 
-        # Any prior digest for this same sender_key is now superseded by the higher monotonic seq
+        # Never evict an unexpired sender high-water mark: if tracking capacity (active + tombstones)
+        # is full of unexpired senders, reject previously unseen sender identities fail-closed.
+        is_known_sender = sender_key in self._inbound_sender_seq or sender_key in self._evicted_sender_tombstones
+        if (
+            not is_known_sender
+            and len(self._inbound_sender_seq) >= self.max_tracked_senders
+            and len(self._evicted_sender_tombstones) >= self.max_sender_tombstones
+        ):
+            return False, "replay_tracking_capacity_exhausted", None
+
         superseded_digests = [
             d for d, (_, sk) in self._seen_delta_digests.items() if sk == sender_key
         ]
-        for d in superseded_digests:
-            self._seen_delta_digests.pop(d, None)
+        projected_digest_count = len(self._seen_delta_digests) - len(superseded_digests)
+        if projected_digest_count >= self.max_seen_delta_digests:
+            evictable_d = next(
+                (
+                    d
+                    for d, (_, sk) in self._seen_delta_digests.items()
+                    if d not in superseded_digests
+                    and (sk in self._inbound_sender_seq or sk in self._evicted_sender_tombstones or sk == sender_key)
+                ),
+                None,
+            )
+            if evictable_d is None:
+                return False, "replay_digest_capacity_exhausted", None
 
-        while len(self._seen_delta_digests) >= self.max_seen_delta_digests:
-            oldest_d = next(iter(self._seen_delta_digests))
-            self._seen_delta_digests.pop(oldest_d, None)
-        self._seen_delta_digests[bundle_digest] = (now_ts, sender_key)
-
-        if sender_key in self._inbound_sender_seq:
-            self._inbound_sender_seq.pop(sender_key, None)
-        while len(self._inbound_sender_seq) >= self.max_tracked_senders:
-            oldest_sk = next(iter(self._inbound_sender_seq))
-            evicted_seq, _ = self._inbound_sender_seq.pop(oldest_sk)
-            self._evicted_sender_seq_floor = max(self._evicted_sender_seq_floor, evicted_seq)
-        self._inbound_sender_seq[sender_key] = (seq, now_ts)
         scale = float(parsed.get("scale", 1.0 / 127.0))
         w_q8 = parsed.get("delta_w_q8", [])
         b_q8 = parsed.get("delta_b_q8", [])
@@ -471,14 +543,48 @@ class ArmigerDHTRSIEngine:
             "reliability_bins": parsed.get("reliability_bins", []),
             "sender_ephemeral_pubkey_hex": pub_bytes.hex(),
         }
+        if not commit:
+            return True, "verified_candidate", decoded
+
+        for d in superseded_digests:
+            self._seen_delta_digests.pop(d, None)
+
+        while len(self._seen_delta_digests) >= self.max_seen_delta_digests:
+            evictable_d = next(
+                (
+                    d
+                    for d, (_, sk) in self._seen_delta_digests.items()
+                    if sk in self._inbound_sender_seq or sk in self._evicted_sender_tombstones or sk == sender_key
+                ),
+                None,
+            )
+            if evictable_d is None:
+                return False, "replay_digest_capacity_exhausted", None
+            self._seen_delta_digests.pop(evictable_d, None)
+
+        eff_retention_ts = max(now_ts, epoch_val)
+        self._seen_delta_digests[bundle_digest] = (eff_retention_ts, sender_key)
+
+        self._evicted_sender_tombstones.pop(sender_key, None)
+        if sender_key in self._inbound_sender_seq:
+            self._inbound_sender_seq.pop(sender_key, None)
+        while len(self._inbound_sender_seq) >= self.max_tracked_senders:
+            if len(self._evicted_sender_tombstones) >= self.max_sender_tombstones:
+                return False, "replay_tracking_capacity_exhausted", None
+            oldest_sk = next(iter(self._inbound_sender_seq))
+            evicted_seq, evicted_ts = self._inbound_sender_seq.pop(oldest_sk)
+            self._evicted_sender_tombstones[oldest_sk] = (evicted_seq, evicted_ts)
+        self._inbound_sender_seq[sender_key] = (seq, eff_retention_ts)
         return True, "verified_and_ingested", decoded
 
     def ingest_signed_bundle(
         self,
         signed_bundle: Mapping[str, Any],
+        *,
+        commit: bool = True,
     ) -> Tuple[bool, str, Optional[Dict[str, Any]]]:
         """Alias for `ingest_signed_delta_bundle`."""
-        return self.ingest_signed_delta_bundle(signed_bundle)
+        return self.ingest_signed_delta_bundle(signed_bundle, commit=commit)
 
     async def publish_to_dht(
         self,
@@ -636,6 +742,21 @@ class ArmigerDHTRSIEngine:
         if candidate_predictor_fn is None:
             return False, "missing_candidate_predictor_fn", None
 
+        # 1. Verify BEP-44 monotonic sequence and Hybrid Ed25519 + WOTS+-SHAKE256 PQ threshold signatures
+        eff_pq_signers = dict(self.trusted_pq_signers)
+        if not eff_pq_signers:
+            for ed_pk_hex, identity in self.trusted_signers.items():
+                norm_ed = ThresholdDHTManifest._normalize_pubkey_id(ed_pk_hex)
+                for wots_pk_hex in WOTSPlusSHAKE256._ED25519_TO_WOTS_PUBS.get(norm_ed, ()):
+                    eff_pq_signers[wots_pk_hex] = identity
+        require_pq_flag = self.require_pq if require_pq is None else bool(require_pq)
+        q_ok, q_reason, asns = SybilQuorumVerifier.verify_quorum(
+            attestations=attestations,
+            target_hash=manifest.bundle_sha256,
+            min_distinct_asns=max(self.min_distinct_asns, manifest.min_asn_quorum),
+            asn_verifier=asn_verifier,
+            require_authoritative_asn=require_authoritative_asn,
+        )
         if authenticated_baseline is not None:
             b_ok, b_reason = authenticated_baseline.verify_signature(self.trusted_signers)
             if not b_ok:
@@ -650,14 +771,6 @@ class ArmigerDHTRSIEngine:
                 return False, "authenticated_baseline_canary_suite_mismatch", None
             baseline_metrics = authenticated_baseline.to_metrics_dict()
 
-        # 1. Verify BEP-44 monotonic sequence and Hybrid Ed25519 + WOTS+-SHAKE256 PQ threshold signatures
-        eff_pq_signers = dict(self.trusted_pq_signers)
-        if not eff_pq_signers:
-            for ed_pk_hex, identity in self.trusted_signers.items():
-                norm_ed = ThresholdDHTManifest._normalize_pubkey_id(ed_pk_hex)
-                for wots_pk_hex in WOTSPlusSHAKE256._ED25519_TO_WOTS_PUBS.get(norm_ed, ()):
-                    eff_pq_signers[wots_pk_hex] = identity
-        require_pq_flag = self.require_pq if require_pq is None else bool(require_pq)
         ok, reason = ThresholdSignatureVerifier.verify(
             manifest=manifest,
             trusted_signers=self.trusted_signers,
@@ -665,6 +778,8 @@ class ArmigerDHTRSIEngine:
             current_seq=self.current_seq,
             trusted_pq_signers=eff_pq_signers,
             require_pq=require_pq_flag,
+            asn_verifier=asn_verifier,
+            verified_asn_quorum=asns if q_ok else None,
             bootstrap_checkpoint_seq=bootstrap_checkpoint_seq,
         )
         if not ok:
@@ -727,13 +842,6 @@ class ArmigerDHTRSIEngine:
                 baseline_metrics = release_envelope.authenticated_baseline.to_metrics_dict()
 
         # 3. Verify K-of-N distinct-ASN Sybil quorum
-        q_ok, q_reason, asns = SybilQuorumVerifier.verify_quorum(
-            attestations=attestations,
-            target_hash=manifest.bundle_sha256,
-            min_distinct_asns=max(self.min_distinct_asns, manifest.min_asn_quorum),
-            asn_verifier=asn_verifier,
-            require_authoritative_asn=require_authoritative_asn,
-        )
         if not q_ok:
             return False, f"sybil_quorum_failed:{q_reason}", None
 
@@ -754,3 +862,276 @@ class ArmigerDHTRSIEngine:
         self.current_seq = manifest.seq
         self.current_bundle_sha256 = actual_sha.lower()
         return True, "update_staged_and_verified", canary_report
+
+    def dispatch_contribution_udp(
+        self,
+        signed_bundle: Optional[Mapping[str, Any]] = None,
+        *,
+        delta_w: Optional[Sequence[float]] = None,
+        delta_b: Optional[Sequence[float]] = None,
+        reliability_bins: Optional[Sequence[Any]] = None,
+        n_samples: int = 25,
+        epoch: Optional[Union[int, float]] = None,
+        seq: Optional[int] = None,
+        model_tier: str = "ultra",
+        salt: bytes = b"armiger-rsi-delta",
+        rotate_key: Optional[bool] = None,
+        dht_nodes: Optional[Sequence[Tuple[str, int]]] = None,
+        collector_nodes: Optional[Sequence[Tuple[str, int]]] = None,
+        discover_collectors: bool = True,
+        release_pubkey_hex: Optional[str] = None,
+        release_salt: Union[bytes, str, None] = None,
+        timeout: float = 2.5,
+        max_dht_puts: int = 8,
+    ) -> Dict[str, Any]:
+        """Publish a signed `< 1,000`-byte BEP-44 delta item over outbound UDP to Mainline DHT
+        (`target = SHA-1(ephemeral_pubkey || "armiger-rsi-delta")`) and directly to collector
+        DHT nodes (`:6881/udp`) discovered via the release pointer.
+
+        Strictly sends 0 packets and opens 0 sockets when `opt_in_sharing=False`.
+        """
+        if not self.opt_in_sharing or self.mode != DHTRSIMode.ANONYMOUS_CONTRIBUTE:
+            self._outbound_packets_blocked_opt_out += 1
+            return {
+                "dispatched": False,
+                "reason": "opt_in_sharing_disabled",
+                "packets_sent": 0,
+                "mainline_puts_ok": 0,
+                "collector_puts_ok": 0,
+            }
+
+        if signed_bundle is None:
+            bundle = self.export_signed_delta_bundle(
+                delta_w=delta_w,
+                delta_b=delta_b,
+                reliability_bins=reliability_bins,
+                n_samples=n_samples,
+                epoch=epoch,
+                seq=seq,
+                model_tier=model_tier,
+                salt=salt,
+                rotate_key=rotate_key,
+            )
+            if bundle is None:
+                return {
+                    "dispatched": False,
+                    "reason": "opt_in_sharing_disabled",
+                    "packets_sent": 0,
+                    "mainline_puts_ok": 0,
+                    "collector_puts_ok": 0,
+                }
+        else:
+            bundle = dict(signed_bundle)
+
+        v_raw = bundle["v"]
+        v_bytes = v_raw.encode("utf-8") if isinstance(v_raw, str) else bytes(v_raw)
+        seq_int = int(bundle["seq"])
+        salt_raw = bundle.get("salt", b"armiger-rsi-delta")
+        salt_bytes = salt_raw.encode("utf-8") if isinstance(salt_raw, str) else bytes(salt_raw)
+        k_raw = bundle.get("k") if bundle.get("k") is not None else bundle.get("pubkey_hex")
+        pub_bytes = bytes.fromhex(k_raw.strip()) if isinstance(k_raw, str) else bytes(k_raw)
+        sig_raw = bundle.get("sig") if bundle.get("sig") is not None else bundle.get("sig_hex")
+        sig_bytes = bytes.fromhex(sig_raw.strip()) if isinstance(sig_raw, str) else bytes(sig_raw)
+
+        # Pre-transmission Canary Firewall & Ed25519 signature verification
+        self.anonymity_guard.inspect_wire_payload(v_bytes)
+        if len(v_bytes) > 1000:
+            raise AnonymityViolationError(f"bep44_value_exceeds_1000_bytes:{len(v_bytes)}")
+        vk = ed25519.Ed25519PublicKey.from_public_bytes(pub_bytes)
+        vk.verify(sig_bytes, _bep44_canonical_sign_buffer(v=v_bytes, seq=seq_int, salt=salt_bytes))
+
+        import socket as _socket
+        try:
+            from verify_dht import (
+                DEFAULT_RELEASE_PUBKEY_HEX,
+                DEFAULT_RELEASE_SALT,
+                _decode_compact_nodes_with_id,
+                _xor_distance,
+                bdecode_krpc,
+                bencode,
+                generate_bep42_node_id,
+                parse_bootstrap_nodes,
+                verify_dht_release,
+            )
+        except ImportError:
+            from armiger.verify_dht import (
+                DEFAULT_RELEASE_PUBKEY_HEX,
+                DEFAULT_RELEASE_SALT,
+                _decode_compact_nodes_with_id,
+                _xor_distance,
+                bdecode_krpc,
+                bencode,
+                generate_bep42_node_id,
+                parse_bootstrap_nodes,
+                verify_dht_release,
+            )
+
+        target_20 = hashlib.sha1(pub_bytes + salt_bytes).digest()
+        eff_dht_nodes: List[Tuple[str, int]] = (
+            list(dht_nodes) if dht_nodes is not None else parse_bootstrap_nodes()
+        )
+        eff_collectors: List[Tuple[str, int]] = list(collector_nodes or ())
+        env_collectors = os.environ.get("ARMIGER_DHT_COLLECTOR_NODES", "").strip()
+        if env_collectors:
+            for c_addr in parse_bootstrap_nodes(env_collectors):
+                if c_addr not in eff_collectors:
+                    eff_collectors.append(c_addr)
+
+        if discover_collectors and eff_dht_nodes:
+            try:
+                ptr_rec = verify_dht_release(
+                    pubkey_hex=release_pubkey_hex or DEFAULT_RELEASE_PUBKEY_HEX,
+                    salt=release_salt or DEFAULT_RELEASE_SALT,
+                    dht_nodes=eff_dht_nodes,
+                    pointer_only=True,
+                    timeout=timeout,
+                    max_dht_queries=16,
+                )
+                for c_item in ptr_rec.get("collector_nodes", []) or []:
+                    if isinstance(c_item, (list, tuple)) and len(c_item) == 2:
+                        c_tup = (str(c_item[0]), int(c_item[1]))
+                        if c_tup not in eff_collectors:
+                            eff_collectors.append(c_tup)
+            except Exception:
+                pass
+
+        packets_sent = 0
+        mainline_puts_ok = 0
+        collector_puts_ok = 0
+        errors: List[str] = []
+        put_attempted_addrs: Set[Tuple[str, int]] = set()
+
+        def _single_socket_get_and_put(addr: Tuple[str, int]) -> Tuple[bool, List[Tuple[bytes, Tuple[str, int]]]]:
+            nonlocal packets_sent
+            host_str, port_int = str(addr[0]).strip(), int(addr[1])
+            try:
+                resolved_ip = _socket.gethostbyname(host_str)
+            except Exception as exc:
+                errors.append(f"{host_str}:{port_int}:resolve:{exc}")
+                return False, []
+            norm_addr = (resolved_ip, port_int)
+            if norm_addr in put_attempted_addrs:
+                return False, []
+            sock = _socket.socket(_socket.AF_INET, _socket.SOCK_DGRAM)
+            refs: List[Tuple[bytes, Tuple[str, int]]] = []
+            try:
+                sock.settimeout(max(0.2, float(timeout)))
+                sock.connect(norm_addr)
+                local_ip = str(sock.getsockname()[0]) or "127.0.0.1"
+                node_id = generate_bep42_node_id(local_ip)
+                q_get = {
+                    b"t": b"cg01",
+                    b"y": b"q",
+                    b"q": b"get",
+                    b"a": {b"id": node_id, b"target": target_20},
+                }
+                sock.send(bencode(q_get))
+                packets_sent += 1
+                self._outbound_udp_packets_sent += 1
+                raw_get = sock.recv(8192)
+                msg_get = bdecode_krpc(raw_get)
+                if not isinstance(msg_get, dict) or msg_get.get(b"y") != b"r":
+                    return False, refs
+                r_body = msg_get.get(b"r")
+                if not isinstance(r_body, dict):
+                    return False, refs
+                refs.extend(_decode_compact_nodes_with_id(r_body.get(b"nodes"), None))
+                for entry in r_body.get(b"nodes_list", []) or []:
+                    if (
+                        isinstance(entry, list)
+                        and len(entry) == 3
+                        and isinstance(entry[0], (bytes, bytearray))
+                        and len(entry[0]) == 20
+                        and isinstance(entry[1], (bytes, bytearray))
+                    ):
+                        refs.append((bytes(entry[0]), ( bytes(entry[1]).decode("ascii", errors="ignore"), int(entry[2]) )))
+                tok = r_body.get(b"token")
+                if not isinstance(tok, (bytes, bytearray)) or not tok:
+                    return False, refs
+                put_attempted_addrs.add(norm_addr)
+                q_put = {
+                    b"t": b"cp01",
+                    b"y": b"q",
+                    b"q": b"put",
+                    b"a": {
+                        b"id": node_id,
+                        b"k": pub_bytes,
+                        b"salt": salt_bytes,
+                        b"seq": int(seq_int),
+                        b"sig": sig_bytes,
+                        b"token": bytes(tok),
+                        b"v": v_bytes,
+                    },
+                }
+                sock.send(bencode(q_put))
+                packets_sent += 1
+                self._outbound_udp_packets_sent += 1
+                raw_put = sock.recv(8192)
+                msg_put = bdecode_krpc(raw_put)
+                if isinstance(msg_put, dict) and msg_put.get(b"y") == b"r":
+                    self._outbound_udp_puts_succeeded += 1
+                    return True, refs
+                err_val = msg_put.get(b"e_detail") or msg_put.get(b"e") if isinstance(msg_put, dict) else "invalid_resp"
+                errors.append(f"{resolved_ip}:{port_int}:put_rejected:{err_val}")
+                return False, refs
+            except Exception as exc:
+                errors.append(f"{resolved_ip}:{port_int}:{exc}")
+                return False, refs
+            finally:
+                sock.close()
+
+        resolved_collector_set: Set[Tuple[str, int]] = set()
+        for c_host, c_port in eff_collectors:
+            try:
+                c_ip = _socket.gethostbyname(str(c_host).strip())
+                resolved_collector_set.add((c_ip, int(c_port)))
+            except Exception:
+                continue
+
+        # 1. Direct BEP-44 put to discovered/configured collector DHT nodes (:6881/udp)
+        for c_addr in eff_collectors:
+            ok_put, _ = _single_socket_get_and_put(c_addr)
+            if ok_put:
+                collector_puts_ok += 1
+
+        # 2. Iterative BEP-44 lookup + put to Mainline DHT nodes
+        frontier: List[Tuple[int, Tuple[str, int]]] = [
+            (_xor_distance(None, target_20), n_addr) for n_addr in eff_dht_nodes
+        ]
+        visited_walk: Set[Tuple[str, int]] = set()
+        while frontier and len(visited_walk) < 16 and mainline_puts_ok < max_dht_puts:
+            frontier.sort(key=lambda item: item[0])
+            _, cur_addr = frontier.pop(0)
+            try:
+                cur_ip = _socket.gethostbyname(str(cur_addr[0]).strip())
+                norm_cur = (cur_ip, int(cur_addr[1]))
+            except Exception:
+                continue
+            if norm_cur in visited_walk:
+                continue
+            visited_walk.add(norm_cur)
+            if norm_cur in put_attempted_addrs:
+                if norm_cur in resolved_collector_set and collector_puts_ok > 0:
+                    mainline_puts_ok += 1
+                continue
+            ok_put, refs = _single_socket_get_and_put(norm_cur)
+            if ok_put:
+                mainline_puts_ok += 1
+                if norm_cur in resolved_collector_set:
+                    collector_puts_ok += 1
+            for ref_nid, ref_addr in refs:
+                if ref_addr not in visited_walk:
+                    frontier.append((_xor_distance(ref_nid, target_20), ref_addr))
+
+        return {
+            "dispatched": (mainline_puts_ok + collector_puts_ok) > 0,
+            "target_hex": target_20.hex(),
+            "pubkey_hex": pub_bytes.hex(),
+            "seq": seq_int,
+            "payload_bytes": len(v_bytes),
+            "packets_sent": packets_sent,
+            "mainline_puts_ok": mainline_puts_ok,
+            "collector_puts_ok": collector_puts_ok,
+            "collector_nodes": [list(c) for c in eff_collectors],
+            "errors": errors,
+        }

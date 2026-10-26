@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+from datetime import datetime, timezone
 import hashlib
 import json
 from pathlib import Path
@@ -26,10 +27,12 @@ import socket
 import struct
 import time
 import sys
-from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple
+from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple, Union
 import urllib.request
 
-
+import os
+import queue
+import threading
 import urllib.parse
 
 from armiger.oci_dht_node import (  # noqa: E402
@@ -40,16 +43,14 @@ from armiger.oci_dht_node import (  # noqa: E402
     fetch_bundle_via_bep19_webseed,
     fetch_bundle_via_peer_wire,
 )
-import os
-import queue
-import threading
-
 from armiger.oci_dht_seeder import (  # noqa: E402
     DEFAULT_DHT_BOOTSTRAP_NODES,
     _KRPC_DNS_SEMAPHORE,
     parse_bootstrap_nodes,
 )
 from armiger.oci_vpn_guard import (  # noqa: E402
+    DEFAULT_RELEASE_PUBKEY_HEX,
+    DEFAULT_RELEASE_SALT,
     _verify_bep44,
     bep44_signing_buffer,
     generate_bep42_node_id,
@@ -60,11 +61,14 @@ MAX_TORRENT_META_BYTES = 1048576
 
 def _extract_from_bep46_dict(d: Dict[Any, Any]) -> Optional[Tuple[bytes, Dict[str, Any]]]:
     meta: Dict[str, Any] = {}
-    if b"mr" in d and isinstance(d[b"mr"], (bytes, bytearray)):
-        mr_b = bytes(d[b"mr"])
+    mr_raw = d.get(b"mr") if b"mr" in d else d.get(b"merkle_root")
+    if isinstance(mr_raw, (bytes, bytearray)):
+        mr_b = bytes(mr_raw)
         meta["merkle_root_sha256"] = mr_b.hex() if len(mr_b) == 32 else mr_b.decode("ascii", errors="ignore")
     elif "mr" in d and isinstance(d["mr"], str):
         meta["merkle_root_sha256"] = d["mr"]
+    elif "merkle_root" in d and isinstance(d["merkle_root"], str):
+        meta["merkle_root_sha256"] = d["merkle_root"]
     if b"ws" in d and isinstance(d[b"ws"], (bytes, bytearray)):
         meta["webseed_url"] = bytes(d[b"ws"]).decode("utf-8", errors="ignore")
     elif "ws" in d and isinstance(d["ws"], str):
@@ -333,7 +337,7 @@ def _fetch_webseed_metadata(
             raise TimeoutError("webseed_metadata_total_deadline_exceeded")
         return min(float(timeout), rem)
 
-    from armiger.oci_sqlite_catalog import _https_get_with_deadline
+    from oci_sqlite_catalog import _https_get_with_deadline
 
     for candidate_url in (f"{base}/{ih_hex}.torrent", f"{base}/bundle.torrent"):
         if time.monotonic() >= meta_deadline:
@@ -368,9 +372,9 @@ def _fetch_webseed_metadata(
 
 def verify_dht_release(
     *,
-    pubkey_hex: str,
-    salt: bytes,
-    dht_nodes: Sequence[Tuple[str, int]],
+    pubkey_hex: str = DEFAULT_RELEASE_PUBKEY_HEX,
+    salt: Union[bytes, str] = DEFAULT_RELEASE_SALT,
+    dht_nodes: Optional[Sequence[Tuple[str, int]]] = None,
     explicit_peers: Sequence[Tuple[str, int]] = (),
     webseed_urls: Sequence[str] = (),
     expected_info_bytes: Optional[bytes] = None,
@@ -382,11 +386,35 @@ def verify_dht_release(
     p2p_budget_sec: Optional[float] = None,
     public_ip: Optional[str] = None,
     resolver_fn: Optional[Callable[[str], str]] = None,
+    retain_payload: bool = False,
+    max_payload_bytes: int = 67108864,
+    allow_standard_bep3: bool = False,
+    max_dht_queries: int = 24,
+    pointer_only: bool = False,
 ) -> Dict[str, Any]:
-    """Execute end-to-end BEP-44/46 + BEP-9/10/19 verification and return a structured receipt."""
+    """Verify transport and return a receipt, optionally retaining files for a receiver.
+
+    ``retain_payload`` is an in-process API, never a CLI output option. Retained
+    bytes still require release authority, quorum, schema and local regression
+    validation before application. It does not grant permission to activate.
+    """
     if mode not in ("strict-p2p", "webseed-fallback"):
         raise ValueError(f"Unsupported verification mode: {mode}")
+    if type(max_payload_bytes) is not int or not 1 <= max_payload_bytes <= 128 * 1024 * 1024:
+        raise ValueError("invalid_max_payload_bytes")
+    if type(max_dht_queries) is not int or not 1 <= max_dht_queries <= 128:
+        raise ValueError("invalid_max_dht_queries")
+    if allow_standard_bep3 and mode != "strict-p2p":
+        raise ValueError("standard_bep3_quarantine_requires_strict_p2p")
 
+    if isinstance(salt, str):
+        salt = salt.encode("utf-8")
+    else:
+        salt = bytes(salt)
+    if dht_nodes is None:
+        dht_nodes = parse_bootstrap_nodes()
+    else:
+        dht_nodes = list(dht_nodes)
     pubkey_32 = bytes.fromhex(pubkey_hex.strip())
     if len(pubkey_32) != 32:
         raise ValueError("pubkey_hex must be 32-byte Ed25519 public key (64 hex chars)")
@@ -405,6 +433,7 @@ def verify_dht_release(
 
     best_record: Optional[Dict[bytes, Any]] = None
     best_seq = -1
+    best_source_addr: Optional[Tuple[str, int]] = None
     get_frontier: List[Tuple[int, Tuple[str, int]]] = [
         (_xor_distance(None, target_20), addr) for addr in dht_nodes
     ]
@@ -412,8 +441,25 @@ def verify_dht_release(
     all_known_dht_nodes: List[Tuple[Optional[bytes], Tuple[str, int]]] = [
         (None, addr) for addr in dht_nodes
     ]
+    discovery_trace: List[Dict[str, Any]] = []
+    pointer_receipt: Dict[str, Any] = {}
 
-    while get_frontier and len(queried_get) < 24:
+    def query(addr, message, **kwargs):
+        response = _udp_krpc_query(addr, message, **kwargs)
+        body = response.get(b"r", {}) if isinstance(response, dict) else {}
+        discovery_trace.append({"at": datetime.now(timezone.utc).isoformat(),
+                                "address": list(addr), "method": message[b"q"].decode("ascii"),
+                                "response": response.get(b"y", b"").decode("ascii", errors="replace") if isinstance(response, dict) else None,
+                                "has_value": isinstance(body, dict) and b"v" in body})
+        return response
+
+    def evidence():
+        return {"discovery_trace": list(discovery_trace), "pointer": dict(pointer_receipt),
+                "bootstrap_nodes": [list(x) for x in dht_nodes],
+                "explicit_peer_count": len(explicit_peers),
+                "payload_http_fallback_allowed": mode != "strict-p2p"}
+
+    while get_frontier and len(queried_get) < max_dht_queries:
         get_frontier.sort(key=lambda item: item[0])
         _, addr = get_frontier.pop(0)
         if addr in queried_get:
@@ -422,13 +468,24 @@ def verify_dht_release(
         q_args: Dict[bytes, Any] = {b"id": sender_state["last_sender_id"], b"target": target_20}
         if salt:
             q_args[b"salt"] = salt
-        resp = _udp_krpc_query(
+        resp = query(
             addr,
             {b"t": b"vf01", b"y": b"q", b"q": b"get", b"a": q_args},
             timeout=timeout,
             resolver_fn=resolver_fn,
             sender_state=sender_state,
         )
+        # Mainline bootstrap routers can provide find_node referrals without
+        # storing/serving BEP44 mutable items. A failed get at those routers
+        # must not strand the lookup before it reaches the target keyspace.
+        # Both calls remain within the existing 24-address bounded walk.
+        if not isinstance(resp, dict) or resp.get(b"y") != b"r":
+            resp = query(
+                addr,
+                {b"t": b"fn01", b"y": b"q", b"q": b"find_node",
+                 b"a": {b"id": sender_state["last_sender_id"], b"target": target_20}},
+                timeout=timeout, resolver_fn=resolver_fn, sender_state=sender_state,
+            )
         if not isinstance(resp, dict) or resp.get(b"y") != b"r":
             continue
         r_body = resp.get(b"r")
@@ -478,6 +535,7 @@ def verify_dht_release(
             if seq_val > best_seq:
                 best_seq = seq_val
                 best_record = r_body
+                best_source_addr = (str(addr[0]), int(addr[1]))
 
     if best_record is None:
         return {
@@ -485,7 +543,13 @@ def verify_dht_release(
             "reason": "bep44_mutable_record_not_found_or_invalid_sig",
             "mode_requested": mode,
             "target_hex": target_20.hex(),
+            **evidence(),
         }
+
+    pointer_receipt.update(authority_ed25519_hex=pubkey_32.hex(), salt_hex=salt.hex(),
+                           seq=best_seq, signature_hex=bytes(best_record[b"sig"]).hex(),
+                           value_bencoded_hex=bencode(best_record[b"v"]).hex(),
+                           ed25519_verified=True)
 
     if best_seq < int(min_seq):
         return {
@@ -494,6 +558,7 @@ def verify_dht_release(
             "mode_requested": mode,
             "target_hex": target_20.hex(),
             "seq": best_seq,
+            **evidence(),
         }
 
     infohash_20, pointer_meta = _extract_infohash_20(best_record[b"v"])
@@ -509,13 +574,13 @@ def verify_dht_release(
             gp_frontier.append((_xor_distance(ref_nid, infohash_20), ref_addr))
     queried_gp: set[Tuple[str, int]] = set()
 
-    while gp_frontier and len(queried_gp) < 24 and len(candidate_peers) < eff_max_peers:
+    while gp_frontier and len(queried_gp) < max_dht_queries and len(candidate_peers) < eff_max_peers:
         gp_frontier.sort(key=lambda item: item[0])
         _, addr = gp_frontier.pop(0)
         if addr in queried_gp:
             continue
         queried_gp.add(addr)
-        gp_resp = _udp_krpc_query(
+        gp_resp = query(
             addr,
             {
                 b"t": b"gp01",
@@ -545,6 +610,58 @@ def verify_dht_release(
             if ref_addr not in queried_gp:
                 gp_frontier.append((_xor_distance(ref_nid, infohash_20), ref_addr))
 
+    collector_nodes: List[Tuple[str, int]] = []
+    for p_host, p_port in candidate_peers:
+        c_port = 6881 if int(p_port) == 6882 else int(p_port)
+        if (str(p_host), c_port) not in collector_nodes:
+            collector_nodes.append((str(p_host), c_port))
+    if best_source_addr is not None and best_source_addr not in collector_nodes:
+        collector_nodes.append(best_source_addr)
+
+    if pointer_only:
+        return {
+            "verified": True,
+            "pointer_only": True,
+            "mode_requested": mode,
+            "target_hex": target_20.hex(),
+            "seq": best_seq,
+            "infohash_hex": infohash_20.hex(),
+            "merkle_root_sha256": pointer_meta.get("merkle_root_sha256"),
+            "pointer_source_addr": list(best_source_addr) if best_source_addr else None,
+            "candidate_peers": [list(p) for p in candidate_peers],
+            "collector_nodes": [list(c) for c in collector_nodes],
+            **evidence(),
+        }
+
+    def completed(res: Dict[str, Any], transport: str, source_key: str, source: str) -> Dict[str, Any]:
+        signed_root = pointer_meta.get("merkle_root_sha256")
+        if signed_root is not None and signed_root != res["merkle_root_sha256"]:
+            raise ValueError("signed_pointer_merkle_root_mismatch")
+        receipt = {
+            "verified": True, "mode_requested": mode, "mode_used": transport,
+            source_key: source, "target_hex": target_20.hex(), "seq": best_seq,
+            "infohash_hex": infohash_20.hex(), "merkle_root_sha256": res["merkle_root_sha256"],
+            "verified_files": sorted(res["files"]),
+            "file_sha256": {name: hashlib.sha256(data).hexdigest() for name, data in sorted(res["files"].items())},
+            "payload_bytes_verified": sum(len(data) for data in res["files"].values()),
+            "pieces_verified": res.get("pieces_verified"),
+            "dht_get_addresses_queried": len(queried_get),
+            "dht_get_peers_addresses_queried": len(queried_gp),
+            "explicit_peer_count": len(explicit_peers),
+            "p2p_errors": list(p2p_errors),
+            "file_sizes": {name: len(data) for name, data in sorted(res["files"].items())},
+            "metadata_info_bencoded_hex": res["info_bytes"].hex(),
+            "metadata_merkle_supplied": res.get("metadata_merkle_supplied"),
+            "metadata_file_sha256_supplied": res.get("metadata_file_sha256_supplied"),
+            "pointer_source_addr": list(best_source_addr) if best_source_addr else None,
+            "candidate_peers": [list(p) for p in candidate_peers],
+            "collector_nodes": [list(c) for c in collector_nodes],
+            **evidence(),
+        }
+        if retain_payload:
+            receipt["payload_files"] = res["files"]
+        return receipt
+
     # Attempt strict P2P BEP-9/10 ut_metadata + BEP-3 piece download first (bounded peer count + total budget)
     eff_p2p_budget = float(p2p_budget_sec) if p2p_budget_sec is not None else max(float(timeout) * 10.0, 30.0)
     p2p_deadline = time.monotonic() + eff_p2p_budget
@@ -561,23 +678,11 @@ def verify_dht_release(
                 infohash_20=infohash_20,
                 timeout=min(float(timeout), rem_budget),
                 max_total_seconds=rem_budget,
+                max_payload_bytes=max_payload_bytes,
+                **({"allow_standard_bep3": True} if allow_standard_bep3 else {}),
             )
             res = asyncio.run(coro)
-            return {
-                "verified": True,
-                "mode_requested": mode,
-                "mode_used": "strict-p2p",
-                "peer_used": f"{peer_host}:{peer_port}",
-                "target_hex": target_20.hex(),
-                "seq": best_seq,
-                "infohash_hex": infohash_20.hex(),
-                "merkle_root_sha256": res["merkle_root_sha256"],
-                "verified_files": sorted(res["files"].keys()),
-                "file_sha256": {
-                    fname: hashlib.sha256(fbytes).hexdigest()
-                    for fname, fbytes in sorted(res["files"].items())
-                },
-            }
+            return completed(res, "strict-p2p", "peer_used", f"{peer_host}:{peer_port}")
         except Exception as exc:
             p2p_errors.append(f"{peer_host}:{peer_port}:{exc}")
 
@@ -590,6 +695,8 @@ def verify_dht_release(
             "target_hex": target_20.hex(),
             "seq": best_seq,
             "infohash_hex": infohash_20.hex(),
+            "candidate_peers": [list(x) for x in candidate_peers],
+            **evidence(),
         }
 
     # Mode is webseed-fallback: try BEP-19 webseed URLs
@@ -636,22 +743,9 @@ def verify_dht_release(
                 fetcher=webseed_fetcher,
                 timeout=timeout,
                 max_total_seconds=rem_payload,
+                max_payload_bytes=max_payload_bytes,
             )
-            return {
-                "verified": True,
-                "mode_requested": mode,
-                "mode_used": "webseed-fallback",
-                "webseed_used": ws_url,
-                "target_hex": target_20.hex(),
-                "seq": best_seq,
-                "infohash_hex": infohash_20.hex(),
-                "merkle_root_sha256": res["merkle_root_sha256"],
-                "verified_files": sorted(res["files"].keys()),
-                "file_sha256": {
-                    fname: hashlib.sha256(fbytes).hexdigest()
-                    for fname, fbytes in sorted(res["files"].items())
-                },
-            }
+            return completed(res, "webseed-fallback", "webseed_used", ws_url)
         except Exception as exc:
             ws_errors.append(f"{ws_url}:{exc}")
 
@@ -669,8 +763,12 @@ def verify_dht_release(
 
 def main(argv: Optional[Sequence[str]] = None) -> int:
     parser = argparse.ArgumentParser(description="Verify Armiger BEP-44/46 DHT + BitTorrent release chain.")
-    parser.add_argument("--pubkey", required=True, help="32-byte Ed25519 publisher public key hex (64 hex chars)")
-    parser.add_argument("--salt", default="armiger-oci-v1-int8", help="BEP-44 salt string")
+    parser.add_argument(
+        "--pubkey",
+        default=DEFAULT_RELEASE_PUBKEY_HEX,
+        help="32-byte Ed25519 publisher public key hex (64 hex chars; defaults to canonical release key)",
+    )
+    parser.add_argument("--salt", default=DEFAULT_RELEASE_SALT, help="BEP-44 salt string")
     parser.add_argument(
         "--dht-node",
         action="append",

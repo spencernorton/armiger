@@ -39,47 +39,50 @@ except ImportError:
     _HAS_CRYPTOGRAPHY = False
 
 # Pinned to the HF commit these hashes describe; `main` now serves Armiger v3.0.
+DEFAULT_RELEASE_PUBKEY_HEX = "3599362bd52dad8b89398b904d3081c2cb483d13376f7ffb49f3748208731e76"
+DEFAULT_RELEASE_SALT = "armiger:weights:ultra"
+
 HF_BASE_URL = "https://huggingface.co/NorviTech/armiger-ultra/resolve/efa3810f94689373adc910615f9c5328c33a20f6"
 ARTIFACT_MANIFEST: Dict[str, Dict[str, Any]] = {
     "armiger.int8.onnx": {
-        "sha256": "0f7496a70565145d09a8b29b09de9b99171cf483e5c32ff32e89df1931231401",
-        "size_bytes": 8283542,
+        "sha256": "aa509ff08a38d9f8187250860516cc0f218c604bbac8d3726c215bb558bc5588",
+        "size_bytes": 6664718,
         "tiers": ("int8", "ultra"),
         "url": f"{HF_BASE_URL}/armiger.int8.onnx",
     },
     "armiger_ultra.fp32.onnx": {
-        "sha256": "4810d525a64f1e617e51c1bcaa68384c5539ec73e64a40ab354e44090c9557af",
-        "size_bytes": 32287709,
+        "sha256": "d092b49428dbca550d4099b168e231c35b0cc60c7632a60e55d0be63646317dc",
+        "size_bytes": 25387489,
         "tiers": ("ultra",),
         "url": f"{HF_BASE_URL}/armiger_ultra.fp32.onnx",
     },
     "swarm_adapter.pt": {
-        "sha256": "85effcb9e70af7bff6047d4ae45d2155444e9b691dc84431f19ad14f9daee9ea",
-        "size_bytes": 131718,
+        "sha256": "74aa36c7701092d198a8238462c0b7a44a55f238ba26f6c506b984a83b1c0ca1",
+        "size_bytes": 316931,
         "tiers": ("ultra",),
         "url": f"{HF_BASE_URL}/swarm_adapter.pt",
     },
     "calibration.json": {
-        "sha256": "bd49efbc3e04e24a3bfeb0828e0c4dd69497f1902ed81d5d883c795e1504538b",
-        "size_bytes": 2689,
+        "sha256": "300387779dc16292dd9e6be038ce9dd60e5bdb0ee929b383dcd4e51715f8b5f8",
+        "size_bytes": 76612,
         "tiers": ("int8", "ultra"),
         "url": f"{HF_BASE_URL}/calibration.json",
     },
     "vocab.json": {
-        "sha256": "9853b5cd56d07beee64e6fc44396084d9c70167c4d74fbc149c0d4e021330b4e",
-        "size_bytes": 39991,
+        "sha256": "4368a1ebfe2fb3bf5fd7258d7fb8e7bf21134ff698ee90f6dc66c85f891e1a05",
+        "size_bytes": 3741,
         "tiers": ("int8", "ultra"),
         "url": f"{HF_BASE_URL}/vocab.json",
     },
     "config.json": {
-        "sha256": "f043736b1e2538328b6835d800f53b25ee77c63100fd17097fdddb750202c6a7",
-        "size_bytes": 8333,
+        "sha256": "f2dfa7c8901585c6718391c60efa8c327f00168ded250a581565675fed42a985",
+        "size_bytes": 5561,
         "tiers": ("int8", "ultra"),
         "url": f"{HF_BASE_URL}/config.json",
     },
     "validated_zero_cue_catalog.json": {
-        "sha256": "3f42219f7e9ac1b38e7aa0f1301ae96298dd58e7d71960c371a4cdaf86c3d0b2",
-        "size_bytes": 25990894,
+        "sha256": "77a018fb4bd85c1b8dd4794bb21a4ab1a4c42cb75890f023c627e93fd0b45dc6",
+        "size_bytes": 44249032,
         "tiers": ("int8", "ultra"),
         "url": f"{HF_BASE_URL}/validated_zero_cue_catalog.json",
     },

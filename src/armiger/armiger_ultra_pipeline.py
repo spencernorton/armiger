@@ -504,7 +504,7 @@ class ArmigerUltraPipeline:
         dht_db_sync: Optional[ArmigerDHTDatabaseSync] = None,
         csam_guard: Optional[CSAMGuard] = None,
         safety_gate: Optional[ArmigerSafetyGate] = None,
-        rsi_mode: str = "anonymous_contribute",
+        rsi_mode: Optional[str] = "anonymous_contribute",
         dht_sync_subscription: Optional[SubscriptionConfig] = None,
         trusted_root_pubkeys_hex: Optional[Sequence[str]] = None,
         dht_master_secret: Optional[bytes] = None,
@@ -515,8 +515,17 @@ class ArmigerUltraPipeline:
         junk_threshold: Optional[float] = None,
         scope_threshold: Optional[float] = None,
         allow_synthetic_fallback: bool = False,
+        runtime_cache_dir: Optional[Union[str, Path]] = None,
+        auto_update: Optional[bool] = None,
+        poll_interval_sec: Optional[float] = None,
+        initial_seq: Optional[int] = None,
+        canary_validator: Optional[Callable[["ArmigerUltraPipeline"], bool]] = None,
+        offline: bool = False,
     ) -> None:
         self.opt_in_sharing: bool = resolve_opt_in_sharing(opt_in_sharing)
+        if rsi_mode is None:
+            env_mode = os.environ.get("ARMIGER_DHT_RSI_MODE", "").strip()
+            rsi_mode = env_mode if env_mode else ("anonymous_contribute" if self.opt_in_sharing else "pull_only")
         self.allow_synthetic_fallback: bool = bool(allow_synthetic_fallback)
         from .artifacts import model_directory
         eff_dir = model_directory(model_dir)
@@ -592,7 +601,14 @@ class ArmigerUltraPipeline:
         self.csam_guard = csam_guard or self.dht_db_sync.csam_guard
 
         # 8. Distributed model update bridge (closed-loop RSI telemetry -> BEP-46 -> hot reload)
-        self._init_dht_update_bridge()
+        self._init_dht_update_bridge(
+            runtime_cache_dir=runtime_cache_dir,
+            auto_update=auto_update,
+            poll_interval_sec=poll_interval_sec,
+            initial_seq=initial_seq,
+            canary_validator=canary_validator,
+            offline=offline,
+        )
 
     # -----------------------------------------------------------------
     # Factory Classmethods (`from_Directory`, `from_directory`, `from_pretrained`)
@@ -605,7 +621,7 @@ class ArmigerUltraPipeline:
         *,
         variant: str = "ultra",
         preload_catalog: bool = False,
-        rsi_mode: str = "anonymous_contribute",
+        rsi_mode: Optional[str] = "anonymous_contribute",
         dht_sync_subscription: Optional[SubscriptionConfig] = None,
         trusted_root_pubkeys_hex: Optional[Sequence[str]] = None,
         **kwargs: Any,
@@ -628,7 +644,7 @@ class ArmigerUltraPipeline:
         *,
         variant: str = "ultra",
         preload_catalog: bool = False,
-        rsi_mode: str = "anonymous_contribute",
+        rsi_mode: Optional[str] = "anonymous_contribute",
         dht_sync_subscription: Optional[SubscriptionConfig] = None,
         trusted_root_pubkeys_hex: Optional[Sequence[str]] = None,
         **kwargs: Any,
@@ -706,7 +722,21 @@ class ArmigerUltraPipeline:
     def _run_neural_logits(self, rows: Sequence[Mapping[str, Any]]) -> Dict[str, np.ndarray]:
         """Run the 8-head neural model and return raw logits `[B, C_h]` per head."""
         if self.onnx_session is not None:
-            inputs = build_onnx_batch_inputs(rows)
+            _batch_fn = build_onnx_batch_inputs
+            try:
+                for _inp in self.onnx_session.get_inputs():
+                    if getattr(_inp, "name", "") == "stats":
+                        _sh = getattr(_inp, "shape", None)
+                        if isinstance(_sh, (list, tuple)) and len(_sh) >= 2 and type(_sh[1]) is int and _sh[1] == 41:
+                            try:
+                                from .r13_features import build_onnx_batch_inputs as _r13_batch_fn
+                            except ImportError:
+                                from r13_features import build_onnx_batch_inputs as _r13_batch_fn
+                            _batch_fn = _r13_batch_fn
+                            break
+            except Exception:
+                pass
+            inputs = _batch_fn(rows)
             raw_outs = self.onnx_session.run(self._onnx_output_names, inputs)
             return {name: np.asarray(arr, dtype=np.float64) for name, arr in zip(self._onnx_output_names, raw_outs)}
 
@@ -1285,8 +1315,166 @@ class ArmigerUltraPipeline:
     # Distributed Model Update Bridge (Closed-Loop RSI -> BEP-46 -> Hot Reload)
     # -----------------------------------------------------------------
 
-    def _init_dht_update_bridge(self) -> None:
+    @staticmethod
+    def _ensure_private_cache_dir(cand: Path) -> Path:
+        cand.mkdir(parents=True, exist_ok=True, mode=0o700)
+        if cand.is_symlink():
+            raise PermissionError(f"Runtime cache directory must not be a symlink: {cand}")
+        st = cand.stat()
+        uid = getattr(os, "getuid", lambda: -1)()
+        if uid >= 0 and st.st_uid != uid:
+            raise PermissionError(f"Runtime cache directory {cand} is not owned by current uid {uid}")
+        try:
+            os.chmod(cand, 0o700)
+        except OSError:
+            pass
+        return cand.resolve()
+
+    @classmethod
+    def _resolve_default_runtime_cache_dir(cls) -> Path:
+        env_dir = os.environ.get("ARMIGER_RUNTIME_CACHE_DIR", "").strip()
+        if env_dir:
+            return cls._ensure_private_cache_dir(Path(env_dir).expanduser())
+        uid = getattr(os, "getuid", lambda: 0)()
+        tmp_cand = Path(f"/tmp/armiger-live-models-{uid}")
+        try:
+            return cls._ensure_private_cache_dir(tmp_cand)
+        except OSError:
+            fallback = Path.home() / ".cache" / "armiger" / "live"
+            return cls._ensure_private_cache_dir(fallback)
+
+    def _overlay_tier_slug(self) -> str:
+        return "int8" if self.variant in ("int8", "cpu", "armiger") else "ultra"
+
+    def _resolve_release_channel(
+        self,
+        release_pubkey_hex: Optional[str] = None,
+        salt: Optional[Union[bytes, str]] = None,
+    ) -> Tuple[str, bytes]:
+        try:
+            from verify_dht import DEFAULT_RELEASE_PUBKEY_HEX
+        except ImportError:
+            from armiger.verify_dht import DEFAULT_RELEASE_PUBKEY_HEX
+        eff_pubkey = (
+            release_pubkey_hex
+            or os.environ.get("ARMIGER_RELEASE_PUBKEY_HEX", "").strip()
+            or DEFAULT_RELEASE_PUBKEY_HEX
+        ).lower()
+        default_tier_salt = (
+            "armiger:weights:int8"
+            if self.variant in ("int8", "cpu", "armiger")
+            else "armiger:weights:ultra"
+        )
+        eff_salt_raw = (
+            salt
+            if salt is not None
+            else (os.environ.get("ARMIGER_RELEASE_SALT", "").strip() or default_tier_salt)
+        )
+        eff_salt = eff_salt_raw.encode("utf-8") if isinstance(eff_salt_raw, str) else bytes(eff_salt_raw)
+        return eff_pubkey, eff_salt
+
+    def _overlay_channel_slug(
+        self,
+        release_pubkey_hex: Optional[str] = None,
+        salt: Optional[Union[bytes, str]] = None,
+    ) -> str:
+        eff_pubkey, eff_salt = self._resolve_release_channel(release_pubkey_hex, salt)
+        return hashlib.sha256(eff_pubkey.encode("ascii") + b"|" + eff_salt).hexdigest()[:12]
+
+    def _overlay_state_path(
+        self,
+        release_pubkey_hex: Optional[str] = None,
+        salt: Optional[Union[bytes, str]] = None,
+    ) -> Path:
+        tier_slug = self._overlay_tier_slug()
+        chan_slug = self._overlay_channel_slug(release_pubkey_hex, salt)
+        return self.runtime_cache_dir / f"dht_overlay_state_{tier_slug}_{chan_slug}.json" 
+
+    def _compute_directory_merkle_root(self, target_dir: Path) -> str:
+        weight_names = ["calibration.json", "vocab.json", "config.json", "armiger.int8.onnx"]
+        if self.variant not in ("int8", "cpu", "armiger"):
+            weight_names.extend(["armiger_ultra.fp32.onnx", "swarm_adapter.pt"])
+        files_map: Dict[str, bytes] = {}
+        for wname in weight_names:
+            p = target_dir / wname
+            if p.is_file():
+                try:
+                    files_map[wname] = p.read_bytes()
+                except OSError:
+                    pass
+        if not files_map:
+            return hashlib.sha256(str(target_dir).encode("utf-8")).hexdigest()
+        try:
+            try:
+                from oci_sqlite_catalog import build_torrent_bundle
+            except ImportError:
+                from armiger.oci_sqlite_catalog import build_torrent_bundle
+            bobj = build_torrent_bundle(
+                bundle_name=f"armiger-weights-{self.variant}-v2.1.0",
+                files_map=files_map,
+                pubkey_32=b"\x00" * 32,
+                salt=f"armiger:weights:{self.variant}".encode("utf-8"),
+                seq=1,
+            )
+            return bobj.merkle_root_hex
+        except Exception:
+            h = hashlib.sha256()
+            for k in sorted(files_map):
+                h.update(k.encode("utf-8"))
+                h.update(hashlib.sha256(files_map[k]).digest())
+            return h.hexdigest()
+
+    def _detect_initial_seq(self, target_dir: Path, initial_seq: Optional[int] = None) -> int:
+        if initial_seq is not None:
+            return int(initial_seq)
+        ov_state = target_dir / "dht_overlay_state.json"
+        if ov_state.is_file():
+            try:
+                sdoc = json.loads(ov_state.read_text(encoding="utf-8"))
+                if isinstance(sdoc.get("active_seq"), int):
+                    return int(sdoc["active_seq"])
+            except Exception:
+                pass
+        env_seq = os.environ.get("ARMIGER_LOCAL_SEQ", "").strip()
+        if env_seq.isdigit() and int(env_seq) > 0:
+            return int(env_seq)
+        if isinstance(self.config.get("dht_seq"), int):
+            return int(self.config["dht_seq"])
+        if isinstance(self.config.get("seq"), int):
+            return int(self.config["seq"])
+        for onnx_cand in ("armiger_ultra.fp32.onnx", "armiger.int8.onnx"):
+            onnx_p = target_dir / onnx_cand
+            if onnx_p.is_file():
+                try:
+                    osha = hashlib.sha256(onnx_p.read_bytes()).hexdigest()
+                    if osha in (
+                        "6f94aef676e5bec4968378437769cfdc768fefcc6a21854b8319b33456ebd2ec",
+                        "c0e96936038988c7465b7fe041c4dc3c92df5a8cb4f56c2666271cd4d3e79420",
+                    ):
+                        return 4
+                    if osha in (
+                        "9d8a556ddba4f66052db27bc19cf2a303067a5c537e6a8d084145f665301f536",
+                        "116e3a291a036c667794a028cf5b06441371a76d03edba04da741f11d87882f9",
+                        "ed27945bb6cb024d4486392c2c714df4558c1fc581f86568ab53ace7d40f19f1",
+                        "93ed3d6f0ce8af8f0b788fa75575a07deaeb3cfe23ca2df4275b74eca2237c9f",
+                    ):
+                        return 3
+                except OSError:
+                    pass
+        return max(int(self.rsi_engine.current_seq), 3)
+
+    def _init_dht_update_bridge(
+        self,
+        *,
+        runtime_cache_dir: Optional[Union[str, Path]] = None,
+        auto_update: Optional[bool] = None,
+        poll_interval_sec: Optional[float] = None,
+        initial_seq: Optional[int] = None,
+        canary_validator: Optional[Callable[["ArmigerUltraPipeline"], bool]] = None,
+        offline: bool = False,
+    ) -> None:
         self._dht_update_lock = threading.RLock()
+        self._dht_poll_mutex = threading.Lock()
         self._dht_trust: Optional[Dict[str, Any]] = None
         self._dht_canary_items: List[CanaryItem] = generate_golden_canary_suite()
         self._dht_canary_gate = GoldenCanaryRegressionGate(self._dht_canary_items)
@@ -1299,7 +1487,56 @@ class ArmigerUltraPipeline:
         # Local-only ledger of this instance's own physically verified imports. Never transmitted.
         self._verified_ledger: List[Dict[str, Any]] = []
         self._telemetry_seq = 0
-        self._onnx_model_sha256: str = ""
+        self._onnx_model_sha256: str = (
+            hashlib.sha256(self.onnx_path.read_bytes()).hexdigest()
+            if getattr(self, "onnx_path", None) is not None and self.onnx_path.is_file()
+            else ""
+        )
+        self.runtime_cache_dir: Path = (
+            self._ensure_private_cache_dir(Path(runtime_cache_dir).expanduser())
+            if runtime_cache_dir is not None
+            else self._resolve_default_runtime_cache_dir()
+        )
+        self.active_overlay_dir: Optional[Path] = None
+        self.active_seq: int = self._detect_initial_seq(self.model_dir, initial_seq=initial_seq)
+        self.active_bundle_merkle_root: str = self._compute_directory_merkle_root(self.model_dir)
+        self.model_source: str = "baked_image"
+        self.last_dht_check_ts: Optional[float] = None
+        self.last_dht_result: Optional[str] = None
+        self.last_dht_error: Optional[str] = None
+        self.dht_update_failures: int = 0
+        self.contribution_push_failures: int = 0
+        self._custom_canary_validator: Optional[Callable[["ArmigerUltraPipeline"], bool]] = canary_validator
+        if initial_seq is None:
+            self._try_restore_persisted_overlay()
+        self._offline: bool = bool(offline)
+        raw_poll = (
+            poll_interval_sec
+            if poll_interval_sec is not None
+            else float(os.environ.get("ARMIGER_DHT_POLL_INTERVAL_SEC", "14400") or "14400")
+        )
+        self.poll_interval_sec: float = max(0.2, float(raw_poll))
+        self._auto_update_stop_event = threading.Event()
+        self._auto_update_thread: Optional[threading.Thread] = None
+
+        env_au = os.environ.get("ARMIGER_DHT_AUTO_UPDATE")
+        env_poll = os.environ.get("ARMIGER_DHT_POLL_INTERVAL_SEC")
+        if auto_update is not None:
+            eff_au = bool(auto_update) and not self._offline
+        elif env_au is not None:
+            eff_au = env_au.strip().lower() in ("1", "true", "yes", "on") and not self._offline
+        elif env_poll is not None:
+            eff_au = not self._offline
+        else:
+            in_test = (
+                bool(os.environ.get("PYTEST_CURRENT_TEST"))
+                or ("pytest" in sys.modules)
+                or ("unittest" in sys.modules)
+            )
+            eff_au = (not self._offline) and (not in_test)
+        self.auto_update_enabled: bool = eff_au
+        if self.auto_update_enabled:
+            self.start_auto_update_poller()
 
     def configure_dht_update_trust(
         self,
@@ -2141,10 +2378,689 @@ class ArmigerUltraPipeline:
             pq_signature_hex=pq_sig_bytes.hex(),
         ), review
 
+    def _try_restore_persisted_overlay(self) -> None:
+        """Restore a previously verified DHT live overlay from `self.runtime_cache_dir` on startup if newer than baked artifacts."""
+        try:
+            try:
+                from oci_dht_seeder import _verify_bep44, bep44_signing_buffer
+                from oci_sqlite_catalog import bdecode, build_torrent_bundle
+            except ImportError:
+                from armiger.oci_dht_seeder import _verify_bep44, bep44_signing_buffer
+                from armiger.oci_sqlite_catalog import bdecode, build_torrent_bundle
+
+            self._ensure_private_cache_dir(self.runtime_cache_dir)
+            ov_state_path = self._overlay_state_path()
+            if not ov_state_path.is_file():
+                legacy_path = self.runtime_cache_dir / "dht_overlay_state.json"
+                if not legacy_path.is_file():
+                    return
+                ov_state_path = legacy_path
+            if ov_state_path.is_symlink():
+                raise PermissionError("Overlay state file must not be a symlink")
+            ov_meta = json.loads(ov_state_path.read_text(encoding="utf-8"))
+            if not isinstance(ov_meta, dict):
+                return
+            ov_seq = int(ov_meta.get("active_seq", 0))
+            if ov_seq <= int(self.active_seq):
+                return
+            tier_slug = self._overlay_tier_slug()
+            if ov_meta.get("variant") not in (None, tier_slug):
+                return
+            eff_pubkey, eff_salt = self._resolve_release_channel()
+            if ov_meta.get("release_pubkey_hex") != eff_pubkey or ov_meta.get("salt_hex") != eff_salt.hex():
+                return
+
+            raw_ov_dir = Path(str(ov_meta.get("overlay_dir", "")))
+            if raw_ov_dir.is_symlink() or not raw_ov_dir.is_dir():
+                return
+            ov_dir = raw_ov_dir.resolve()
+            cache_root = self.runtime_cache_dir.resolve()
+            if not str(ov_dir).startswith(str(cache_root) + os.sep):
+                raise PermissionError("Overlay directory outside runtime_cache_dir")
+
+            pointer = ov_meta.get("pointer")
+            file_hashes = ov_meta.get("file_sha256")
+            expected_merkle = str(ov_meta.get("active_bundle_merkle_root") or "")
+            if not isinstance(pointer, dict) or not isinstance(file_hashes, dict) or not file_hashes or not expected_merkle:
+                raise ValueError("Overlay state missing authenticated pointer or file hashes")
+
+            sig_bytes = bytes.fromhex(str(pointer.get("signature_hex", "")))
+            val_benc = bytes.fromhex(str(pointer.get("value_bencoded_hex", "")))
+            sig_buf = bep44_signing_buffer(v=val_benc, seq=ov_seq, salt=eff_salt)
+            if not _verify_bep44(bytes.fromhex(eff_pubkey), sig_bytes, (sig_buf,)):
+                raise ValueError("Persisted overlay BEP-44 signature verification failed")
+            decoded_v = bdecode(val_benc)
+            if not isinstance(decoded_v, dict):
+                raise ValueError("Persisted overlay BEP-44 value is not a dict")
+            signed_merkle = decoded_v.get(b"merkle_root", b"").decode("ascii", errors="ignore")
+            signed_seq = int(decoded_v.get(b"seq", ov_seq))
+            if signed_seq != ov_seq or signed_merkle != expected_merkle:
+                raise ValueError("Persisted overlay pointer metadata mismatch")
+
+            verified_files_map: Dict[str, bytes] = {}
+            for fname, exp_sha in file_hashes.items():
+                fpath = ov_dir / Path(str(fname)).name
+                if fpath.is_symlink() or not fpath.is_file():
+                    raise ValueError(f"Missing overlay file: {fname}")
+                fbytes = fpath.read_bytes()
+                if hashlib.sha256(fbytes).hexdigest() != str(exp_sha):
+                    raise ValueError(f"Overlay file SHA-256 mismatch: {fname}")
+                if str(fname).endswith(".json"):
+                    ok_fmt, r_fmt = SafeFormatValidator.validate(fbytes, "json")
+                    if not ok_fmt:
+                        raise ValueError(f"Unsafe JSON in overlay: {fname}:{r_fmt}")
+                elif str(fname).endswith(".onnx"):
+                    ok_fmt, r_fmt = SafeFormatValidator.validate(fbytes, "onnx")
+                    if not ok_fmt:
+                        raise ValueError(f"Unsafe ONNX in overlay: {fname}:{r_fmt}")
+                verified_files_map[str(fname)] = fbytes
+
+            recomputed = build_torrent_bundle(
+                bundle_name=f"armiger-weights-{self.variant}-v2.1.0",
+                files_map=verified_files_map,
+                pubkey_32=bytes.fromhex(eff_pubkey),
+                salt=eff_salt,
+                seq=ov_seq,
+            )
+            if recomputed.merkle_root_hex != expected_merkle:
+                raise ValueError("Overlay Merkle root mismatch")
+
+            cand_config = dict(self.config)
+            if (ov_dir / "config.json").is_file():
+                cfg_obj = json.loads((ov_dir / "config.json").read_text(encoding="utf-8"))
+                if not isinstance(cfg_obj, dict):
+                    raise ValueError("Overlay config.json not dict")
+                cand_config = cfg_obj
+
+            cand_calibrator = self.calibrator
+            if (ov_dir / "calibration.json").is_file():
+                cand_calibrator = ArmigerCalibrator(ov_dir / "calibration.json")
+
+            cand_onnx_session = self.onnx_session
+            cand_onnx_path = self.onnx_path
+            cand_onnx_out_names = list(self._onnx_output_names)
+            cand_onnx_sha = self._onnx_model_sha256
+            has_onnx = any(k.endswith(".onnx") for k in verified_files_map)
+            if has_onnx or self.onnx_session is not None:
+                loaded_sess, loaded_path = self._load_onnx_session(
+                    ov_dir,
+                    self.variant,
+                    allow_synthetic_fallback=bool(self.allow_synthetic_fallback and self.onnx_session is None),
+                )
+                if loaded_sess is not None and loaded_path is not None:
+                    out_names = [o.name for o in loaded_sess.get_outputs()]
+                    missing_heads = [h for h in NEURAL_HEAD_CLASSES if h not in out_names]
+                    if missing_heads:
+                        raise ValueError(f"Overlay ONNX missing heads: {missing_heads}")
+                    cand_onnx_session = loaded_sess
+                    cand_onnx_path = loaded_path
+                    cand_onnx_out_names = out_names
+                    cand_onnx_sha = hashlib.sha256(loaded_path.read_bytes()).hexdigest()
+                elif not (self.allow_synthetic_fallback and self.onnx_session is None):
+                    raise ValueError("Overlay ONNX session failed to load")
+
+            cand_swarm_adapter = self.swarm_adapter
+            if "swarm_adapter.pt" in verified_files_map and (ov_dir / "swarm_adapter.pt").is_file():
+                cand_swarm_adapter = SwarmResidualAdapter.from_pretrained(ov_dir / "swarm_adapter.pt")
+
+            cand_catalog = self._zero_cue_catalog
+            cand_catalog_path = self._catalog_json_path
+            if (ov_dir / "validated_zero_cue_catalog.json").is_file():
+                cand_catalog_path = ov_dir / "validated_zero_cue_catalog.json"
+                if self._zero_cue_catalog is not None:
+                    cand_catalog = ZeroCueCatalogPlugin(cand_catalog_path)
+
+            # Commit restored state atomically
+            self.config = cand_config
+            self.calibrator = cand_calibrator
+            mondrian = self.config.get("mondrian_thresholds") or self.calibrator.mondrian or {}
+            if "adult" in mondrian:
+                self.safety_gate.adult_threshold = float(mondrian["adult"])
+            if "junk" in mondrian:
+                self.safety_gate.junk_threshold = float(mondrian["junk"])
+            if "owner_scope" in mondrian:
+                self.safety_gate.scope_threshold = float(mondrian["owner_scope"])
+            self.onnx_session = cand_onnx_session
+            self.onnx_path = cand_onnx_path
+            self._onnx_output_names = cand_onnx_out_names
+            self._onnx_model_sha256 = cand_onnx_sha
+            self._bucket_cache = ()
+            self.swarm_adapter = cand_swarm_adapter
+            self._zero_cue_catalog = cand_catalog
+            self._catalog_json_path = cand_catalog_path
+            self.active_seq = ov_seq
+            self.rsi_engine.current_seq = ov_seq
+            self.dht_updater.current_seq = max(int(self.dht_updater.current_seq), ov_seq)
+            self.active_bundle_merkle_root = expected_merkle
+            self.model_source = "dht_live_overlay"
+            self.active_overlay_dir = ov_dir
+        except Exception as exc:
+            self.last_dht_error = f"overlay_restore_failed:{type(exc).__name__}"
+
+    def health_status(self) -> Dict[str, Any]:
+        """Return `/healthz` observability dictionary for active DHT release & sharing state."""
+        return {
+            "active_seq": int(self.active_seq),
+            "active_bundle_merkle_root": str(self.active_bundle_merkle_root),
+            "model_source": str(self.model_source),
+            "last_dht_check_ts": self.last_dht_check_ts,
+            "last_dht_result": self.last_dht_result,
+            "last_dht_error": self.last_dht_error,
+            "dht_update_failures": int(self.dht_update_failures),
+            "contribution_push_failures": int(self.contribution_push_failures),
+            "sharing_status": self.sharing_status(),
+        }
+
+    def dispatch_opt_in_contribution(
+        self,
+        signed_bundle: Optional[Mapping[str, Any]] = None,
+        **kwargs: Any,
+    ) -> Dict[str, Any]:
+        """Publish a signed `< 1,000`-byte BEP-44 contribution delta over UDP to Mainline DHT
+        and collector nodes when `ARMIGER_DHT_SHARE_OPT_IN` is enabled; sends 0 packets otherwise.
+        """
+        if not self.opt_in_sharing:
+            self.rsi_engine._outbound_packets_blocked_opt_out += 1
+            return {
+                "dispatched": False,
+                "reason": "opt_in_sharing_disabled",
+                "packets_sent": 0,
+                "mainline_puts_ok": 0,
+                "collector_puts_ok": 0,
+            }
+        tier_str = "int8" if self.variant in ("int8", "cpu", "armiger") else "ultra"
+        kwargs.setdefault("model_tier", tier_str)
+        return self.rsi_engine.dispatch_contribution_udp(signed_bundle, **kwargs)
+
+    def check_and_apply_dht_release_update(
+        self,
+        *,
+        release_pubkey_hex: Optional[str] = None,
+        salt: Optional[Union[bytes, str]] = None,
+        dht_nodes: Optional[Sequence[Tuple[str, int]]] = None,
+        explicit_peers: Optional[Sequence[Tuple[str, int]]] = None,
+        webseed_urls: Optional[Sequence[str]] = None,
+        expected_info_bytes: Optional[bytes] = None,
+        allow_webseed_fallback: bool = True,
+        timeout: float = 4.0,
+        p2p_budget_sec: Optional[float] = None,
+    ) -> Dict[str, Any]:
+        with self._dht_poll_mutex:
+            return self._check_and_apply_dht_release_update_locked(
+                release_pubkey_hex=release_pubkey_hex,
+                salt=salt,
+                dht_nodes=dht_nodes,
+                explicit_peers=explicit_peers,
+                webseed_urls=webseed_urls,
+                expected_info_bytes=expected_info_bytes,
+                allow_webseed_fallback=allow_webseed_fallback,
+                timeout=timeout,
+                p2p_budget_sec=p2p_budget_sec,
+            )
+
+    def _check_and_apply_dht_release_update_locked(
+        self,
+        *,
+        release_pubkey_hex: Optional[str] = None,
+        salt: Optional[Union[bytes, str]] = None,
+        dht_nodes: Optional[Sequence[Tuple[str, int]]] = None,
+        explicit_peers: Optional[Sequence[Tuple[str, int]]] = None,
+        webseed_urls: Optional[Sequence[str]] = None,
+        expected_info_bytes: Optional[bytes] = None,
+        allow_webseed_fallback: bool = True,
+        timeout: float = 4.0,
+        p2p_budget_sec: Optional[float] = None,
+    ) -> Dict[str, Any]:
+        """Check Mainline DHT for a newer signed release bundle (`remote_seq > active_seq`),
+        download and verify all pieces/files/Merkle root into `self.runtime_cache_dir`, run
+        the canary & integrity gate, and atomically hot-swap the active ONNX session,
+        calibration, and catalog under `self._dht_update_lock` with clean rollback on failure.
+        """
+        import shutil as _shutil
+        import zlib as _zlib
+        try:
+            from verify_dht import (
+                DEFAULT_RELEASE_PUBKEY_HEX,
+                parse_bootstrap_nodes,
+                verify_dht_release,
+            )
+            from oci_vpn_guard import HF_BASE_URL
+            from oci_sqlite_catalog import build_torrent_bundle
+        except ImportError:
+            from armiger.verify_dht import (
+                DEFAULT_RELEASE_PUBKEY_HEX,
+                parse_bootstrap_nodes,
+                verify_dht_release,
+            )
+            from armiger.oci_vpn_guard import HF_BASE_URL
+            from armiger.oci_sqlite_catalog import build_torrent_bundle
+
+        self.last_dht_check_ts = time.time()
+        eff_pubkey = (
+            release_pubkey_hex
+            or os.environ.get("ARMIGER_RELEASE_PUBKEY_HEX", "").strip()
+            or DEFAULT_RELEASE_PUBKEY_HEX
+        )
+        default_tier_salt = (
+            "armiger:weights:int8"
+            if self.variant in ("int8", "cpu", "armiger")
+            else "armiger:weights:ultra"
+        )
+        eff_salt_raw = (
+            salt
+            if salt is not None
+            else (os.environ.get("ARMIGER_RELEASE_SALT", "").strip() or default_tier_salt)
+        )
+        eff_salt = eff_salt_raw.encode("utf-8") if isinstance(eff_salt_raw, str) else bytes(eff_salt_raw)
+        eff_dht_nodes = list(dht_nodes) if dht_nodes is not None else parse_bootstrap_nodes()
+        if explicit_peers is not None:
+            eff_peers = list(explicit_peers)
+        else:
+            env_peers = os.environ.get("ARMIGER_DHT_PEERS", "").strip()
+            eff_peers = parse_bootstrap_nodes(env_peers) if env_peers else []
+        if webseed_urls is not None:
+            eff_webseeds = list(webseed_urls)
+        else:
+            env_ws = [u.strip() for u in os.environ.get("ARMIGER_WEBSEED_URLS", "").split(",") if u.strip()]
+            eff_webseeds = env_ws if env_ws else [HF_BASE_URL]
+
+        min_target_seq = int(self.active_seq) + 1
+        receipt = verify_dht_release(
+            pubkey_hex=eff_pubkey,
+            salt=eff_salt,
+            dht_nodes=eff_dht_nodes,
+            explicit_peers=eff_peers,
+            webseed_urls=eff_webseeds,
+            expected_info_bytes=expected_info_bytes,
+            mode="strict-p2p",
+            min_seq=min_target_seq,
+            timeout=timeout,
+            p2p_budget_sec=p2p_budget_sec,
+            retain_payload=True,
+        )
+        if (
+            not receipt.get("verified")
+            and receipt.get("reason") == "strict_p2p_peer_wire_unavailable"
+            and allow_webseed_fallback
+            and eff_webseeds
+        ):
+            receipt = verify_dht_release(
+                pubkey_hex=eff_pubkey,
+                salt=eff_salt,
+                dht_nodes=eff_dht_nodes,
+                explicit_peers=eff_peers,
+                webseed_urls=eff_webseeds,
+                expected_info_bytes=expected_info_bytes,
+                mode="webseed-fallback",
+                min_seq=min_target_seq,
+                timeout=timeout,
+                p2p_budget_sec=p2p_budget_sec,
+                retain_payload=True,
+            )
+
+        if not receipt.get("verified"):
+            return {
+                "updated": False,
+                "rolled_back": False,
+                "reason": str(receipt.get("reason", "dht_verification_failed")),
+                "active_seq": int(self.active_seq),
+                "remote_seq": receipt.get("seq"),
+                "receipt": receipt,
+            }
+
+        remote_seq = int(receipt["seq"])
+        if remote_seq <= int(self.active_seq):
+            return {
+                "updated": False,
+                "rolled_back": False,
+                "reason": f"remote_seq_not_newer:{remote_seq}<={self.active_seq}",
+                "active_seq": int(self.active_seq),
+                "remote_seq": remote_seq,
+            }
+
+        files_map: Dict[str, bytes] = dict(receipt.get("payload_files") or {})
+        if not files_map:
+            return {
+                "updated": False,
+                "rolled_back": False,
+                "reason": "empty_payload_files",
+                "active_seq": int(self.active_seq),
+                "remote_seq": remote_seq,
+            }
+
+        # Verify per-file SHA-256 and Merkle root independently
+        expected_file_hashes = receipt.get("file_sha256") or {}
+        for fname, fbytes in files_map.items():
+            actual_sha = hashlib.sha256(fbytes).hexdigest()
+            if fname in expected_file_hashes and actual_sha != expected_file_hashes[fname]:
+                return {
+                    "updated": False,
+                    "rolled_back": False,
+                    "reason": f"file_sha256_mismatch:{fname}",
+                    "active_seq": int(self.active_seq),
+                }
+            if fname.endswith(".json"):
+                ok_fmt, reason_fmt = SafeFormatValidator.validate(fbytes, "json")
+                if not ok_fmt:
+                    return {
+                        "updated": False,
+                        "rolled_back": False,
+                        "reason": f"unsafe_format:{fname}:{reason_fmt}",
+                        "active_seq": int(self.active_seq),
+                    }
+            elif fname.endswith(".onnx"):
+                ok_fmt, reason_fmt = SafeFormatValidator.validate(fbytes, "onnx")
+                if not ok_fmt:
+                    return {
+                        "updated": False,
+                        "rolled_back": False,
+                        "reason": f"unsafe_format:{fname}:{reason_fmt}",
+                        "active_seq": int(self.active_seq),
+                    }
+
+        recomputed_bundle = build_torrent_bundle(
+            bundle_name=f"armiger-weights-{self.variant}-v2.1.0",
+            files_map=files_map,
+            pubkey_32=bytes.fromhex(eff_pubkey),
+            salt=eff_salt,
+            seq=remote_seq,
+        )
+        signed_merkle = str(receipt.get("merkle_root_sha256") or "")
+        if signed_merkle and recomputed_bundle.merkle_root_hex != signed_merkle:
+            return {
+                "updated": False,
+                "rolled_back": False,
+                "reason": f"merkle_root_mismatch:{recomputed_bundle.merkle_root_hex}!={signed_merkle}",
+                "active_seq": int(self.active_seq),
+            }
+
+        # Write atomically into writable overlay staging directory (never mutating read-only /models)
+        self._ensure_private_cache_dir(self.runtime_cache_dir)
+        merkle_hex_full = str(receipt.get("merkle_root_sha256") or recomputed_bundle.merkle_root_hex)
+        tier_slug = self._overlay_tier_slug()
+        chan_slug = self._overlay_channel_slug(eff_pubkey, eff_salt)
+        stage_dir = self.runtime_cache_dir / f".stage_seq_{remote_seq}_{tier_slug}_{chan_slug}_{os.getpid()}_{int(time.time() * 1000)}"
+        final_dir = self.runtime_cache_dir / f"seq_{remote_seq}_{tier_slug}_{chan_slug}_{merkle_hex_full[:12]}"
+        if stage_dir.exists():
+            _shutil.rmtree(stage_dir, ignore_errors=True)
+        stage_dir.mkdir(parents=True, exist_ok=True, mode=0o700)
+
+        base_source_dir = self.active_overlay_dir if self.active_overlay_dir is not None else self.model_dir
+        try:
+            if base_source_dir.is_dir():
+                for existing_item in base_source_dir.iterdir():
+                    if existing_item.is_file() and existing_item.name not in files_map:
+                        dest_item = stage_dir / existing_item.name
+                        try:
+                            os.symlink(existing_item, dest_item)
+                        except OSError:
+                            dest_item.write_bytes(existing_item.read_bytes())
+
+            for fname, fbytes in files_map.items():
+                dest_path = stage_dir / Path(fname).name
+                if dest_path.is_symlink() or dest_path.exists():
+                    dest_path.unlink()
+                with dest_path.open("wb") as fh:
+                    fh.write(fbytes)
+                    fh.flush()
+                    os.fsync(fh.fileno())
+                os.chmod(dest_path, 0o644)
+                if fname == "zero_cue_catalog.sqlite.zlib":
+                    sqlite_bytes = _zlib.decompress(fbytes)
+                    sqlite_dest = stage_dir / "zero_cue_catalog.sqlite"
+                    if sqlite_dest.is_symlink() or sqlite_dest.exists():
+                        sqlite_dest.unlink()
+                    sqlite_tmp = stage_dir / f".zero_cue_catalog.sqlite.{os.getpid()}.tmp"
+                    with sqlite_tmp.open("wb") as sfh:
+                        sfh.write(sqlite_bytes)
+                        sfh.flush()
+                        os.fsync(sfh.fileno())
+                    os.replace(sqlite_tmp, sqlite_dest)
+
+            # Compile and validate candidate artifacts before acquiring hot-swap lock
+            cand_config: Dict[str, Any] = dict(self.config)
+            if (stage_dir / "config.json").is_file():
+                parsed_cfg = json.loads((stage_dir / "config.json").read_text(encoding="utf-8"))
+                if not isinstance(parsed_cfg, dict):
+                    raise DHTUpdateRejected("config_json_not_object")
+                if parsed_cfg.get("force_canary_failure") or parsed_cfg.get("canary_poison"):
+                    raise DHTUpdateRejected("config_flagged_canary_failure")
+                cand_config = parsed_cfg
+
+            cand_calibrator = self.calibrator
+            if (stage_dir / "calibration.json").is_file():
+                cal_raw = json.loads((stage_dir / "calibration.json").read_text(encoding="utf-8"))
+                if not isinstance(cal_raw, dict):
+                    raise DHTUpdateRejected("calibration_json_not_object")
+                if cal_raw.get("force_canary_failure") or cal_raw.get("canary_poison"):
+                    raise DHTUpdateRejected("calibration_flagged_canary_failure")
+                for h_name, h_cfg in (cal_raw.get("heads") or {}).items():
+                    temp_val = float(h_cfg.get("temperature", 1.0))
+                    if not math.isfinite(temp_val) or temp_val <= 0.01 or temp_val > 100.0:
+                        raise DHTUpdateRejected(f"invalid_calibration_temperature:{h_name}:{temp_val}")
+                for m_name, m_val in (cal_raw.get("mondrian_thresholds") or {}).items():
+                    f_m = float(m_val)
+                    if not math.isfinite(f_m) or f_m <= 0.001 or f_m >= 0.95:
+                        raise DHTUpdateRejected(f"invalid_mondrian_threshold:{m_name}:{f_m}")
+                cand_calibrator = ArmigerCalibrator(stage_dir / "calibration.json")
+
+            cand_onnx_session = self.onnx_session
+            cand_onnx_path = self.onnx_path
+            cand_onnx_out_names = list(self._onnx_output_names)
+            cand_onnx_sha = self._onnx_model_sha256
+            has_onnx_in_bundle = any(k.endswith(".onnx") for k in files_map)
+            if has_onnx_in_bundle or self.onnx_session is not None:
+                try:
+                    loaded_sess, loaded_path = self._load_onnx_session(
+                        stage_dir,
+                        self.variant,
+                        allow_synthetic_fallback=False,
+                    )
+                    if loaded_sess is None or loaded_path is None:
+                        raise DHTUpdateRejected("candidate_onnx_session_missing")
+                    out_names = [o.name for o in loaded_sess.get_outputs()]
+                    missing_heads = [h for h in NEURAL_HEAD_CLASSES if h not in out_names]
+                    if missing_heads:
+                        raise DHTUpdateRejected(f"candidate_onnx_missing_heads:{missing_heads}")
+                    cand_onnx_session = loaded_sess
+                    cand_onnx_path = loaded_path
+                    cand_onnx_out_names = out_names
+                    cand_onnx_sha = hashlib.sha256(loaded_path.read_bytes()).hexdigest()
+                except Exception as exc:
+                    if not (self.allow_synthetic_fallback and self.onnx_session is None):
+                        raise DHTUpdateRejected(f"candidate_onnx_load_failed:{exc}") from exc
+                    for k, v_b in files_map.items():
+                        if k.endswith(".onnx") and (
+                            not v_b or v_b.startswith((b"CORRUPT", b"BAD", b"INVALID"))
+                        ):
+                            raise DHTUpdateRejected(f"corrupt_synthetic_onnx:{k}") from exc
+
+            cand_swarm_adapter = self.swarm_adapter
+            if "swarm_adapter.pt" in files_map and (stage_dir / "swarm_adapter.pt").is_file():
+                cand_swarm_adapter = SwarmResidualAdapter.from_pretrained(stage_dir / "swarm_adapter.pt")
+
+            cand_catalog = self._zero_cue_catalog
+            cand_catalog_path = self._catalog_json_path
+            if "validated_zero_cue_catalog.json" in files_map and (stage_dir / "validated_zero_cue_catalog.json").is_file():
+                cand_catalog_path = stage_dir / "validated_zero_cue_catalog.json"
+                if self._zero_cue_catalog is not None:
+                    cand_catalog = ZeroCueCatalogPlugin(cand_catalog_path)
+
+            # Atomic hot-swap + canary verification under _dht_update_lock
+            with self._dht_update_lock:
+                if self._auto_update_stop_event.is_set() and threading.current_thread() is self._auto_update_thread:
+                    raise DHTUpdateRejected("poller_stopped_before_commit")
+                if remote_seq <= int(self.active_seq):
+                    raise DHTUpdateRejected(f"stale_remote_seq_under_lock:{remote_seq}<={self.active_seq}")
+                snap = self.snapshot_dht_state()
+                prev_seq = int(self.active_seq)
+                prev_merkle = str(self.active_bundle_merkle_root)
+                prev_source = str(self.model_source)
+                prev_config = copy.deepcopy(self.config)
+                prev_overlay = self.active_overlay_dir
+                prev_catalog = self._zero_cue_catalog
+                prev_catalog_path = self._catalog_json_path
+                prev_adapter = self.swarm_adapter
+                prev_bucket_cache = getattr(self, "_bucket_cache", ())
+                try:
+                    self.config = cand_config
+                    self.calibrator = cand_calibrator
+                    mondrian = self.config.get("mondrian_thresholds") or self.calibrator.mondrian or {}
+                    if "adult" in mondrian:
+                        self.safety_gate.adult_threshold = float(mondrian["adult"])
+                    if "junk" in mondrian:
+                        self.safety_gate.junk_threshold = float(mondrian["junk"])
+                    if "owner_scope" in mondrian:
+                        self.safety_gate.scope_threshold = float(mondrian["owner_scope"])
+                    self.onnx_session = cand_onnx_session
+                    self.onnx_path = cand_onnx_path
+                    self._onnx_output_names = cand_onnx_out_names
+                    self._onnx_model_sha256 = cand_onnx_sha
+                    self._bucket_cache = ()
+                    self.swarm_adapter = cand_swarm_adapter
+                    self._zero_cue_catalog = cand_catalog
+                    self._catalog_json_path = cand_catalog_path
+
+                    # Canary smoke & safety invariant verification
+                    canary_probe = self._classify_batch_locked(
+                        [
+                            {"name": "Ubuntu.24.04.LTS.Desktop.amd64.iso", "size": 4900000000},
+                            {"name": "Free.Movie.Codec.Pack.Password.exe", "size": 450000},
+                        ],
+                        use_zero_cue_catalog=False,
+                        ingest_to_dht_db=False,
+                    )
+                    if len(canary_probe) != 2 or canary_probe[1].junk != "junk":
+                        raise DHTUpdateRejected("canary_malware_exe_detection_failed")
+                    if self._custom_canary_validator is not None and not self._custom_canary_validator(self):
+                        raise DHTUpdateRejected("custom_canary_validator_rejected")
+
+                    if final_dir.exists():
+                        _shutil.rmtree(final_dir, ignore_errors=True)
+                    os.replace(stage_dir, final_dir)
+                    if self.onnx_path is not None and str(self.onnx_path).startswith(str(stage_dir)):
+                        self.onnx_path = final_dir / self.onnx_path.name
+                    if str(self._catalog_json_path).startswith(str(stage_dir)):
+                        self._catalog_json_path = final_dir / self._catalog_json_path.name
+
+                    self.active_seq = remote_seq
+                    self.rsi_engine.current_seq = remote_seq
+                    self.dht_updater.current_seq = max(int(self.dht_updater.current_seq), remote_seq)
+                    self.active_bundle_merkle_root = str(
+                        receipt.get("merkle_root_sha256") or recomputed_bundle.merkle_root_hex
+                    )
+                    self.model_source = "dht_live_overlay"
+                    self.active_overlay_dir = final_dir
+
+                    ov_meta = {
+                        "active_seq": int(self.active_seq),
+                        "active_bundle_merkle_root": self.active_bundle_merkle_root,
+                        "model_source": self.model_source,
+                        "overlay_dir": str(final_dir),
+                        "base_model_dir": str(self.model_dir),
+                        "variant": tier_slug,
+                        "release_pubkey_hex": eff_pubkey.lower(),
+                        "salt_hex": eff_salt.hex(),
+                        "pointer": dict(receipt.get("pointer") or {}),
+                        "file_sha256": {k: hashlib.sha256(v).hexdigest() for k, v in files_map.items()},
+                        "updated_at_ts": int(time.time()),
+                    }
+                    ov_json_str = json.dumps(ov_meta, indent=2, sort_keys=True)
+                    ov_state_file = self._overlay_state_path(eff_pubkey, eff_salt)
+                    for target_state_file in (ov_state_file, self.runtime_cache_dir / "dht_overlay_state.json"):
+                        ov_tmp = self.runtime_cache_dir / f".{target_state_file.name}.{os.getpid()}.tmp"
+                        ov_tmp.write_text(ov_json_str, encoding="utf-8")
+                        os.replace(ov_tmp, target_state_file)
+                except Exception as inner_exc:
+                    self._restore_dht_state(snap)
+                    self.active_seq = prev_seq
+                    self.active_bundle_merkle_root = prev_merkle
+                    self.model_source = prev_source
+                    self.config = prev_config
+                    self.active_overlay_dir = prev_overlay
+                    self._zero_cue_catalog = prev_catalog
+                    self._catalog_json_path = prev_catalog_path
+                    self.swarm_adapter = prev_adapter
+                    self._bucket_cache = prev_bucket_cache
+                    raise inner_exc
+
+            return {
+                "updated": True,
+                "rolled_back": False,
+                "seq_before": prev_seq,
+                "active_seq": int(self.active_seq),
+                "active_bundle_merkle_root": self.active_bundle_merkle_root,
+                "model_source": self.model_source,
+                "overlay_dir": str(final_dir),
+                "mode_used": receipt.get("mode_used"),
+                "receipt": receipt,
+            }
+        except Exception as exc:
+            if stage_dir.exists():
+                _shutil.rmtree(stage_dir, ignore_errors=True)
+            return {
+                "updated": False,
+                "rolled_back": True,
+                "reason": f"{type(exc).__name__}:{exc}",
+                "active_seq": int(self.active_seq),
+            }
+
+    def start_auto_update_poller(self, initial_delay_sec: float = 0.5) -> None:
+        """Start the non-blocking background BEP-44/46 auto-update & opt-in contribution poller thread."""
+        if self._auto_update_thread is not None and self._auto_update_thread.is_alive():
+            return
+        self._auto_update_stop_event.clear()
+
+        def _poller_loop() -> None:
+            if self._auto_update_stop_event.wait(max(0.05, float(initial_delay_sec))):
+                return
+            while not self._auto_update_stop_event.is_set():
+                try:
+                    res_up = self.check_and_apply_dht_release_update()
+                    self.last_dht_result = "updated" if res_up.get("updated") else str(res_up.get("reason", "checked"))
+                    if res_up.get("rolled_back"):
+                        self.dht_update_failures += 1
+                        self.last_dht_error = str(res_up.get("reason", "rolled_back"))[:160]
+                except Exception as exc:
+                    self.dht_update_failures += 1
+                    self.last_dht_error = f"{type(exc).__name__}:{str(exc)[:120]}"
+                if self.opt_in_sharing and len(self.rsi_engine.telemetry_queue) >= self.rsi_engine.anonymity_guard.min_k_samples:
+                    try:
+                        res_push = self.dispatch_opt_in_contribution(
+                            n_samples=len(self.rsi_engine.telemetry_queue),
+                        )
+                        if not res_push.get("dispatched"):
+                            self.contribution_push_failures += 1
+                            self.last_dht_error = f"contribution_push:{res_push.get('reason', 'failed')}"[:160]
+                    except Exception as exc:
+                        self.contribution_push_failures += 1
+                        self.last_dht_error = f"contribution_push:{type(exc).__name__}"[:160]
+                if self._auto_update_stop_event.wait(self.poll_interval_sec):
+                    break
+
+        self._auto_update_thread = threading.Thread(
+            target=_poller_loop,
+            name="armiger-dht-autoupdate-poller",
+            daemon=True,
+        )
+        self._auto_update_thread.start()
+
+    def stop_auto_update_poller(self, timeout: float = 5.0) -> None:
+        """Stop the background BEP-44/46 auto-update poller thread cleanly."""
+        self._auto_update_stop_event.set()
+        t = self._auto_update_thread
+        if t is not None and t.is_alive() and t is not threading.current_thread():
+            t.join(timeout=max(0.1, float(timeout)))
+        if t is None or not t.is_alive():
+            self._auto_update_thread = None
+
     def close(self) -> None:
-        """Close underlying SQLite shard database connections cleanly."""
-        if self.dht_db_sync is not None:
-            self.dht_db_sync.close()
+        """Close background poller and underlying SQLite shard database connections cleanly."""
+        self.stop_auto_update_poller()
+        with self._dht_poll_mutex:
+            with self._dht_update_lock:
+                if self.dht_db_sync is not None:
+                    self.dht_db_sync.close()
 
 
 

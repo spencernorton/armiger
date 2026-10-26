@@ -31,6 +31,8 @@ from armiger.oci_sqlite_catalog import (  # noqa: F401
 )
 from armiger.oci_vpn_guard import (  # noqa: F401
     ARTIFACT_MANIFEST,
+    DEFAULT_RELEASE_PUBKEY_HEX,
+    DEFAULT_RELEASE_SALT,
     AnonymityGuard,
     VPNEgressGuard,
     VPNEgressStatus,
