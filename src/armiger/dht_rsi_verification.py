@@ -1331,6 +1331,18 @@ class SafeFormatValidator:
             graph_err = _check_graph(model.graph)
             if graph_err:
                 return False, graph_err
+        except ModuleNotFoundError:
+            if b"location" in data and (b".bin" in data or b".onnx.data" in data):
+                return False, "onnx_external_data_forbidden:raw_scan"
+            try:
+                import onnxruntime as ort
+                sess_opts = ort.SessionOptions()
+                sess_opts.intra_op_num_threads = 1
+                sess = ort.InferenceSession(data, sess_options=sess_opts, providers=["CPUExecutionProvider"])
+                if not sess.get_inputs() or not sess.get_outputs():
+                    return False, "onnx_empty_graph_or_missing_opset"
+            except Exception as ort_exc:
+                return False, f"onnx_protobuf_parse_error:{type(ort_exc).__name__}"
         except Exception as exc:
             return False, f"onnx_protobuf_parse_error:{type(exc).__name__}"
         return True, "onnx_valid"
