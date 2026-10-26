@@ -141,6 +141,7 @@ class ArmigerDHTRSIEngine:
         dp_sigma: float = 0.05,
         max_seen_delta_digests: int = 4096,
         max_tracked_senders: int = 1024,
+        max_sender_tombstones: Optional[int] = None,
         delta_freshness_window_seconds: int = 14 * 86400,
         max_telemetry_queue_size: int = 1024,
         max_item_encryption_retries: int = 3,
@@ -181,7 +182,12 @@ class ArmigerDHTRSIEngine:
         self.max_item_encryption_retries = max(int(max_item_encryption_retries), 1)
         self._seen_delta_digests: Dict[str, Tuple[int, Tuple[str, bytes]]] = {}
         self._inbound_sender_seq: Dict[Tuple[str, bytes], Tuple[int, int]] = {}
-        self._evicted_sender_seq_floor: int = int(current_seq)
+        self._evicted_sender_tombstones: Dict[Tuple[str, bytes], Tuple[int, int]] = {}
+        self.max_sender_tombstones: int = (
+            max(int(max_sender_tombstones), 1)
+            if max_sender_tombstones is not None
+            else max(self.max_tracked_senders * 8, 256)
+        )
 
         self.verifier = PhysicalGroundTruthVerifier()
         self.anonymizer = TelemetryAnonymizer(
@@ -387,28 +393,82 @@ class ArmigerDHTRSIEngine:
         for sk in expired_senders:
             self._inbound_sender_seq.pop(sk, None)
 
+        expired_tombstones = [
+            sk for sk, (_, seen_ts) in self._evicted_sender_tombstones.items() if seen_ts < cutoff
+        ]
+        for sk in expired_tombstones:
+            self._evicted_sender_tombstones.pop(sk, None)
+
     def ingest_signed_delta_bundle(
         self,
         signed_bundle: Mapping[str, Any],
+        *,
+        commit: bool = True,
     ) -> Tuple[bool, str, Optional[Dict[str, Any]]]:
         """Verify Ed25519 signature and AnonymityGuard schema of an inbound delta bundle (works in pull_only mode)."""
         if self.mode == DHTRSIMode.OFF:
             return False, "plugin_mode_off", None
 
+        if not isinstance(signed_bundle, Mapping):
+            return False, "malformed_bundle_envelope:not_mapping", None
+
         try:
             v_raw = signed_bundle["v"]
-            v_bytes = v_raw if isinstance(v_raw, (bytes, bytearray)) else str(v_raw).encode("utf-8")
-            seq = int(signed_bundle["seq"])
+            if isinstance(v_raw, str):
+                if len(v_raw) > 2 * 1024 * 1024:
+                    return False, "malformed_bundle_envelope:v_too_large", None
+                v_bytes = v_raw.encode("utf-8")
+            elif isinstance(v_raw, (bytes, bytearray, memoryview)):
+                if len(v_raw) > 2 * 1024 * 1024:
+                    return False, "malformed_bundle_envelope:v_too_large", None
+                v_bytes = bytes(v_raw)
+            else:
+                return False, f"malformed_bundle_envelope:invalid_v_type:{type(v_raw).__name__}", None
+
+            raw_seq = signed_bundle["seq"]
+            if isinstance(raw_seq, bool) or not isinstance(raw_seq, int) or raw_seq < 1 or raw_seq > (2**63 - 1):
+                return False, f"malformed_bundle_envelope:invalid_seq:{raw_seq!r}", None
+            seq = int(raw_seq)
+
             salt = signed_bundle.get("salt", b"armiger-rsi-delta")
+            if salt is None:
+                salt = b"armiger-rsi-delta"
             if isinstance(salt, str):
-                salt = salt.encode("utf-8")
-            salt_bytes = bytes(salt)
+                if len(salt) > 256:
+                    return False, f"bep44_salt_exceeds_64_bytes:{len(salt)}", None
+                salt_bytes = salt.encode("utf-8")
+            elif isinstance(salt, (bytes, bytearray, memoryview)):
+                if len(salt) > 64:
+                    return False, f"bep44_salt_exceeds_64_bytes:{len(salt)}", None
+                salt_bytes = bytes(salt)
+            else:
+                return False, f"malformed_bundle_envelope:invalid_salt_type:{type(salt).__name__}", None
             if len(salt_bytes) > 64:
                 return False, f"bep44_salt_exceeds_64_bytes:{len(salt_bytes)}", None
-            pub_raw = signed_bundle.get("k") or signed_bundle.get("pubkey_hex")
-            pub_bytes = bytes.fromhex(pub_raw) if isinstance(pub_raw, str) else bytes(pub_raw)
-            sig_raw = signed_bundle.get("sig") or signed_bundle.get("sig_hex")
-            sig_bytes = bytes.fromhex(sig_raw) if isinstance(sig_raw, str) else bytes(sig_raw)
+
+            pub_raw = signed_bundle["k"] if signed_bundle.get("k") is not None else signed_bundle.get("pubkey_hex")
+            if isinstance(pub_raw, str):
+                if len(pub_raw.strip()) != 64:
+                    return False, "malformed_bundle_envelope:invalid_pubkey_hex_length", None
+                pub_bytes = bytes.fromhex(pub_raw.strip())
+            elif isinstance(pub_raw, (bytes, bytearray, memoryview)):
+                if len(pub_raw) != 32:
+                    return False, f"malformed_bundle_envelope:invalid_pubkey_length:{len(pub_raw)}", None
+                pub_bytes = bytes(pub_raw)
+            else:
+                return False, f"malformed_bundle_envelope:invalid_pubkey_type:{type(pub_raw).__name__}", None
+
+            sig_raw = signed_bundle["sig"] if signed_bundle.get("sig") is not None else signed_bundle.get("sig_hex")
+            if isinstance(sig_raw, str):
+                if len(sig_raw.strip()) != 128:
+                    return False, "malformed_bundle_envelope:invalid_sig_hex_length", None
+                sig_bytes = bytes.fromhex(sig_raw.strip())
+            elif isinstance(sig_raw, (bytes, bytearray, memoryview)):
+                if len(sig_raw) != 64:
+                    return False, f"malformed_bundle_envelope:invalid_sig_length:{len(sig_raw)}", None
+                sig_bytes = bytes(sig_raw)
+            else:
+                return False, f"malformed_bundle_envelope:invalid_sig_type:{type(sig_raw).__name__}", None
         except Exception as exc:
             return False, f"malformed_bundle_envelope:{exc}", None
 
@@ -422,10 +482,10 @@ class ArmigerDHTRSIEngine:
         self._prune_inbound_delta_tracking(now_ts)
 
         sender_key = (pub_bytes.hex(), salt_bytes)
-        prev_entry = self._inbound_sender_seq.get(sender_key)
+        prev_entry = self._inbound_sender_seq.get(sender_key) or self._evicted_sender_tombstones.get(sender_key)
         min_seq = max(
             self.current_seq,
-            prev_entry[0] if prev_entry is not None else self._evicted_sender_seq_floor,
+            prev_entry[0] if prev_entry is not None else 0,
         )
         if seq <= min_seq:
             return False, f"stale_or_replayed_delta_seq:{seq}<={min_seq}", None
@@ -443,25 +503,33 @@ class ArmigerDHTRSIEngine:
         if epoch_val <= 0 or abs(now_ts - epoch_val) > self.delta_freshness_window_seconds:
             return False, f"stale_or_future_delta_epoch:{epoch_val}", None
 
-        # Any prior digest for this same sender_key is now superseded by the higher monotonic seq
+        # Never evict an unexpired sender high-water mark: if tracking capacity (active + tombstones)
+        # is full of unexpired senders, reject previously unseen sender identities fail-closed.
+        is_known_sender = sender_key in self._inbound_sender_seq or sender_key in self._evicted_sender_tombstones
+        if (
+            not is_known_sender
+            and len(self._inbound_sender_seq) >= self.max_tracked_senders
+            and len(self._evicted_sender_tombstones) >= self.max_sender_tombstones
+        ):
+            return False, "replay_tracking_capacity_exhausted", None
+
         superseded_digests = [
             d for d, (_, sk) in self._seen_delta_digests.items() if sk == sender_key
         ]
-        for d in superseded_digests:
-            self._seen_delta_digests.pop(d, None)
+        projected_digest_count = len(self._seen_delta_digests) - len(superseded_digests)
+        if projected_digest_count >= self.max_seen_delta_digests:
+            evictable_d = next(
+                (
+                    d
+                    for d, (_, sk) in self._seen_delta_digests.items()
+                    if d not in superseded_digests
+                    and (sk in self._inbound_sender_seq or sk in self._evicted_sender_tombstones or sk == sender_key)
+                ),
+                None,
+            )
+            if evictable_d is None:
+                return False, "replay_digest_capacity_exhausted", None
 
-        while len(self._seen_delta_digests) >= self.max_seen_delta_digests:
-            oldest_d = next(iter(self._seen_delta_digests))
-            self._seen_delta_digests.pop(oldest_d, None)
-        self._seen_delta_digests[bundle_digest] = (now_ts, sender_key)
-
-        if sender_key in self._inbound_sender_seq:
-            self._inbound_sender_seq.pop(sender_key, None)
-        while len(self._inbound_sender_seq) >= self.max_tracked_senders:
-            oldest_sk = next(iter(self._inbound_sender_seq))
-            evicted_seq, _ = self._inbound_sender_seq.pop(oldest_sk)
-            self._evicted_sender_seq_floor = max(self._evicted_sender_seq_floor, evicted_seq)
-        self._inbound_sender_seq[sender_key] = (seq, now_ts)
         scale = float(parsed.get("scale", 1.0 / 127.0))
         w_q8 = parsed.get("delta_w_q8", [])
         b_q8 = parsed.get("delta_b_q8", [])
@@ -475,14 +543,48 @@ class ArmigerDHTRSIEngine:
             "reliability_bins": parsed.get("reliability_bins", []),
             "sender_ephemeral_pubkey_hex": pub_bytes.hex(),
         }
+        if not commit:
+            return True, "verified_candidate", decoded
+
+        for d in superseded_digests:
+            self._seen_delta_digests.pop(d, None)
+
+        while len(self._seen_delta_digests) >= self.max_seen_delta_digests:
+            evictable_d = next(
+                (
+                    d
+                    for d, (_, sk) in self._seen_delta_digests.items()
+                    if sk in self._inbound_sender_seq or sk in self._evicted_sender_tombstones or sk == sender_key
+                ),
+                None,
+            )
+            if evictable_d is None:
+                return False, "replay_digest_capacity_exhausted", None
+            self._seen_delta_digests.pop(evictable_d, None)
+
+        eff_retention_ts = max(now_ts, epoch_val)
+        self._seen_delta_digests[bundle_digest] = (eff_retention_ts, sender_key)
+
+        self._evicted_sender_tombstones.pop(sender_key, None)
+        if sender_key in self._inbound_sender_seq:
+            self._inbound_sender_seq.pop(sender_key, None)
+        while len(self._inbound_sender_seq) >= self.max_tracked_senders:
+            if len(self._evicted_sender_tombstones) >= self.max_sender_tombstones:
+                return False, "replay_tracking_capacity_exhausted", None
+            oldest_sk = next(iter(self._inbound_sender_seq))
+            evicted_seq, evicted_ts = self._inbound_sender_seq.pop(oldest_sk)
+            self._evicted_sender_tombstones[oldest_sk] = (evicted_seq, evicted_ts)
+        self._inbound_sender_seq[sender_key] = (seq, eff_retention_ts)
         return True, "verified_and_ingested", decoded
 
     def ingest_signed_bundle(
         self,
         signed_bundle: Mapping[str, Any],
+        *,
+        commit: bool = True,
     ) -> Tuple[bool, str, Optional[Dict[str, Any]]]:
         """Alias for `ingest_signed_delta_bundle`."""
-        return self.ingest_signed_delta_bundle(signed_bundle)
+        return self.ingest_signed_delta_bundle(signed_bundle, commit=commit)
 
     async def publish_to_dht(
         self,
@@ -640,6 +742,21 @@ class ArmigerDHTRSIEngine:
         if candidate_predictor_fn is None:
             return False, "missing_candidate_predictor_fn", None
 
+        # 1. Verify BEP-44 monotonic sequence and Hybrid Ed25519 + WOTS+-SHAKE256 PQ threshold signatures
+        eff_pq_signers = dict(self.trusted_pq_signers)
+        if not eff_pq_signers:
+            for ed_pk_hex, identity in self.trusted_signers.items():
+                norm_ed = ThresholdDHTManifest._normalize_pubkey_id(ed_pk_hex)
+                for wots_pk_hex in WOTSPlusSHAKE256._ED25519_TO_WOTS_PUBS.get(norm_ed, ()):
+                    eff_pq_signers[wots_pk_hex] = identity
+        require_pq_flag = self.require_pq if require_pq is None else bool(require_pq)
+        q_ok, q_reason, asns = SybilQuorumVerifier.verify_quorum(
+            attestations=attestations,
+            target_hash=manifest.bundle_sha256,
+            min_distinct_asns=max(self.min_distinct_asns, manifest.min_asn_quorum),
+            asn_verifier=asn_verifier,
+            require_authoritative_asn=require_authoritative_asn,
+        )
         if authenticated_baseline is not None:
             b_ok, b_reason = authenticated_baseline.verify_signature(self.trusted_signers)
             if not b_ok:
@@ -654,14 +771,6 @@ class ArmigerDHTRSIEngine:
                 return False, "authenticated_baseline_canary_suite_mismatch", None
             baseline_metrics = authenticated_baseline.to_metrics_dict()
 
-        # 1. Verify BEP-44 monotonic sequence and Hybrid Ed25519 + WOTS+-SHAKE256 PQ threshold signatures
-        eff_pq_signers = dict(self.trusted_pq_signers)
-        if not eff_pq_signers:
-            for ed_pk_hex, identity in self.trusted_signers.items():
-                norm_ed = ThresholdDHTManifest._normalize_pubkey_id(ed_pk_hex)
-                for wots_pk_hex in WOTSPlusSHAKE256._ED25519_TO_WOTS_PUBS.get(norm_ed, ()):
-                    eff_pq_signers[wots_pk_hex] = identity
-        require_pq_flag = self.require_pq if require_pq is None else bool(require_pq)
         ok, reason = ThresholdSignatureVerifier.verify(
             manifest=manifest,
             trusted_signers=self.trusted_signers,
@@ -669,6 +778,8 @@ class ArmigerDHTRSIEngine:
             current_seq=self.current_seq,
             trusted_pq_signers=eff_pq_signers,
             require_pq=require_pq_flag,
+            asn_verifier=asn_verifier,
+            verified_asn_quorum=asns if q_ok else None,
             bootstrap_checkpoint_seq=bootstrap_checkpoint_seq,
         )
         if not ok:
@@ -731,13 +842,6 @@ class ArmigerDHTRSIEngine:
                 baseline_metrics = release_envelope.authenticated_baseline.to_metrics_dict()
 
         # 3. Verify K-of-N distinct-ASN Sybil quorum
-        q_ok, q_reason, asns = SybilQuorumVerifier.verify_quorum(
-            attestations=attestations,
-            target_hash=manifest.bundle_sha256,
-            min_distinct_asns=max(self.min_distinct_asns, manifest.min_asn_quorum),
-            asn_verifier=asn_verifier,
-            require_authoritative_asn=require_authoritative_asn,
-        )
         if not q_ok:
             return False, f"sybil_quorum_failed:{q_reason}", None
 

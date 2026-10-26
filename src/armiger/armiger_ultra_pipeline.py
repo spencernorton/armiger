@@ -1316,18 +1316,79 @@ class ArmigerUltraPipeline:
     # -----------------------------------------------------------------
 
     @staticmethod
-    def _resolve_default_runtime_cache_dir() -> Path:
+    def _ensure_private_cache_dir(cand: Path) -> Path:
+        cand.mkdir(parents=True, exist_ok=True, mode=0o700)
+        if cand.is_symlink():
+            raise PermissionError(f"Runtime cache directory must not be a symlink: {cand}")
+        st = cand.stat()
+        uid = getattr(os, "getuid", lambda: -1)()
+        if uid >= 0 and st.st_uid != uid:
+            raise PermissionError(f"Runtime cache directory {cand} is not owned by current uid {uid}")
+        try:
+            os.chmod(cand, 0o700)
+        except OSError:
+            pass
+        return cand.resolve()
+
+    @classmethod
+    def _resolve_default_runtime_cache_dir(cls) -> Path:
         env_dir = os.environ.get("ARMIGER_RUNTIME_CACHE_DIR", "").strip()
         if env_dir:
-            return Path(env_dir).expanduser().resolve()
-        tmp_cand = Path("/tmp/armiger-live-models")
+            return cls._ensure_private_cache_dir(Path(env_dir).expanduser())
+        uid = getattr(os, "getuid", lambda: 0)()
+        tmp_cand = Path(f"/tmp/armiger-live-models-{uid}")
         try:
-            tmp_cand.mkdir(parents=True, exist_ok=True)
-            return tmp_cand
+            return cls._ensure_private_cache_dir(tmp_cand)
         except OSError:
             fallback = Path.home() / ".cache" / "armiger" / "live"
-            fallback.mkdir(parents=True, exist_ok=True)
-            return fallback
+            return cls._ensure_private_cache_dir(fallback)
+
+    def _overlay_tier_slug(self) -> str:
+        return "int8" if self.variant in ("int8", "cpu", "armiger") else "ultra"
+
+    def _resolve_release_channel(
+        self,
+        release_pubkey_hex: Optional[str] = None,
+        salt: Optional[Union[bytes, str]] = None,
+    ) -> Tuple[str, bytes]:
+        try:
+            from verify_dht import DEFAULT_RELEASE_PUBKEY_HEX
+        except ImportError:
+            from armiger.verify_dht import DEFAULT_RELEASE_PUBKEY_HEX
+        eff_pubkey = (
+            release_pubkey_hex
+            or os.environ.get("ARMIGER_RELEASE_PUBKEY_HEX", "").strip()
+            or DEFAULT_RELEASE_PUBKEY_HEX
+        ).lower()
+        default_tier_salt = (
+            "armiger:weights:int8"
+            if self.variant in ("int8", "cpu", "armiger")
+            else "armiger:weights:ultra"
+        )
+        eff_salt_raw = (
+            salt
+            if salt is not None
+            else (os.environ.get("ARMIGER_RELEASE_SALT", "").strip() or default_tier_salt)
+        )
+        eff_salt = eff_salt_raw.encode("utf-8") if isinstance(eff_salt_raw, str) else bytes(eff_salt_raw)
+        return eff_pubkey, eff_salt
+
+    def _overlay_channel_slug(
+        self,
+        release_pubkey_hex: Optional[str] = None,
+        salt: Optional[Union[bytes, str]] = None,
+    ) -> str:
+        eff_pubkey, eff_salt = self._resolve_release_channel(release_pubkey_hex, salt)
+        return hashlib.sha256(eff_pubkey.encode("ascii") + b"|" + eff_salt).hexdigest()[:12]
+
+    def _overlay_state_path(
+        self,
+        release_pubkey_hex: Optional[str] = None,
+        salt: Optional[Union[bytes, str]] = None,
+    ) -> Path:
+        tier_slug = self._overlay_tier_slug()
+        chan_slug = self._overlay_channel_slug(release_pubkey_hex, salt)
+        return self.runtime_cache_dir / f"dht_overlay_state_{tier_slug}_{chan_slug}.json" 
 
     def _compute_directory_merkle_root(self, target_dir: Path) -> str:
         weight_names = ["calibration.json", "vocab.json", "config.json", "armiger.int8.onnx"]
@@ -1432,7 +1493,7 @@ class ArmigerUltraPipeline:
             else ""
         )
         self.runtime_cache_dir: Path = (
-            Path(runtime_cache_dir).expanduser().resolve()
+            self._ensure_private_cache_dir(Path(runtime_cache_dir).expanduser())
             if runtime_cache_dir is not None
             else self._resolve_default_runtime_cache_dir()
         )
@@ -2319,30 +2380,158 @@ class ArmigerUltraPipeline:
 
     def _try_restore_persisted_overlay(self) -> None:
         """Restore a previously verified DHT live overlay from `self.runtime_cache_dir` on startup if newer than baked artifacts."""
-        ov_state_path = self.runtime_cache_dir / "dht_overlay_state.json"
-        if not ov_state_path.is_file():
-            return
         try:
+            try:
+                from oci_dht_seeder import _verify_bep44, bep44_signing_buffer
+                from oci_sqlite_catalog import bdecode, build_torrent_bundle
+            except ImportError:
+                from armiger.oci_dht_seeder import _verify_bep44, bep44_signing_buffer
+                from armiger.oci_sqlite_catalog import bdecode, build_torrent_bundle
+
+            self._ensure_private_cache_dir(self.runtime_cache_dir)
+            ov_state_path = self._overlay_state_path()
+            if not ov_state_path.is_file():
+                legacy_path = self.runtime_cache_dir / "dht_overlay_state.json"
+                if not legacy_path.is_file():
+                    return
+                ov_state_path = legacy_path
+            if ov_state_path.is_symlink():
+                raise PermissionError("Overlay state file must not be a symlink")
             ov_meta = json.loads(ov_state_path.read_text(encoding="utf-8"))
-            ov_seq = int(ov_meta.get("active_seq", 0))
-            ov_dir = Path(str(ov_meta.get("overlay_dir", "")))
-            if ov_seq <= int(self.active_seq) or not ov_dir.is_dir():
+            if not isinstance(ov_meta, dict):
                 return
-            if (ov_dir / "calibration.json").is_file():
-                self.calibrator = ArmigerCalibrator(ov_dir / "calibration.json")
+            ov_seq = int(ov_meta.get("active_seq", 0))
+            if ov_seq <= int(self.active_seq):
+                return
+            tier_slug = self._overlay_tier_slug()
+            if ov_meta.get("variant") not in (None, tier_slug):
+                return
+            eff_pubkey, eff_salt = self._resolve_release_channel()
+            if ov_meta.get("release_pubkey_hex") != eff_pubkey or ov_meta.get("salt_hex") != eff_salt.hex():
+                return
+
+            raw_ov_dir = Path(str(ov_meta.get("overlay_dir", "")))
+            if raw_ov_dir.is_symlink() or not raw_ov_dir.is_dir():
+                return
+            ov_dir = raw_ov_dir.resolve()
+            cache_root = self.runtime_cache_dir.resolve()
+            if not str(ov_dir).startswith(str(cache_root) + os.sep):
+                raise PermissionError("Overlay directory outside runtime_cache_dir")
+
+            pointer = ov_meta.get("pointer")
+            file_hashes = ov_meta.get("file_sha256")
+            expected_merkle = str(ov_meta.get("active_bundle_merkle_root") or "")
+            if not isinstance(pointer, dict) or not isinstance(file_hashes, dict) or not file_hashes or not expected_merkle:
+                raise ValueError("Overlay state missing authenticated pointer or file hashes")
+
+            sig_bytes = bytes.fromhex(str(pointer.get("signature_hex", "")))
+            val_benc = bytes.fromhex(str(pointer.get("value_bencoded_hex", "")))
+            sig_buf = bep44_signing_buffer(v=val_benc, seq=ov_seq, salt=eff_salt)
+            if not _verify_bep44(bytes.fromhex(eff_pubkey), sig_bytes, (sig_buf,)):
+                raise ValueError("Persisted overlay BEP-44 signature verification failed")
+            decoded_v = bdecode(val_benc)
+            if not isinstance(decoded_v, dict):
+                raise ValueError("Persisted overlay BEP-44 value is not a dict")
+            signed_merkle = decoded_v.get(b"merkle_root", b"").decode("ascii", errors="ignore")
+            signed_seq = int(decoded_v.get(b"seq", ov_seq))
+            if signed_seq != ov_seq or signed_merkle != expected_merkle:
+                raise ValueError("Persisted overlay pointer metadata mismatch")
+
+            verified_files_map: Dict[str, bytes] = {}
+            for fname, exp_sha in file_hashes.items():
+                fpath = ov_dir / Path(str(fname)).name
+                if fpath.is_symlink() or not fpath.is_file():
+                    raise ValueError(f"Missing overlay file: {fname}")
+                fbytes = fpath.read_bytes()
+                if hashlib.sha256(fbytes).hexdigest() != str(exp_sha):
+                    raise ValueError(f"Overlay file SHA-256 mismatch: {fname}")
+                if str(fname).endswith(".json"):
+                    ok_fmt, r_fmt = SafeFormatValidator.validate(fbytes, "json")
+                    if not ok_fmt:
+                        raise ValueError(f"Unsafe JSON in overlay: {fname}:{r_fmt}")
+                elif str(fname).endswith(".onnx"):
+                    ok_fmt, r_fmt = SafeFormatValidator.validate(fbytes, "onnx")
+                    if not ok_fmt:
+                        raise ValueError(f"Unsafe ONNX in overlay: {fname}:{r_fmt}")
+                verified_files_map[str(fname)] = fbytes
+
+            recomputed = build_torrent_bundle(
+                bundle_name=f"armiger-weights-{self.variant}-v2.1.0",
+                files_map=verified_files_map,
+                pubkey_32=bytes.fromhex(eff_pubkey),
+                salt=eff_salt,
+                seq=ov_seq,
+            )
+            if recomputed.merkle_root_hex != expected_merkle:
+                raise ValueError("Overlay Merkle root mismatch")
+
+            cand_config = dict(self.config)
             if (ov_dir / "config.json").is_file():
                 cfg_obj = json.loads((ov_dir / "config.json").read_text(encoding="utf-8"))
-                if isinstance(cfg_obj, dict):
-                    self.config = cfg_obj
-            if self.onnx_session is not None:
-                loaded_sess, loaded_path = self._load_onnx_session(ov_dir, self.variant, allow_synthetic_fallback=False)
+                if not isinstance(cfg_obj, dict):
+                    raise ValueError("Overlay config.json not dict")
+                cand_config = cfg_obj
+
+            cand_calibrator = self.calibrator
+            if (ov_dir / "calibration.json").is_file():
+                cand_calibrator = ArmigerCalibrator(ov_dir / "calibration.json")
+
+            cand_onnx_session = self.onnx_session
+            cand_onnx_path = self.onnx_path
+            cand_onnx_out_names = list(self._onnx_output_names)
+            cand_onnx_sha = self._onnx_model_sha256
+            has_onnx = any(k.endswith(".onnx") for k in verified_files_map)
+            if has_onnx or self.onnx_session is not None:
+                loaded_sess, loaded_path = self._load_onnx_session(
+                    ov_dir,
+                    self.variant,
+                    allow_synthetic_fallback=bool(self.allow_synthetic_fallback and self.onnx_session is None),
+                )
                 if loaded_sess is not None and loaded_path is not None:
-                    self.onnx_session = loaded_sess
-                    self.onnx_path = loaded_path
-                    self._onnx_output_names = [o.name for o in loaded_sess.get_outputs()]
-                    self._onnx_model_sha256 = hashlib.sha256(loaded_path.read_bytes()).hexdigest()
+                    out_names = [o.name for o in loaded_sess.get_outputs()]
+                    missing_heads = [h for h in NEURAL_HEAD_CLASSES if h not in out_names]
+                    if missing_heads:
+                        raise ValueError(f"Overlay ONNX missing heads: {missing_heads}")
+                    cand_onnx_session = loaded_sess
+                    cand_onnx_path = loaded_path
+                    cand_onnx_out_names = out_names
+                    cand_onnx_sha = hashlib.sha256(loaded_path.read_bytes()).hexdigest()
+                elif not (self.allow_synthetic_fallback and self.onnx_session is None):
+                    raise ValueError("Overlay ONNX session failed to load")
+
+            cand_swarm_adapter = self.swarm_adapter
+            if "swarm_adapter.pt" in verified_files_map and (ov_dir / "swarm_adapter.pt").is_file():
+                cand_swarm_adapter = SwarmResidualAdapter.from_pretrained(ov_dir / "swarm_adapter.pt")
+
+            cand_catalog = self._zero_cue_catalog
+            cand_catalog_path = self._catalog_json_path
+            if (ov_dir / "validated_zero_cue_catalog.json").is_file():
+                cand_catalog_path = ov_dir / "validated_zero_cue_catalog.json"
+                if self._zero_cue_catalog is not None:
+                    cand_catalog = ZeroCueCatalogPlugin(cand_catalog_path)
+
+            # Commit restored state atomically
+            self.config = cand_config
+            self.calibrator = cand_calibrator
+            mondrian = self.config.get("mondrian_thresholds") or self.calibrator.mondrian or {}
+            if "adult" in mondrian:
+                self.safety_gate.adult_threshold = float(mondrian["adult"])
+            if "junk" in mondrian:
+                self.safety_gate.junk_threshold = float(mondrian["junk"])
+            if "owner_scope" in mondrian:
+                self.safety_gate.scope_threshold = float(mondrian["owner_scope"])
+            self.onnx_session = cand_onnx_session
+            self.onnx_path = cand_onnx_path
+            self._onnx_output_names = cand_onnx_out_names
+            self._onnx_model_sha256 = cand_onnx_sha
+            self._bucket_cache = ()
+            self.swarm_adapter = cand_swarm_adapter
+            self._zero_cue_catalog = cand_catalog
+            self._catalog_json_path = cand_catalog_path
             self.active_seq = ov_seq
-            self.active_bundle_merkle_root = str(ov_meta.get("active_bundle_merkle_root") or self._compute_directory_merkle_root(ov_dir))
+            self.rsi_engine.current_seq = ov_seq
+            self.dht_updater.current_seq = max(int(self.dht_updater.current_seq), ov_seq)
+            self.active_bundle_merkle_root = expected_merkle
             self.model_source = "dht_live_overlay"
             self.active_overlay_dir = ov_dir
         except Exception as exc:
@@ -2384,6 +2573,32 @@ class ArmigerUltraPipeline:
         return self.rsi_engine.dispatch_contribution_udp(signed_bundle, **kwargs)
 
     def check_and_apply_dht_release_update(
+        self,
+        *,
+        release_pubkey_hex: Optional[str] = None,
+        salt: Optional[Union[bytes, str]] = None,
+        dht_nodes: Optional[Sequence[Tuple[str, int]]] = None,
+        explicit_peers: Optional[Sequence[Tuple[str, int]]] = None,
+        webseed_urls: Optional[Sequence[str]] = None,
+        expected_info_bytes: Optional[bytes] = None,
+        allow_webseed_fallback: bool = True,
+        timeout: float = 4.0,
+        p2p_budget_sec: Optional[float] = None,
+    ) -> Dict[str, Any]:
+        with self._dht_poll_mutex:
+            return self._check_and_apply_dht_release_update_locked(
+                release_pubkey_hex=release_pubkey_hex,
+                salt=salt,
+                dht_nodes=dht_nodes,
+                explicit_peers=explicit_peers,
+                webseed_urls=webseed_urls,
+                expected_info_bytes=expected_info_bytes,
+                allow_webseed_fallback=allow_webseed_fallback,
+                timeout=timeout,
+                p2p_budget_sec=p2p_budget_sec,
+            )
+
+    def _check_and_apply_dht_release_update_locked(
         self,
         *,
         release_pubkey_hex: Optional[str] = None,
@@ -2560,12 +2775,15 @@ class ArmigerUltraPipeline:
             }
 
         # Write atomically into writable overlay staging directory (never mutating read-only /models)
-        self.runtime_cache_dir.mkdir(parents=True, exist_ok=True)
-        stage_dir = self.runtime_cache_dir / f".stage_seq_{remote_seq}_{os.getpid()}_{int(time.time() * 1000)}"
-        final_dir = self.runtime_cache_dir / f"seq_{remote_seq}"
+        self._ensure_private_cache_dir(self.runtime_cache_dir)
+        merkle_hex_full = str(receipt.get("merkle_root_sha256") or recomputed_bundle.merkle_root_hex)
+        tier_slug = self._overlay_tier_slug()
+        chan_slug = self._overlay_channel_slug(eff_pubkey, eff_salt)
+        stage_dir = self.runtime_cache_dir / f".stage_seq_{remote_seq}_{tier_slug}_{chan_slug}_{os.getpid()}_{int(time.time() * 1000)}"
+        final_dir = self.runtime_cache_dir / f"seq_{remote_seq}_{tier_slug}_{chan_slug}_{merkle_hex_full[:12]}"
         if stage_dir.exists():
             _shutil.rmtree(stage_dir, ignore_errors=True)
-        stage_dir.mkdir(parents=True, exist_ok=True)
+        stage_dir.mkdir(parents=True, exist_ok=True, mode=0o700)
 
         base_source_dir = self.active_overlay_dir if self.active_overlay_dir is not None else self.model_dir
         try:
@@ -2670,6 +2888,8 @@ class ArmigerUltraPipeline:
 
             # Atomic hot-swap + canary verification under _dht_update_lock
             with self._dht_update_lock:
+                if self._auto_update_stop_event.is_set() and threading.current_thread() is self._auto_update_thread:
+                    raise DHTUpdateRejected("poller_stopped_before_commit")
                 if remote_seq <= int(self.active_seq):
                     raise DHTUpdateRejected(f"stale_remote_seq_under_lock:{remote_seq}<={self.active_seq}")
                 snap = self.snapshot_dht_state()
@@ -2738,11 +2958,19 @@ class ArmigerUltraPipeline:
                         "model_source": self.model_source,
                         "overlay_dir": str(final_dir),
                         "base_model_dir": str(self.model_dir),
+                        "variant": tier_slug,
+                        "release_pubkey_hex": eff_pubkey.lower(),
+                        "salt_hex": eff_salt.hex(),
+                        "pointer": dict(receipt.get("pointer") or {}),
+                        "file_sha256": {k: hashlib.sha256(v).hexdigest() for k, v in files_map.items()},
                         "updated_at_ts": int(time.time()),
                     }
-                    ov_tmp = self.runtime_cache_dir / f".dht_overlay_state.{os.getpid()}.tmp"
-                    ov_tmp.write_text(json.dumps(ov_meta, indent=2, sort_keys=True), encoding="utf-8")
-                    os.replace(ov_tmp, self.runtime_cache_dir / "dht_overlay_state.json")
+                    ov_json_str = json.dumps(ov_meta, indent=2, sort_keys=True)
+                    ov_state_file = self._overlay_state_path(eff_pubkey, eff_salt)
+                    for target_state_file in (ov_state_file, self.runtime_cache_dir / "dht_overlay_state.json"):
+                        ov_tmp = self.runtime_cache_dir / f".{target_state_file.name}.{os.getpid()}.tmp"
+                        ov_tmp.write_text(ov_json_str, encoding="utf-8")
+                        os.replace(ov_tmp, target_state_file)
                 except Exception as inner_exc:
                     self._restore_dht_state(snap)
                     self.active_seq = prev_seq
@@ -2817,18 +3045,22 @@ class ArmigerUltraPipeline:
         )
         self._auto_update_thread.start()
 
-    def stop_auto_update_poller(self) -> None:
+    def stop_auto_update_poller(self, timeout: float = 5.0) -> None:
         """Stop the background BEP-44/46 auto-update poller thread cleanly."""
         self._auto_update_stop_event.set()
-        if self._auto_update_thread is not None and self._auto_update_thread.is_alive():
-            self._auto_update_thread.join(timeout=2.0)
-        self._auto_update_thread = None
+        t = self._auto_update_thread
+        if t is not None and t.is_alive() and t is not threading.current_thread():
+            t.join(timeout=max(0.1, float(timeout)))
+        if t is None or not t.is_alive():
+            self._auto_update_thread = None
 
     def close(self) -> None:
         """Close background poller and underlying SQLite shard database connections cleanly."""
         self.stop_auto_update_poller()
-        if self.dht_db_sync is not None:
-            self.dht_db_sync.close()
+        with self._dht_poll_mutex:
+            with self._dht_update_lock:
+                if self.dht_db_sync is not None:
+                    self.dht_db_sync.close()
 
 
 

@@ -524,6 +524,33 @@ class TestDHTAutoUpdateAndContributionLoop(unittest.TestCase):
                 self.assertFalse(res_replay["dispatched"])
                 self.assertEqual(harness.dht_node.inbound_contributions_accepted, 1)
                 self.assertGreaterEqual(harness.dht_node.inbound_contributions_rejected, 1)
+
+                # Transient journal persistence failure must not poison replay state on retry
+                signed_delta_11 = pipeline_opt_in.export_signed_delta_bundle(
+                    delta_w=[0.01, -0.02, 0.01, 0.0, -0.01, 0.02, -0.01, 0.01],
+                    delta_b=[0.005, -0.005],
+                    n_samples=30,
+                    seq=11,
+                )
+                assert signed_delta_11 is not None
+                orig_persist = harness.dht_node._persist_accepted_contribution
+                harness.dht_node._persist_accepted_contribution = lambda *a, **kw: False
+                try:
+                    res_fail_persist = pipeline_opt_in.dispatch_opt_in_contribution(
+                        signed_delta_11,
+                        dht_nodes=[("127.0.0.1", dht_port)],
+                        discover_collectors=False,
+                    )
+                    self.assertFalse(res_fail_persist["dispatched"])
+                finally:
+                    harness.dht_node._persist_accepted_contribution = orig_persist
+                res_retry_persist = pipeline_opt_in.dispatch_opt_in_contribution(
+                    signed_delta_11,
+                    dht_nodes=[("127.0.0.1", dht_port)],
+                    discover_collectors=False,
+                )
+                self.assertTrue(res_retry_persist["dispatched"])
+                self.assertEqual(harness.dht_node.inbound_contributions_accepted, 2)
             finally:
                 pipeline_opt_in.close()
         finally:

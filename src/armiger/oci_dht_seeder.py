@@ -1098,25 +1098,6 @@ class GatedBEP44UDPNode:
         if not _verify_bep44(pubkey, sig, candidates):
             _reject(206, b"Invalid signature")
             return
-        parsed_delta: Optional[Dict[str, Any]] = None
-        if is_rsi_delta:
-            if self.rsi_collector is None:
-                _reject(202, b"RSI contribution collector unavailable")
-                return
-            v_for_rsi = bytes(v) if isinstance(v, (bytes, bytearray)) else encoded_v
-            ok_rsi, reason_rsi, parsed_delta = self.rsi_collector.ingest_signed_delta_bundle(
-                {
-                    "v": v_for_rsi,
-                    "seq": int(seq),
-                    "salt": salt,
-                    "k": pubkey,
-                    "sig": sig,
-                }
-            )
-            if not ok_rsi:
-                err_code = 302 if ("stale_or_replayed" in reason_rsi or "replayed_" in reason_rsi) else 203
-                _reject(err_code, reason_rsi.encode("utf-8", errors="ignore")[:120] or b"RSI delta rejected")
-                return
         target = compute_bep44_target(pubkey, salt)
         existing = self._store.get(target)
         if existing is None and len(self._store) >= self.MAX_MUTABLE_ITEMS:
@@ -1139,9 +1120,37 @@ class GatedBEP44UDPNode:
                     return
                 _reject(302, b"Conflicting value at identical sequence number")
                 return
+        parsed_delta: Optional[Dict[str, Any]] = None
         if is_rsi_delta:
+            if self.rsi_collector is None:
+                _reject(202, b"RSI contribution collector unavailable")
+                return
+            v_for_rsi = bytes(v) if isinstance(v, (bytes, bytearray)) else encoded_v
+            delta_envelope = {
+                "v": v_for_rsi,
+                "seq": int(seq),
+                "salt": salt,
+                "k": pubkey,
+                "sig": sig,
+            }
+            ok_rsi, reason_rsi, parsed_delta = self.rsi_collector.ingest_signed_delta_bundle(
+                delta_envelope,
+                commit=False,
+            )
+            if not ok_rsi:
+                err_code = 302 if ("stale_or_replayed" in reason_rsi or "replayed_" in reason_rsi) else 203
+                _reject(err_code, reason_rsi.encode("utf-8", errors="ignore")[:120] or b"RSI delta rejected")
+                return
             if not self._persist_accepted_contribution(target, pubkey, salt, int(seq), sig, parsed_delta):
                 _reject(202, b"Contribution journal persistence failed")
+                return
+            ok_commit, reason_commit, parsed_delta = self.rsi_collector.ingest_signed_delta_bundle(
+                delta_envelope,
+                commit=True,
+            )
+            if not ok_commit:
+                err_code = 302 if ("stale_or_replayed" in reason_commit or "replayed_" in reason_commit) else 203
+                _reject(err_code, reason_commit.encode("utf-8", errors="ignore")[:120] or b"RSI delta rejected")
                 return
         self._store[target] = {
             "v": v,
