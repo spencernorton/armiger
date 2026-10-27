@@ -15,7 +15,7 @@ Armiger helps Bitmagnet and Rats Search label torrents by type and language, usi
 
 ## Choose your setup
 
-1. **[Bitmagnet + Armiger Ultra](examples/bitmagnet/README.md)** — classify items and add searchable tags in Bitmagnet.
+1. **[Bitmagnet + Armiger Ultra](examples/bitmagnet/README.md)** — set up Bitmagnet + Armiger Ultra, filter via the Torznab proxy (`:8097`), browse `armiger-*` tags, and configure all environment variables.
 2. **[Rats Search + Armiger Ultra](examples/rats-search/README.md)** — classify items in Rats Search.
 3. **[Standalone Armiger Ultra](docs/quickstart.md)** — run the ready-made Armiger container on its own.
 

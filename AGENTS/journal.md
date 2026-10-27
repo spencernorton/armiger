@@ -1,3 +1,10 @@
+## 2026-10-26 — Document all Bitmagnet + Armiger environment variables, setup options, and usage workflows
+
+- **Branch:** docs/bitmagnet-env-and-usage-guide
+- **What changed:** Expand `examples/bitmagnet/README.md` and `docs/bitmagnet-configuration.md` to document every environment variable across the Bitmagnet Compose stack, `bitmagnet_connector.py`, and `ArmigerUltraPipeline` (including stack ports/credentials, `DHT_CRAWLER_SCALING_FACTOR` + 60-second `persistTorrents` polling math, Torznab pre-grab filter flags, index pruning, model/catalog settings, and all `v3.3.0+` BEP 44/46 auto-update and opt-in contribution variables). Add clear step-by-step instructions for Option A (two-line OCI `include`), Option B (full `docker-compose.yml` / Portainer Stacks / `.env`), and Option C (attaching `armiger-ultra` to an existing Bitmagnet installation), plus usage instructions for `armiger-*` tags in Bitmagnet (`:3333`), Prowlarr/`*Arr` Torznab filtering (`:8097/torznab`), and HTTP health/classification endpoints (`:8096`). Wire `${VAR:-default}` interpolation in `examples/bitmagnet/docker-compose.yml` and expand `examples/bitmagnet/compose.override.example.yaml`.
+- **Validation:** Verified all environment variable names and defaults against `examples/bitmagnet/docker-compose.yml`, `bitmagnet_connector.py` (`v1.2.3`), and `src/armiger/` (`v3.3.2`), ran `docker compose config --quiet`, and ran `pytest -q`.
+- **Follow-ups:** None.
+
 ## 2026-10-26 — Release model bundle 3.3.0 (R13.3), updated evaluation charts, and configurable DHT auto-update
 
 - **Branch:** release/v3.3.2-r13-3

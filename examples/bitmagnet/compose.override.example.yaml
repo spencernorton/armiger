@@ -2,19 +2,33 @@
 # Apply with: docker compose config --quiet && docker compose up -d
 # Complete reference: ../../docs/bitmagnet-configuration.md
 services:
+  bitmagnet:
+    environment:
+      # Optional TMDB API key for Bitmagnet's built-in metadata matching.
+      TMDB_API_KEY: ""
+      # Bitmagnet DHT crawl concurrency (default 10; ~300-450 torrents/min).
+      DHT_CRAWLER_SCALING_FACTOR: "10"
+
   armiger-ultra:
     environment:
-      # Polling: the shipped defaults are 5 seconds and 100 items.
+      # Connector mode: both (poller + HTTP/Torznab), http, or poll.
+      ARMIGER_CONNECTOR_MODE: "both"
+      # Polling: 5s interval and 100-item batch drain up to 1,200 torrents/min across 60s Bitmagnet flushes.
       BITMAGNET_POLL_SECONDS: "5"
       BITMAGNET_BATCH_SIZE: "100"
-      # Preload the catalog. False defers loading until first use.
+      # Model & catalog: ultra (FP32, bundled) or int8 (downloads INT8 bundle if missing).
+      ARMIGER_VARIANT: "ultra"
       ARMIGER_USE_ZERO_CUE_CATALOG: "true"
-      # Automatically poll the DHT for signed catalog and calibration updates.
-      ARMIGER_DHT_AUTO_UPDATE: "true"
-      # These two settings filter requests made through Armiger's Torznab proxy.
+      # Torznab pre-grab filter settings (apply to requests on :8097/torznab).
       ARMIGER_REQUIRE_ENGLISH_AUDIO: "false"
       ARMIGER_ALLOW_ENGLISH_SUBS: "true"
       ARMIGER_REJECT_DEAD_SWARMS: "false"
-      # True removes matching entries from Bitmagnet's index.
+      ARMIGER_ENABLE_TORZNAB_PROXY: "true"
+      # Index pruning: when true, deletes matching records from Bitmagnet's database.
       ARMIGER_PRUNE_MALWARE: "false"
       ARMIGER_PRUNE_DEAD_SWARMS: "false"
+      # Distributed model updates (BEP 44/46) and opt-in contribution sharing.
+      ARMIGER_DHT_AUTO_UPDATE: "true"
+      ARMIGER_DHT_POLL_INTERVAL_SEC: "14400"
+      ARMIGER_DHT_SHARE_OPT_IN: "false"
+      ARMIGER_DHT_RSI_MODE: "pull_only"
