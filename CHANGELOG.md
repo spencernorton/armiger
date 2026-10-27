@@ -1,5 +1,9 @@
 # Changelog
 
+## 3.3.3
+
+- Pin `NorviTech/armiger-ultra` revision `18ef5418b3858ee4f70c137540febb5343b8754e` with canonical BEP 46 `.torrent` metadata and `zero_cue_catalog.sqlite.zlib` webseed assets, fix package-qualified import and webseed transfer budget in `verify_dht.py`, accept unsorted KRPC framing keys (`bdecode_krpc`) from Mainline `libtorrent` routers, and prioritize responsive Mainline DHT bootstrap routers.
+
 ## 3.3.2
 
 - Update the pinned model bundle to `3.3.0` (`v3.0-gold-r13.3` on `NorviTech/armiger-ultra`), refresh the canonical evaluation and overview charts, publish `ghcr.io/spencernorton/armiger-ultra` tags, and expose `ARMIGER_DHT_AUTO_UPDATE` in the Docker and Compose setups.

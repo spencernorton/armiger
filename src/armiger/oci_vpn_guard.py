@@ -42,7 +42,7 @@ except ImportError:
 DEFAULT_RELEASE_PUBKEY_HEX = "3599362bd52dad8b89398b904d3081c2cb483d13376f7ffb49f3748208731e76"
 DEFAULT_RELEASE_SALT = "armiger:weights:ultra"
 
-HF_BASE_URL = "https://huggingface.co/NorviTech/armiger-ultra/resolve/cd8a5fbed4245557999ce3aafd168a568edd7fdd"
+HF_BASE_URL = "https://huggingface.co/NorviTech/armiger-ultra/resolve/18ef5418b3858ee4f70c137540febb5343b8754e"
 ARTIFACT_MANIFEST: Dict[str, Dict[str, Any]] = {
     "armiger.int8.onnx": {
         "sha256": "c0e96936038988c7465b7fe041c4dc3c92df5a8cb4f56c2666271cd4d3e79420",
@@ -75,8 +75,8 @@ ARTIFACT_MANIFEST: Dict[str, Dict[str, Any]] = {
         "url": f"{HF_BASE_URL}/vocab.json",
     },
     "config.json": {
-        "sha256": "047286ecbccd7360a597cf9eff21a688f9f842a427c1e1f877b367d3ce42e7eb",
-        "size_bytes": 5629,
+        "sha256": "da965d165bc45b5dafb2ae2fcb45781b1c37cebd9fc3026604c12d060d6e523f",
+        "size_bytes": 5201,
         "tiers": ("int8", "ultra"),
         "url": f"{HF_BASE_URL}/config.json",
     },
@@ -124,6 +124,7 @@ def _bdecode_at(
     max_depth: int = 32,
     max_items: int = 4096,
     counter: Optional[List[int]] = None,
+    allow_unsorted_keys: bool = False,
 ) -> Tuple[Any, int]:
     if depth > max_depth:
         raise ValueError("Bencode nesting limit exceeded")
@@ -152,14 +153,14 @@ def _bdecode_at(
             count_here += 1
             if count_here > max_items:
                 raise ValueError("Bencode container item limit exceeded")
-            item, idx = _bdecode_at(data, idx, depth + 1, max_depth=max_depth, max_items=max_items, counter=counter)
+            item, idx = _bdecode_at(data, idx, depth + 1, max_depth=max_depth, max_items=max_items, counter=counter, allow_unsorted_keys=allow_unsorted_keys)
             if ch == b"l":
                 arr.append(item)
             else:
-                if not isinstance(item, bytes) or (prev is not None and item <= prev):
+                if not isinstance(item, bytes) or item in out or (not allow_unsorted_keys and prev is not None and item <= prev):
                     raise ValueError("Noncanonical or duplicate dictionary key")
                 prev = item
-                value, idx = _bdecode_at(data, idx, depth + 1, max_depth=max_depth, max_items=max_items, counter=counter)
+                value, idx = _bdecode_at(data, idx, depth + 1, max_depth=max_depth, max_items=max_items, counter=counter, allow_unsorted_keys=allow_unsorted_keys)
                 out[item] = value
         return (arr if ch == b"l" else out), idx + 1
     if b"0" <= ch <= b"9":
@@ -177,11 +178,11 @@ def _bdecode_at(
     raise ValueError("Invalid bencode token")
 
 
-def bdecode(data: bytes, *, max_bytes: int = 1048576, max_depth: int = 32, max_items: int = 4096) -> Any:
+def bdecode(data: bytes, *, max_bytes: int = 1048576, max_depth: int = 32, max_items: int = 4096, allow_unsorted_keys: bool = False) -> Any:
     """Decode canonical bencoded bytes with strict depth, item, and byte limits."""
     if not isinstance(data, (bytes, bytearray)) or not data or len(data) > max_bytes:
         raise ValueError("Empty, oversized, or non-bytes input to bdecode")
-    val, idx = _bdecode_at(bytes(data), 0, 0, max_depth=max_depth, max_items=max_items, counter=[0])
+    val, idx = _bdecode_at(bytes(data), 0, 0, max_depth=max_depth, max_items=max_items, counter=[0], allow_unsorted_keys=allow_unsorted_keys)
     if idx != len(data):
         raise ValueError("Trailing bytes after bencoded payload")
     return val
@@ -195,7 +196,7 @@ def bdecode_krpc(
     max_items: int = 128,
 ) -> Any:
     """Decode an untrusted UDP KRPC datagram with strict 8 KiB, depth-8, 128-item limits."""
-    return bdecode(data, max_bytes=max_bytes, max_depth=max_depth, max_items=max_items)
+    return bdecode(data, max_bytes=max_bytes, max_depth=max_depth, max_items=max_items, allow_unsorted_keys=True)
 
 
 _CRC32C_TABLE: Optional[List[int]] = None

@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "source_manifest": "benchmarks/CHARTS_MANIFEST.json",
-  "source_manifest_sha256": "5b8f8cf5236bc1d37c9ae5283df0f16d74f1239a6cccf12bab72c28fd2fc30b8",
+  "source_manifest_sha256": "f9c6ba860e105f2a6e3adc448f303d98e1de7ea2f02d05bb30115088013712a1",
   "renderer": "benchmarks/generate_readme_overview.py",
   "renderer_sha256": "0c4b1cba58563c8c463484da74182684360af5d27ed75bed4f1e7a330fd4d786",
   "image": "docs/assets/armiger_overview.png",
