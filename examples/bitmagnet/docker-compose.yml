@@ -5,7 +5,7 @@ services:
     environment:
       POSTGRES_DB: bitmagnet
       POSTGRES_USER: bitmagnet
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-armiger-local}
+      POSTGRES_PASSWORD: armiger-local
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -13,6 +13,7 @@ services:
       interval: 5s
       timeout: 5s
       retries: 20
+
   bitmagnet:
     image: ghcr.io/bitmagnet-io/bitmagnet:v0.10.0
     restart: unless-stopped
@@ -20,17 +21,18 @@ services:
       postgres:
         condition: service_healthy
     ports:
-      - '127.0.0.1:${BITMAGNET_HTTP_PORT:-3333}:3333'
-      - '${BITMAGNET_DHT_PORT:-3334}:3334/tcp'
-      - '${BITMAGNET_DHT_PORT:-3334}:3334/udp'
+      - '127.0.0.1:3333:3333'
+      - '3334:3334/tcp'
+      - '3334:3334/udp'
     environment:
       POSTGRES_HOST: postgres
       POSTGRES_NAME: bitmagnet
       POSTGRES_USER: bitmagnet
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-armiger-local}
-      TMDB_API_KEY: ${TMDB_API_KEY:-}
-      DHT_CRAWLER_SCALING_FACTOR: '${DHT_CRAWLER_SCALING_FACTOR:-10}'
+      POSTGRES_PASSWORD: armiger-local
+      TMDB_API_KEY: ''
+      DHT_CRAWLER_SCALING_FACTOR: '10'
     command: [worker, run, --keys=http_server, --keys=queue_server, --keys=dht_crawler]
+
   armiger-ultra:
     image: ghcr.io/spencernorton/armiger:3.3.2
     restart: unless-stopped
@@ -39,28 +41,29 @@ services:
       bitmagnet:
         condition: service_started
     ports:
-      - '127.0.0.1:${ARMIGER_HTTP_PORT:-8096}:8096'
-      - '127.0.0.1:${ARMIGER_PROXY_PORT:-8097}:8097'
+      - '127.0.0.1:8096:8096'
+      - '127.0.0.1:8097:8097'
     environment:
-      ARMIGER_CONNECTOR_MODE: ${ARMIGER_CONNECTOR_MODE:-both}
+      ARMIGER_CONNECTOR_MODE: both
       ARMIGER_CONNECTOR_HOST: 0.0.0.0
       ARMIGER_CONNECTOR_PORT: '8096'
       ARMIGER_PROXY_PORT: '8097'
-      ARMIGER_ENABLE_TORZNAB_PROXY: '${ARMIGER_ENABLE_TORZNAB_PROXY:-true}'
-      BITMAGNET_GRAPHQL_URL: ${BITMAGNET_GRAPHQL_URL:-http://bitmagnet:3333/graphql}
-      UPSTREAM_TORZNAB_URL: ${UPSTREAM_TORZNAB_URL:-http://bitmagnet:3333/torznab}
-      BITMAGNET_POLL_SECONDS: '${BITMAGNET_POLL_SECONDS:-5}'
-      BITMAGNET_BATCH_SIZE: '${BITMAGNET_BATCH_SIZE:-100}'
-      ARMIGER_VARIANT: ${ARMIGER_VARIANT:-ultra}
-      ARMIGER_USE_ZERO_CUE_CATALOG: '${ARMIGER_USE_ZERO_CUE_CATALOG:-true}'
-      ARMIGER_REQUIRE_ENGLISH_AUDIO: '${ARMIGER_REQUIRE_ENGLISH_AUDIO:-false}'
-      ARMIGER_ALLOW_ENGLISH_SUBS: '${ARMIGER_ALLOW_ENGLISH_SUBS:-true}'
-      ARMIGER_REJECT_DEAD_SWARMS: '${ARMIGER_REJECT_DEAD_SWARMS:-false}'
-      ARMIGER_PRUNE_MALWARE: '${ARMIGER_PRUNE_MALWARE:-false}'
-      ARMIGER_PRUNE_DEAD_SWARMS: '${ARMIGER_PRUNE_DEAD_SWARMS:-false}'
-      ARMIGER_DHT_AUTO_UPDATE: '${ARMIGER_DHT_AUTO_UPDATE:-true}'
-      ARMIGER_DHT_POLL_INTERVAL_SEC: '${ARMIGER_DHT_POLL_INTERVAL_SEC:-14400}'
-      ARMIGER_DHT_SHARE_OPT_IN: '${ARMIGER_DHT_SHARE_OPT_IN:-false}'
-      ARMIGER_DHT_RSI_MODE: ${ARMIGER_DHT_RSI_MODE:-pull_only}
+      ARMIGER_ENABLE_TORZNAB_PROXY: 'true'
+      BITMAGNET_GRAPHQL_URL: http://bitmagnet:3333/graphql
+      UPSTREAM_TORZNAB_URL: http://bitmagnet:3333/torznab
+      BITMAGNET_POLL_SECONDS: '5'
+      BITMAGNET_BATCH_SIZE: '100'
+      ARMIGER_VARIANT: ultra
+      ARMIGER_USE_ZERO_CUE_CATALOG: 'true'
+      ARMIGER_REQUIRE_ENGLISH_AUDIO: 'false'
+      ARMIGER_ALLOW_ENGLISH_SUBS: 'true'
+      ARMIGER_REJECT_DEAD_SWARMS: 'false'
+      ARMIGER_PRUNE_MALWARE: 'false'
+      ARMIGER_PRUNE_DEAD_SWARMS: 'false'
+      ARMIGER_DHT_AUTO_UPDATE: 'true'
+      ARMIGER_DHT_POLL_INTERVAL_SEC: '14400'
+      ARMIGER_DHT_SHARE_OPT_IN: 'false'
+      ARMIGER_DHT_RSI_MODE: pull_only
+
 volumes:
   postgres_data:
