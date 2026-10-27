@@ -42,23 +42,23 @@ except ImportError:
 DEFAULT_RELEASE_PUBKEY_HEX = "3599362bd52dad8b89398b904d3081c2cb483d13376f7ffb49f3748208731e76"
 DEFAULT_RELEASE_SALT = "armiger:weights:ultra"
 
-HF_BASE_URL = "https://huggingface.co/NorviTech/armiger-ultra/resolve/efa3810f94689373adc910615f9c5328c33a20f6"
+HF_BASE_URL = "https://huggingface.co/NorviTech/armiger-ultra/resolve/cd8a5fbed4245557999ce3aafd168a568edd7fdd"
 ARTIFACT_MANIFEST: Dict[str, Dict[str, Any]] = {
     "armiger.int8.onnx": {
-        "sha256": "aa509ff08a38d9f8187250860516cc0f218c604bbac8d3726c215bb558bc5588",
-        "size_bytes": 6664718,
+        "sha256": "c0e96936038988c7465b7fe041c4dc3c92df5a8cb4f56c2666271cd4d3e79420",
+        "size_bytes": 17599636,
         "tiers": ("int8", "ultra"),
         "url": f"{HF_BASE_URL}/armiger.int8.onnx",
     },
     "armiger_ultra.fp32.onnx": {
-        "sha256": "d092b49428dbca550d4099b168e231c35b0cc60c7632a60e55d0be63646317dc",
-        "size_bytes": 25387489,
+        "sha256": "6f94aef676e5bec4968378437769cfdc768fefcc6a21854b8319b33456ebd2ec",
+        "size_bytes": 33254585,
         "tiers": ("ultra",),
         "url": f"{HF_BASE_URL}/armiger_ultra.fp32.onnx",
     },
     "swarm_adapter.pt": {
-        "sha256": "74aa36c7701092d198a8238462c0b7a44a55f238ba26f6c506b984a83b1c0ca1",
-        "size_bytes": 316931,
+        "sha256": "4e4c7a2dd59fb91a234e6627e7ade35062f99268d3f05370432bb9f2a2f9b1c9",
+        "size_bytes": 144144,
         "tiers": ("ultra",),
         "url": f"{HF_BASE_URL}/swarm_adapter.pt",
     },
@@ -69,20 +69,20 @@ ARTIFACT_MANIFEST: Dict[str, Dict[str, Any]] = {
         "url": f"{HF_BASE_URL}/calibration.json",
     },
     "vocab.json": {
-        "sha256": "4368a1ebfe2fb3bf5fd7258d7fb8e7bf21134ff698ee90f6dc66c85f891e1a05",
-        "size_bytes": 3741,
+        "sha256": "c10afea430188e0207752e93bf0b340fbb585858684037c5134a477cbc0dd7bb",
+        "size_bytes": 39996,
         "tiers": ("int8", "ultra"),
         "url": f"{HF_BASE_URL}/vocab.json",
     },
     "config.json": {
-        "sha256": "f2dfa7c8901585c6718391c60efa8c327f00168ded250a581565675fed42a985",
-        "size_bytes": 5561,
+        "sha256": "047286ecbccd7360a597cf9eff21a688f9f842a427c1e1f877b367d3ce42e7eb",
+        "size_bytes": 5629,
         "tiers": ("int8", "ultra"),
         "url": f"{HF_BASE_URL}/config.json",
     },
     "validated_zero_cue_catalog.json": {
-        "sha256": "77a018fb4bd85c1b8dd4794bb21a4ab1a4c42cb75890f023c627e93fd0b45dc6",
-        "size_bytes": 44249032,
+        "sha256": "8a8b7a4ba97cb22c3aa1f75ab33762052deb09580df464b1eabfe622a2837d26",
+        "size_bytes": 26039500,
         "tiers": ("int8", "ultra"),
         "url": f"{HF_BASE_URL}/validated_zero_cue_catalog.json",
     },

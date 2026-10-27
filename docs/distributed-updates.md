@@ -77,7 +77,7 @@ BEP 44 and BEP 46 handle version discovery; Armiger defines the plugin update ma
 
 ## Your sharing choices
 
-**Receiving does not require contributing.** With `opt_in_sharing=False` (the default), contribution exports and DHT publications are blocked, while local verification and adoption of supplied inbound bundles remain available.
+**Receiving does not require contributing.** With `opt_in_sharing=False` (the default), contribution exports and DHT publications are blocked, while local verification and adoption of supplied inbound bundles remain available. In the Docker and Compose setups, automatic pull-only update polling is controlled by `ARMIGER_DHT_AUTO_UPDATE` (`true` by default; set `ARMIGER_DHT_AUTO_UPDATE=false` to disable background update polling).
 
 With no override, sharing resolves to `False`. To enable contributions, pass `opt_in_sharing=True` explicitly, or leave the argument unset and set `ARMIGER_DHT_SHARE_OPT_IN` to `1`, `true` or `yes`. An explicit `False` overrides the environment. Components also enforce their configured mode, such as `pull_only` or `off`.
 

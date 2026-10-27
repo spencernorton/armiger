@@ -8,7 +8,7 @@ Create a folder called `armiger-bitmagnet`. Save this as **`compose.yaml`** insi
 
 ```yaml
 include:
-  - oci://ghcr.io/spencernorton/armiger-bitmagnet-stack:3.3.1
+  - oci://ghcr.io/spencernorton/armiger-bitmagnet-stack:3.3.2
 ```
 
 This loads the complete setup from our versioned package. All connections are already configured.

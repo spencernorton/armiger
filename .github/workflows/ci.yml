@@ -101,10 +101,14 @@ jobs:
             echo "$TAG already exists; leaving it unchanged."
           else
             docker buildx create --use --driver docker-container
+            EXTRA_TAG=""
+            if [ "${{ matrix.image }}" = "armiger" ]; then
+              EXTRA_TAG="--tag ghcr.io/spencernorton/armiger-ultra:sha-$GITHUB_SHA-$ARCH"
+            fi
             docker buildx build --platform "linux/$ARCH" --file "$DOCKERFILE" \
               --label "org.opencontainers.image.revision=$GITHUB_SHA" \
               --label "org.opencontainers.image.version=$VERSION" \
-              --tag "$TAG" --push .
+              --tag "$TAG" $EXTRA_TAG --push .
           fi
   publish-index:
     name: Publish release manifests
@@ -130,7 +134,13 @@ jobs:
             if docker buildx imagetools inspect "$BASE" > /dev/null 2>&1; then
               echo "$BASE already exists; leaving it unchanged."
             elif [ "$IMAGE" = armiger ]; then
-              docker buildx imagetools create --annotation "index:org.opencontainers.image.revision=$GITHUB_SHA" --tag "$BASE" "ghcr.io/spencernorton/$IMAGE:sha-$GITHUB_SHA-amd64" "ghcr.io/spencernorton/$IMAGE:sha-$GITHUB_SHA-arm64"
+              docker buildx imagetools create --annotation "index:org.opencontainers.image.revision=$GITHUB_SHA" \
+                --tag "$BASE" \
+                --tag "ghcr.io/spencernorton/armiger:latest" \
+                --tag "ghcr.io/spencernorton/armiger-ultra:$VERSION" \
+                --tag "ghcr.io/spencernorton/armiger-ultra:3.3.0" \
+                --tag "ghcr.io/spencernorton/armiger-ultra:latest" \
+                "ghcr.io/spencernorton/$IMAGE:sha-$GITHUB_SHA-amd64" "ghcr.io/spencernorton/$IMAGE:sha-$GITHUB_SHA-arm64"
             else
               docker buildx imagetools create --annotation "index:org.opencontainers.image.revision=$GITHUB_SHA" --tag "$BASE" "ghcr.io/spencernorton/$IMAGE:sha-$GITHUB_SHA-amd64"
             fi

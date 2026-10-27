@@ -1,3 +1,11 @@
+## 2026-10-26 — Release model bundle 3.3.0 (R13.3), updated evaluation charts, and configurable DHT auto-update
+
+- **Branch:** release/v3.3.2-r13-3
+- **What changed:** Pin the `3.3.0` (`v3.0-gold-r13.3`) `NorviTech/armiger-ultra` revision (`cd8a5fbed4245557999ce3aafd168a568edd7fdd`) in `src/armiger/model_manifest.json`, `src/armiger/artifacts.py`, `src/armiger/oci_vpn_guard.py`, and `examples/Dockerfile`; add R13.3 41-stat feature support (`r13_features.py`) and updated `calibration.json`; regenerate the 5 canonical and overview evaluation charts from `benchmarks/updated_std_charts_data.json`; expose `ARMIGER_DHT_AUTO_UPDATE` across `examples/Dockerfile` and Compose files; and publish pre-built `ghcr.io/spencernorton/armiger-ultra` container tags in `.github/workflows/ci.yml`.
+- **Validation:** Verified full pytest suite (`290 passed`), `tests/smoke_installed.py`, `docker compose config --quiet` on all 3 example manifests, and `git diff --check`.
+- **Deployment:** Public release `3.3.2` publishes via GitHub Actions on merge.
+- **Status file updated:** Yes.
+
 ## 2026-10-26 — Pin Bitmagnet poller pagination fix and clarify Portainer and polling docs
 
 - **Branch:** fix/bitmagnet-poller-pagination-and-docs
