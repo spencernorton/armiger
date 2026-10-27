@@ -102,7 +102,7 @@ The full files work without a `.env` file. If a port is already in use, create `
 
 | Setup | Optional settings (defaults) |
 | --- | --- |
-| Bitmagnet | `BITMAGNET_HTTP_PORT=3333`, `BITMAGNET_DHT_PORT=3334`, `ARMIGER_HTTP_PORT=8096`, `ARMIGER_PROXY_PORT=8097`, `BITMAGNET_POLL_SECONDS=5`, `BITMAGNET_BATCH_SIZE=100`, `TMDB_API_KEY=` |
+| Bitmagnet | `BITMAGNET_HTTP_PORT=3333`, `BITMAGNET_DHT_PORT=3334`, `ARMIGER_HTTP_PORT=8096`, `ARMIGER_PROXY_PORT=8097`, `POSTGRES_PASSWORD=armiger-local`, `TMDB_API_KEY=`, `DHT_CRAWLER_SCALING_FACTOR=10`, `BITMAGNET_POLL_SECONDS=5`, `BITMAGNET_BATCH_SIZE=100`, `ARMIGER_REQUIRE_ENGLISH_AUDIO=false`, `ARMIGER_ALLOW_ENGLISH_SUBS=true`, `ARMIGER_REJECT_DEAD_SWARMS=false`, `ARMIGER_PRUNE_MALWARE=false`, `ARMIGER_PRUNE_DEAD_SWARMS=false`, `ARMIGER_DHT_AUTO_UPDATE=true`, `ARMIGER_DHT_SHARE_OPT_IN=false` (see [all Bitmagnet variables](bitmagnet-configuration.md)) |
 | Rats Search | `RATS_HTTP_PORT=8095`, `ARMIGER_HTTP_PORT=8098` |
 
 Bitmagnet's database has no published port and uses an internal password. To choose your own, set `POSTGRES_PASSWORD` **before the first start**; keep it unchanged while reusing that database. TMDB enrichment is optional. Automatic deletion of flagged items is disabled.

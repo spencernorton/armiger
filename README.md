@@ -15,7 +15,7 @@ Armiger helps Bitmagnet and Rats Search label torrents by type and language, usi
 
 ## Choose your setup
 
-1. **[Bitmagnet + Armiger Ultra](examples/bitmagnet/README.md)** — classify items and add searchable tags in Bitmagnet.
+1. **[Bitmagnet + Armiger Ultra](examples/bitmagnet/README.md)** — set up Bitmagnet + Armiger Ultra, filter via the Torznab proxy (`:8097`), browse `armiger-*` tags, and configure all environment variables.
 2. **[Rats Search + Armiger Ultra](examples/rats-search/README.md)** — classify items in Rats Search.
 3. **[Standalone Armiger Ultra](docs/quickstart.md)** — run the ready-made Armiger container on its own.
 
@@ -36,7 +36,7 @@ It does not inspect media payloads. Metadata predictions can be wrong and do not
 - [Other integrations](https://github.com/spencernorton/Armiger-Connectors) — DH-Waypoint, Torznab and Arr.
 - [Help and bug reports](https://github.com/spencernorton/armiger/issues) · [Contributing](.github/CONTRIBUTING.md) · [Security reporting](.github/SECURITY.md)
 
-Library **3.2.1** uses model bundle **3.0.0**. The Docker image includes verified model files. Python installs download them from a fixed [Hugging Face](https://huggingface.co/NorviTech/armiger-ultra) revision and verify them before use. Apache-2.0: [license](LICENSE), [notices](NOTICE), [use policy](.github/LEGAL.md).
+Library **3.3.1** uses model bundle **3.0.0**. The Docker image includes verified model files. Python installs download them from a fixed [Hugging Face](https://huggingface.co/NorviTech/armiger-ultra) revision and verify them before use. Apache-2.0: [license](LICENSE), [notices](NOTICE), [use policy](.github/LEGAL.md).
 
 ---
 
