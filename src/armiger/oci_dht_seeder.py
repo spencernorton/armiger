@@ -47,10 +47,10 @@ from armiger.oci_vpn_guard import (
 
 
 DEFAULT_DHT_BOOTSTRAP_NODES: Tuple[Tuple[str, int], ...] = (
-    ("router.bittorrent.com", 6881),
-    ("dht.transmissionbt.com", 6881),
-    ("router.utorrent.com", 6881),
     ("dht.libtorrent.org", 25401),
+    ("dht.transmissionbt.com", 6881),
+    ("router.bittorrent.com", 6881),
+    ("router.utorrent.com", 6881),
 )
 
 
@@ -153,7 +153,8 @@ class GatedBEP44UDPNode:
         self.anonymity_guard = anonymity_guard or AnonymityGuard()
         self.host = host
         self.port = int(port)
-        self.node_id: bytes = node_id if (node_id and len(node_id) == 20) else hashlib.sha1(os.urandom(32)).digest()
+        self._explicit_node_id: bool = bool(node_id and len(node_id) == 20)
+        self.node_id: bytes = node_id if self._explicit_node_id else hashlib.sha1(os.urandom(32)).digest()
         self.require_write_token = bool(require_write_token)
         self.enforce_bep42_routing = bool(enforce_bep42_routing)
         self.rsi_collector = rsi_collector if rsi_collector is not None else _create_default_rsi_collector()
@@ -435,6 +436,12 @@ class GatedBEP44UDPNode:
                 if not isinstance(resp, dict):
                     raise RuntimeError("Invalid non-dict KRPC response")
                 r_dict = resp.get(b"r")
+                ip_ref = resp.get(b"ip")
+                if not self._explicit_node_id and isinstance(ip_ref, bytes) and len(ip_ref) in (4, 6):
+                    try:
+                        self.node_id = generate_bep42_node_id(socket.inet_ntoa(ip_ref[:4]))
+                    except Exception:
+                        pass
                 if isinstance(r_dict, dict) and isinstance(r_dict.get(b"id"), bytes) and len(r_dict[b"id"]) == 20:
                     self.add_routing_node(r_dict[b"id"], resolved_ip, port_int)
                 return resp
@@ -503,8 +510,11 @@ class GatedBEP44UDPNode:
         candidates: Dict[Tuple[str, int], bytes] = {}
         for nid, nip, npt in self.routing_table:
             candidates[(nip, int(npt))] = nid
+        entry_set: Set[Tuple[str, int]] = set()
         for e_host, e_port in entry_addrs:
-            candidates.setdefault((str(e_host), int(e_port)), hashlib.sha1(f"{e_host}:{e_port}".encode("utf-8")).digest())
+            e_addr = (str(e_host), int(e_port))
+            entry_set.add(e_addr)
+            candidates.setdefault(e_addr, hashlib.sha1(f"{e_host}:{e_port}".encode("utf-8")).digest())
 
         visited: Set[Tuple[str, int]] = set()
         responders: Dict[Tuple[str, int], Dict[str, Any]] = {}
@@ -513,7 +523,7 @@ class GatedBEP44UDPNode:
             unvisited = [addr for addr in candidates if addr not in visited]
             if not unvisited:
                 break
-            unvisited.sort(key=lambda addr: _xor_distance(candidates[addr], target_20))
+            unvisited.sort(key=lambda addr: (0 if addr in entry_set else 1, _xor_distance(candidates[addr], target_20)))
             batch = unvisited[:max(1, int(alpha))]
 
             async def _probe(addr: Tuple[str, int]) -> None:

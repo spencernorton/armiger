@@ -337,7 +337,10 @@ def _fetch_webseed_metadata(
             raise TimeoutError("webseed_metadata_total_deadline_exceeded")
         return min(float(timeout), rem)
 
-    from oci_sqlite_catalog import _https_get_with_deadline
+    try:
+        from armiger.oci_sqlite_catalog import _https_get_with_deadline
+    except ImportError:
+        from oci_sqlite_catalog import _https_get_with_deadline
 
     for candidate_url in (f"{base}/{ih_hex}.torrent", f"{base}/bundle.torrent"):
         if time.monotonic() >= meta_deadline:
@@ -536,6 +539,8 @@ def verify_dht_release(
                 best_seq = seq_val
                 best_record = r_body
                 best_source_addr = (str(addr[0]), int(addr[1]))
+            if best_record is not None and best_seq >= int(min_seq) and len(queried_get) >= 8:
+                break
 
     if best_record is None:
         return {
@@ -609,6 +614,8 @@ def verify_dht_release(
                 continue
             if ref_addr not in queried_gp:
                 gp_frontier.append((_xor_distance(ref_nid, infohash_20), ref_addr))
+        if len(queried_gp) >= 8 and not candidate_peers:
+            break
 
     collector_nodes: List[Tuple[str, int]] = []
     for p_host, p_port in candidate_peers:
@@ -714,7 +721,11 @@ def verify_dht_release(
 
     for ws_url in all_webseeds:
         try:
-            ws_budget = max(float(timeout) * 3.0, 15.0)
+            ws_budget = (
+                max(float(timeout) * 15.0, 60.0)
+                if (webseed_fetcher is None and float(timeout) >= 2.0)
+                else max(float(timeout) * 3.0, 15.0)
+            )
             ws_deadline = time.monotonic() + ws_budget
             eff_info = authenticated_info
             if eff_info is None:

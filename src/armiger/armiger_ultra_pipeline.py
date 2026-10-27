@@ -2382,11 +2382,11 @@ class ArmigerUltraPipeline:
         """Restore a previously verified DHT live overlay from `self.runtime_cache_dir` on startup if newer than baked artifacts."""
         try:
             try:
-                from oci_dht_seeder import _verify_bep44, bep44_signing_buffer
-                from oci_sqlite_catalog import bdecode, build_torrent_bundle
+                from armiger.oci_vpn_guard import _verify_bep44, bdecode, bep44_signing_buffer
+                from armiger.oci_sqlite_catalog import build_torrent_bundle
             except ImportError:
-                from armiger.oci_dht_seeder import _verify_bep44, bep44_signing_buffer
-                from armiger.oci_sqlite_catalog import bdecode, build_torrent_bundle
+                from oci_vpn_guard import _verify_bep44, bdecode, bep44_signing_buffer
+                from oci_sqlite_catalog import build_torrent_bundle
 
             self._ensure_private_cache_dir(self.runtime_cache_dir)
             ov_state_path = self._overlay_state_path()
@@ -2426,10 +2426,14 @@ class ArmigerUltraPipeline:
 
             sig_bytes = bytes.fromhex(str(pointer.get("signature_hex", "")))
             val_benc = bytes.fromhex(str(pointer.get("value_bencoded_hex", "")))
-            sig_buf = bep44_signing_buffer(v=val_benc, seq=ov_seq, salt=eff_salt)
-            if not _verify_bep44(bytes.fromhex(eff_pubkey), sig_bytes, (sig_buf,)):
+            raw_v = bdecode(val_benc) if val_benc[:1].isdigit() else val_benc
+            cand_bufs = (
+                bep44_signing_buffer(v=raw_v, seq=ov_seq, salt=eff_salt),
+                bep44_signing_buffer(v=val_benc, seq=ov_seq, salt=eff_salt),
+            )
+            if not _verify_bep44(bytes.fromhex(eff_pubkey), sig_bytes, cand_bufs):
                 raise ValueError("Persisted overlay BEP-44 signature verification failed")
-            decoded_v = bdecode(val_benc)
+            decoded_v = bdecode(raw_v) if isinstance(raw_v, (bytes, bytearray)) else raw_v
             if not isinstance(decoded_v, dict):
                 raise ValueError("Persisted overlay BEP-44 value is not a dict")
             signed_merkle = decoded_v.get(b"merkle_root", b"").decode("ascii", errors="ignore")

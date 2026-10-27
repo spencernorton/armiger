@@ -1,3 +1,10 @@
+## 2026-10-27 — Release 3.3.3: BEP 46 webseed metadata alignment, KRPC interop, and HF repo consolidation
+
+- **Branch:** release/v3.3.3-dht-webseed-and-hf-cleanup
+- **What changed:** Pin `NorviTech/armiger-ultra` revision `18ef5418b3858ee4f70c137540febb5343b8754e` (with canonical `<infohash>.torrent` / `bundle.torrent` metadata, `zero_cue_catalog.sqlite.zlib`, and cleaned `config.json`) across `src/armiger/model_manifest.json`, `src/armiger/artifacts.py`, `src/armiger/oci_vpn_guard.py`, and `examples/Dockerfile`. Fix package-prefixed import (`from armiger.oci_sqlite_catalog import _https_get_with_deadline`) and live webseed payload budget in `src/armiger/verify_dht.py`. Allow unsorted KRPC framing keys in `bdecode_krpc` (`allow_unsorted_keys=True`, while preserving strict duplicate-key rejection and strict canonical key ordering in `bdecode`) so `libtorrent` Mainline DHT routers (`dht.libtorrent.org:25401`) are not dropped. Reorder `DEFAULT_DHT_BOOTSTRAP_NODES` in `src/armiger/oci_dht_seeder.py` and prioritize bootstrap entry nodes in `iterative_find_closest`. Bump package and image version to `3.3.3`.
+- **Validation:** Verified full pytest suite, `git diff --check`, and live Mainline DHT + BEP 19 webseed verification.
+- **Follow-ups:** None.
+
 ## 2026-10-26 — Document all Bitmagnet + Armiger environment variables, setup options, and usage workflows
 
 - **Branch:** docs/bitmagnet-env-and-usage-guide

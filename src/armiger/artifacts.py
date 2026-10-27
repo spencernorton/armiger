@@ -50,6 +50,7 @@ KNOWN_RELEASE_DIGESTS = {
         ("3eb5d460bf8408fd0bc104f1cf84ddcd1e71cb8f3d2cbbfab69f38be3eb6776c", 74060),
     },
     "config.json": {
+        ("da965d165bc45b5dafb2ae2fcb45781b1c37cebd9fc3026604c12d060d6e523f", 5201),
         ("047286ecbccd7360a597cf9eff21a688f9f842a427c1e1f877b367d3ce42e7eb", 5629),
         ("bacf41ee0a941200229108785bd9207deca265e83d1daf95b4fb49aef0071db1", 5562),
         ("f2dfa7c8901585c6718391c60efa8c327f00168ded250a581565675fed42a985", 5561),

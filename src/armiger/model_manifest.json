@@ -1,7 +1,7 @@
 {
   "repository": "NorviTech/armiger-ultra",
-  "revision": "cd8a5fbed4245557999ce3aafd168a568edd7fdd",
-  "model_version": "3.3.0",
+  "revision": "18ef5418b3858ee4f70c137540febb5343b8754e",
+  "model_version": "3.3.3",
   "files": {
     "armiger.int8.onnx": {
       "sha256": "c0e96936038988c7465b7fe041c4dc3c92df5a8cb4f56c2666271cd4d3e79420",
@@ -24,8 +24,8 @@
       "size": 26039500
     },
     "config.json": {
-      "sha256": "047286ecbccd7360a597cf9eff21a688f9f842a427c1e1f877b367d3ce42e7eb",
-      "size": 5629
+      "sha256": "da965d165bc45b5dafb2ae2fcb45781b1c37cebd9fc3026604c12d060d6e523f",
+      "size": 5201
     },
     "vocab.json": {
       "sha256": "c10afea430188e0207752e93bf0b340fbb585858684037c5134a477cbc0dd7bb",
