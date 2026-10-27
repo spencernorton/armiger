@@ -1,5 +1,9 @@
 # Changelog
 
+## 3.3.2
+
+- Update the pinned model bundle to `3.3.0` (`v3.0-gold-r13.3` on `NorviTech/armiger-ultra`), refresh the canonical evaluation and overview charts, publish `ghcr.io/spencernorton/armiger-ultra` tags, and expose `ARMIGER_DHT_AUTO_UPDATE` in the Docker and Compose setups.
+
 ## 3.3.1
 
 - Paginate the Bitmagnet poller across multi-batch 60-second crawl flushes (`#37`), expose `BITMAGNET_POLL_SECONDS` and `BITMAGNET_BATCH_SIZE` in the full Bitmagnet Compose file, and document Portainer stack setup and crawler scaling.

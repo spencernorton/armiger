@@ -105,8 +105,37 @@ def render(data: dict, path: Path) -> None:
     from matplotlib.patches import FancyBboxPatch
     from PIL import Image
 
+    v330 = json.loads((ROOT / "benchmarks/updated_std_charts_data.json").read_text(encoding="utf-8"))
+    ho = v330["heldout_20261026"]
+    bc = v330["beyond_confirmation_v330"]
     bg, surface, border = "#0d1117", "#151c25", "#2b3745"
     white, muted, green = "#edf4fa", "#9caec0", "#3edba8"
+
+    categories_order = [
+        ("Movie", "Movies"), ("TV Show", "TV shows"), ("Music", "Music"),
+        ("Audiobook", "Audiobooks"), ("Ebook", "eBooks"), ("Comic", "Comics"),
+        ("Course", "Courses"), ("Game", "Games"), ("Software", "Software"),
+        ("Adult / XXX", "Adult content"),
+    ]
+    classifiers = [
+        ("Armiger Ultra v3.3.0", "armiger_ultra_pct"),
+        ("MIMMO BERT (360M)", "mimmo_bert_pct"),
+        ("Bitmagnet Built-In", "bitmagnet_pct"),
+    ]
+    overall_row = {
+        "label": "Overall",
+        "n": ho["p1_cat10"]["Armiger Ultra v3.3.0"]["n"],
+        "scores": {
+            "Armiger Ultra v3.3.0": ho["p1_cat10"]["Armiger Ultra v3.3.0"]["point_pct"],
+            "MIMMO BERT (360M)": ho["p1_cat10"]["MIMMO BERT (360M)"]["point_pct"],
+            "Bitmagnet Built-In": ho["p1_cat10"]["Bitmagnet Built-In"]["point_pct"],
+        },
+    }
+    cat_rows = [
+        {"label": lbl, "n": ho["per_cat_10"][k]["n"], "scores": {m: ho["per_cat_10"][k][f] for m, f in classifiers}}
+        for k, lbl in categories_order
+    ]
+
     with plt.rc_context({"font.family": "DejaVu Sans", "text.color": white}):
         fig = plt.figure(figsize=(16, 10), dpi=120, facecolor=bg)
         ax = fig.add_axes((0, 0, 1, 1))
@@ -125,24 +154,24 @@ def render(data: dict, path: Path) -> None:
         def rule(y):
             ax.plot((72, 866), (y, y), color=border, linewidth=0.6)
 
-        text(50, 35, "ARMIGER ULTRA  /  MODEL v3.0.0", 11, muted, "bold")
-        text(50, 75, "How Armiger Ultra compares", 31, weight="bold")
-        text(50, 135, "Content recognition, title matching and extra metadata checks", 16, muted)
+        text(50, 35, "ARMIGER ULTRA  /  MODEL v3.3.0  (2026-10-26 HELD-OUT BENCHMARK)", 11, muted, "bold")
+        text(50, 75, "How Armiger Ultra v3.3.0 compares", 31, weight="bold")
+        text(50, 135, "Content recognition, title matching and extra metadata checks on the newest held-out test suite", 15.5, muted)
         box(45, 190, 850, 704)
         text(73, 214, "Correct content category", 20, weight="bold")
-        text(73, 257, "Same labelled items for each classifier", 12, muted)
+        text(73, 257, "Same 2,484 held-out labelled items for each classifier (2026-10-26)", 12, muted)
         centres = [409, 589, 769]
-        for x, label, color in zip(centres, ["Armiger\nUltra", "MIMMO\nBERT", "Bitmagnet\nbuilt-in"],
+        for x, label, color in zip(centres, ["Armiger\nUltra v3.3", "MIMMO\nBERT", "Bitmagnet\nbuilt-in"],
                                    [green, muted, muted]):
             text(x, 294, label, 13, color, "bold", "center")
         text(297, 309, "ITEMS", 8.5, muted, align="right")
         rule(342)
-        table_rows = [{"label": "Overall", **data["overall"]}, *data["categories"]]
+        table_rows = [overall_row, *cat_rows]
         for index, row in enumerate(table_rows):
             y = 365 + index * 43
             text(74, y - 9, row["label"], 15.4, weight="bold" if index == 0 else "normal")
             text(297, y - 4, f"{row['n']:,}", 10.5, muted, align="right")
-            for column, ((model, _), x) in enumerate(zip(CLASSIFIERS, centres)):
+            for column, ((model, _), x) in enumerate(zip(classifiers, centres)):
                 value = row["scores"][model]
                 base = to_rgb(green if column == 0 else "#80a7db")
                 dark = to_rgb(surface)
@@ -154,36 +183,48 @@ def render(data: dict, path: Path) -> None:
             if index == 0:
                 rule(y + 28)
         text(74, 849, "0% = no correct labels in that row; tools cover different content types.", 9.5, muted)
-        text(74, 873, f"Overall also includes {data['other_category_n']} other / unknown items.", 9.5, muted)
+        text(74, 873, "All 2,484 held-out test items come from the 2026-10-26 production qualification suite.", 9.5, muted)
 
-        text(930, 214, "Ultra’s extra checks", 20, weight="bold")
-        text(930, 257, "Separate tests for each job", 12, muted)
+        text(930, 214, "Ultra v3.3.0’s extra checks", 20, weight="bold")
+        text(930, 257, "Separate held-out tests for each job (2026-10-26)", 12, muted)
 
-        def card(x, y, title, key, unit, comparisons, note="", suffix="%"):
-            entry = data[key]
+        def card(x, y, title, score_val, n_val, unit, comparisons, note="", suffix="%"):
             box(x, y, 292, 277)
             text(x + 22, y + 21, title, 16.5, weight="bold")
-            text(x + 22, y + 62, f"{entry['scores'][ULTRA]:.0f}{suffix}", 39, green, "bold")
+            text(x + 22, y + 62, f"{score_val:.0f}{suffix}", 39, green, "bold")
             text(x + 22, y + 132, unit, 11.3)
             for line, value in enumerate(comparisons):
                 text(x + 22, y + 173 + line * 24, value, 11.0, muted)
             if note:
                 text(x + 22, y + 219, note, 9.2, muted)
-            text(x + 22, y + 251, f"{entry['n']:,} test items", 10, muted)
+            text(x + 22, y + 251, f"{n_val:,} test items", 10, muted)
 
-        title = data["title_matching"]["scores"]
-        audio = data["audio_language"]["scores"]
-        card(930, 302, "Title matching", "title_matching", "correct movie / show matches", [
-            f"GuessIt {title['GuessIt']:.0f}%   ·   RTN {title['RTN (rank-torrent-name)']:.0f}%"])
-        card(1247, 302, "Audio language", "audio_language", "English vs other audio", [
-            f"GuessIt {audio['GuessIt']:.0f}%   ·   RTN {audio['RTN (rank-torrent-name)']:.0f}%"])
-        card(930, 605, "Junk & malware cues", "junk", "junk / clean detection score", [
-            "Other tools: no comparable", "score in this test"], "Metadata cues, not a file scan")
-        card(1247, 605, "Seed availability", "seeds", "live-swarm ranking score", [
-            f"Seed count alone: {data['seeds']['scores']['Raw Seeder Count']:.0f}/100"],
-            suffix="/100")
-        text(50, 923, "Rounded benchmark results, not guarantees. Seed scores measure ranking quality, not percentage correct.", 11, muted)
-        text(50, 953, "Junk scoring weighs clean and junk items equally. Full test sets, methods and limitations are in the evaluation guide.", 11, muted)
+        tm_u = ho["p2_match"]["Armiger Ultra v3.3.0"]
+        tm_g = ho["p2_match"]["GuessIt"]["point_pct"]
+        tm_r = ho["p2_match"]["RTN (rank-torrent-name)"]["point_pct"]
+
+        au_u = ho["p3_audio"]["Armiger Ultra v3.3.0"]
+        au_g = ho["p3_audio"]["GuessIt"]["point_pct"]
+        au_r = ho["p3_audio"]["RTN (rank-torrent-name)"]["point_pct"]
+
+        jk_u = ho["p6a_junk"]["Armiger Ultra v3.3.0"]
+        jk_r = ho["p6a_junk"]["RTN (rank-torrent-name)"]["point_pct"]
+        jk_b = ho["p6a_junk"]["Bitmagnet Built-In"]["point_pct"]
+
+        sw_u = bc["p2f_swarm_whse"]["models"]["Armiger Ultra (Fair Hybrid)"]
+        sw_s = bc["p2f_swarm_whse"]["models"]["Raw Seeder Count"]["point_pct"]
+
+        card(930, 302, "Title matching", tm_u["point_pct"], tm_u["n"], "correct movie / show matches", [
+            f"GuessIt {tm_g:.0f}%   ·   RTN {tm_r:.0f}%"])
+        card(1247, 302, "Audio language", au_u["point_pct"], au_u["n"], "English vs other audio", [
+            f"GuessIt {au_g:.0f}%   ·   RTN {au_r:.0f}%"], "93% on full file-tree torrents")
+        card(930, 605, "Junk & malware", jk_u["point_pct"], jk_u["n"], "junk / clean balanced score", [
+            f"RTN {jk_r:.0f}%   ·   Bitmagnet {jk_b:.0f}%"], "Metadata cues, not a file scan")
+        card(1247, 605, "Seed availability", sw_u["point_pct"], sw_u["n"], "live-swarm ranking score", [
+            f"Seed count alone: {sw_s:.0f}/100"], suffix="/100")
+
+        text(50, 923, "Rounded benchmark results on the 2026-10-26 held-out test suite. Seed scores measure ranking quality (AUROC), not percentage correct.", 11, muted)
+        text(50, 953, "Junk scoring weighs clean (n=500) and junk/malware (n=197) items equally (99.90% balanced accuracy).", 11, muted)
         output = io.BytesIO()
         fig.savefig(output, format="png", dpi=120, facecolor=bg)
         plt.close(fig)

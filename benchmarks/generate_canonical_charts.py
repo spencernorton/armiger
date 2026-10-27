@@ -1114,18 +1114,38 @@ def build_all_charts_and_manifest(
         }
 
     fallback_assets = assets_dir if (assets_dir / "armiger_vs_llms_overall_and_6dims.png").is_file() else (npz_path.parent.parent / "docs" / "assets")
+    v330_data = json.loads((BENCH_DIR / "updated_std_charts_data.json").read_text(encoding="utf-8"))
     if render_pngs:
+        ho = v330_data["heldout_20261026"]
+        bc = v330_data["beyond_confirmation_v330"]
+        p2a = bc["p2a_cat"]
+        p2b = bc["p2b_match"]
+        p2c = bc["p2c_audio"]
+        p2d = bc["p2d_anime"]
+        p2e = bc["p2e_junk"]
+        p2f_pub = bc["p2f_swarm_pub"]
+        p2f_whse = bc["p2f_swarm_whse"]
+
+        comp_5d_gpt_u = float(np.mean([p["ultra_vs_gpt"]["point_pct"] for p in (p2a, p2b, p2c, p2d, p2e)]))
+        comp_5d_gpt_g = float(np.mean([p["gpt_loto"]["point_pct"] for p in (p2a, p2b, p2c, p2d, p2e)]))
+        comp_4d_gem_u = float(np.mean([p["ultra_vs_gem"]["point_pct"] for p in (p2a, p2b, p2c, p2d)]))
+        comp_4d_gem_m = float(np.mean([p["gem_loto"]["point_pct"] for p in (p2a, p2b, p2c, p2d)]))
+
+        pts_u6 = [p["ultra_all3"]["point_pct"] for p in (p2a, p2b, p2c, p2d, p2e)] + [p2f_pub["models"]["Armiger Ultra (Fair Hybrid)"]["point_pct"]]
+        comp_6d_pub = float(np.mean(pts_u6))
+        comp_6d_whse = float(np.mean(pts_u6[:-1] + [p2f_whse["models"]["Armiger Ultra (Fair Hybrid)"]["point_pct"]]))
+
         # ==========================================================================
         # RENDER CHART 1: armiger_vs_llms_overall_and_6dims.png
         # ==========================================================================
-        fig1 = plt.figure(figsize=(24, 11.4))
+        fig1 = plt.figure(figsize=(24, 11.4), facecolor=BG_CANVAS)
         fig1.suptitle(
-            "Armiger Ultra vs. Cloud Teacher LLMs Across 6 Core Dimensions (Common-Support LOTO & OOF)",
+            "Armiger Ultra v3.3.0 vs. Cloud Teacher LLMs Across 6 Core Dimensions (Common-Support LOTO & OOF)",
             fontsize=17.0, fontweight="bold", color=TEXT_MAIN, y=0.972,
         )
         fig1.text(
             0.5, 0.934,
-            "Common-Support Leave-One-Vendor-Out (LOTO) & Physical Swarm OOF with Family-Clustered 95% Bootstrap CIs (10,000 Resamples)",
+            "Armiger Ultra v3.3.0 Newly Evaluated on the 3-Teacher Common-Support Benchmark (N = 1,046) & Physical Swarm OOF (±95% Bootstrap CIs, 10,000 Resamples)",
             ha="center", fontsize=11.0, style="italic", color=TEXT_SUB, parse_math=False,
         )
 
@@ -1138,19 +1158,12 @@ def build_all_charts_and_manifest(
 
         ax_left = fig1.add_subplot(gs1[:, 0])
         style_ax(ax_left)
-        comp_4d_gpt_u = composite_stats["loto_common_support_4dim_2a_to_2d"]["vs_openai_gpt"][ref_llm]
-        comp_4d_gpt_g = composite_stats["loto_common_support_4dim_2a_to_2d"]["vs_openai_gpt"][gpt_llm]
-        comp_4d_gem_u = composite_stats["loto_common_support_4dim_2a_to_2d"]["vs_google_gemini"][ref_llm]
-        comp_4d_gem_m = composite_stats["loto_common_support_4dim_2a_to_2d"]["vs_google_gemini"][gem_llm]
-        comp_5d_gpt_u = composite_stats["loto_common_support_5dim_2a_to_2e_vs_gpt"][ref_llm]
-        comp_5d_gpt_g = composite_stats["loto_common_support_5dim_2a_to_2e_vs_gpt"][gpt_llm]
-
         left_rows = [
-            ("Armiger Ultra (5D LOTO vs GPT)", comp_5d_gpt_u, C_ULTRA, f"{comp_5d_gpt_u:.2f}% (2A-2E {{google,meta}} Support)"),
+            ("Armiger Ultra v3.3.0 (5D vs GPT)", comp_5d_gpt_u, C_ULTRA, f"{comp_5d_gpt_u:.2f}% (2A-2E {{google,meta}} Support)"),
             ("OpenAI GPT Fast (5D LOTO)", comp_5d_gpt_g, C_GPT, f"{comp_5d_gpt_g:.2f}% (0% Junk Recall on 2E)"),
-            ("Armiger Ultra (4D LOTO vs Gem)", comp_4d_gem_u, C_ULTRA, f"{comp_4d_gem_u:.2f}% (2A-2D {{openai,meta}} Support)"),
-            ("Google Gemini Flash (4D LOTO)", comp_4d_gem_m, C_GEMINI, f"{comp_4d_gem_m:.2f}% (+0.22 pp vs Ultra on 2A-2D)"),
-            ("Armiger Ultra (6D Disjoint)", composite_stats[ref_llm]["point_pct"], C_ULTRA, f"{composite_stats[ref_llm]['point_pct']:.2f}% Pub-6D | {composite_stats[ref_llm]['point_with_corpus_swarm_pct']:.2f}% Corpus"),
+            ("Armiger Ultra v3.3.0 (4D vs Gem)", comp_4d_gem_u, C_ULTRA, f"{comp_4d_gem_u:.2f}% (2A-2D {{openai,meta}} Support)"),
+            ("Google Gemini Flash (4D LOTO)", comp_4d_gem_m, C_GEMINI, f"{comp_4d_gem_m:.2f}% (2A-2D {{openai,meta}} Support)"),
+            ("Armiger Ultra v3.3.0 (6D Disjoint)", comp_6d_pub, C_ULTRA, f"{comp_6d_pub:.2f}% Pub-6D | {comp_6d_whse:.2f}% Corpus"),
         ]
         y_left = np.arange(len(left_rows))
         ax_left.axhspan(-0.5, 0.5, color=BG_HIGHLIGHT, alpha=0.75, zorder=1)
@@ -1158,33 +1171,33 @@ def build_all_charts_and_manifest(
         ax_left.set_yticks(y_left)
         ax_left.set_yticklabels([r[0] for r in left_rows], fontsize=9.8, fontweight="bold", color=TEXT_MAIN)
         ax_left.invert_yaxis()
-        ax_left.set_xlim(50, 134)
+        ax_left.set_xlim(50, 136)
         ax_left.set_xticks([55, 65, 75, 85, 95, 100])
         ax_left.set_xlabel("Common-Support LOTO & Vendor-Disjoint Composite Means (%)", fontsize=9.8, color=TEXT_SUB, labelpad=8)
         ax_left.set_title(
-            "1. Pairwise LOTO Common-Support & 6D Composites\n(Explicitly Reporting Both 2A-2D & 2A-2E Orderings)",
+            "1. Pairwise LOTO Common-Support & 6D Composites\n(Armiger Ultra v3.3.0 Evaluated on 2A-2D & 2A-2E)",
             fontsize=11.2, fontweight="bold", color=TEXT_MAIN, pad=10,
         )
         for idx, (_, val, _, lbl) in enumerate(left_rows):
             ax_left.text(val + 0.65, idx, lbl, va="center", ha="left", fontsize=8.4, fontweight="bold" if "Ultra" in left_rows[idx][0] else "normal", color=TEXT_MAIN if "Ultra" in left_rows[idx][0] else "#CBD5E1", zorder=6, parse_math=False)
 
         loto_panel_specs = [
-            (0, 2, "2A. 11-Class Category (LOTO N=974 / 982)", p2a_loto_gpt_stats, p2a_loto_gemini_stats, (85, 114), [85, 90, 95, 100]),
-            (0, 3, "2B. Catalog Matching (LOTO N=974 / 982)", p2b_loto_gpt_stats, p2b_loto_gemini_stats, (80, 114), [80, 85, 90, 95, 100]),
-            (0, 4, "2C. Audio Language Strict (LOTO N=209 / 194)", p2c_loto_gpt_stats, p2c_loto_gemini_stats, (80, 114), [80, 85, 90, 95, 100]),
-            (1, 2, "2D. Anime Detection (LOTO N=629 / 629)", p2d_loto_gpt_stats, p2d_loto_gemini_stats, (85, 114), [85, 90, 95, 100]),
+            (0, 2, "2A. 11-Class Category (LOTO N=974 / 982)", p2a, (80, 114), [80, 85, 90, 95, 100]),
+            (0, 3, "2B. Catalog Matching (LOTO N=974 / 982)", p2b, (80, 114), [80, 85, 90, 95, 100]),
+            (0, 4, "2C. Audio Language Strict (LOTO N=209 / 194)", p2c, (80, 114), [80, 85, 90, 95, 100]),
+            (1, 2, "2D. Anime Detection (LOTO N=629 / 629)", p2d, (85, 114), [85, 90, 95, 100]),
         ]
-        for row, col, title, st_gpt, st_gem, xlim, xticks in loto_panel_specs:
+        for row, col, title, p_dict, xlim, xticks in loto_panel_specs:
             ax = fig1.add_subplot(gs1[row, col])
             style_ax(ax)
             s_list = [
-                st_gpt["models"][ref_llm],
-                st_gpt["models"][gpt_llm],
-                st_gem["models"][ref_llm],
-                st_gem["models"][gem_llm],
+                p_dict["ultra_vs_gpt"],
+                p_dict["gpt_loto"],
+                p_dict["ultra_vs_gem"],
+                p_dict["gem_loto"],
             ]
             c_list = [C_ULTRA, C_GPT, C_ULTRA, C_GEMINI]
-            tags = ["Ultra (vs GPT)", "GPT (LOTO)", "Ultra (vs Gem)", "Gemini (LOTO)"]
+            tags = ["Ultra v3.3 (vs GPT)", "GPT (LOTO)", "Ultra v3.3 (vs Gem)", "Gemini (LOTO)"]
             y_pos = np.arange(4)
             ax.barh(y_pos, [s["point_pct"] for s in s_list], height=0.55, color=c_list, zorder=3)
             draw_ci_whiskers(ax, y_pos, s_list)
@@ -1197,21 +1210,17 @@ def build_all_charts_and_manifest(
             span = xlim[1] - xlim[0]
             for idx, (tag, s_item) in enumerate(zip(tags, s_list)):
                 hi_x = max(s_item["point_pct"], s_item["ci95_hi"])
-                ax.text(hi_x + span * 0.015, idx, f"{s_item['point_pct']:.2f}% ({tag})", va="center", ha="left", fontsize=7.8, fontweight="bold" if "Ultra" in tag else "normal", color=TEXT_MAIN if "Ultra" in tag else "#CBD5E1", zorder=6, parse_math=False)
+                ax.text(hi_x + span * 0.015, idx, f"{s_item['point_pct']:.2f}% ({tag})", va="center", ha="left", fontsize=7.6, fontweight="bold" if "Ultra" in tag else "normal", color=TEXT_MAIN if "Ultra" in tag else "#CBD5E1", zorder=6, parse_math=False)
 
-        # Panel 2E: Junk LOTO vs GPT (N=975, n_pos=64)
         ax2e = fig1.add_subplot(gs1[1, 3])
         style_ax(ax2e)
-        s2e_list = [
-            p2e_loto_gpt_stats["models"][ref_llm],
-            p2e_loto_gpt_stats["models"][gpt_llm],
-        ]
+        s2e_list = [p2e["ultra_vs_gpt"], p2e["gpt_loto"]]
         y2e = np.array([0, 1])
         ax2e.barh(y2e, [s["point_pct"] for s in s2e_list], height=0.55, color=[C_ULTRA, C_GPT], zorder=3)
         draw_ci_whiskers(ax2e, y2e, s2e_list)
         ax2e.barh(2, 45.0, height=0.55, color="#21262D", edgecolor=TEXT_MUTED, hatch="//", zorder=2)
         ax2e.text(46.0, 2, "Gemini N/A (LOTO n_pos=0)", va="center", ha="left", fontsize=7.8, style="italic", color=TEXT_SUB, parse_math=False)
-        for idx, (tag, s_item) in enumerate(zip(["Ultra (LOTO N=975)", "GPT (0/64 Recall)"], s2e_list)):
+        for idx, (tag, s_item) in enumerate(zip(["Ultra v3.3 LOTO", "GPT (0/64 Recall)"], s2e_list)):
             hi_x = max(s_item["point_pct"], s_item["ci95_hi"])
             ax2e.text(hi_x + 1.2, idx, f"{s_item['point_pct']:.2f}% ({tag})", va="center", ha="left", fontsize=7.8, fontweight="bold" if idx == 0 else "normal", color=TEXT_MAIN if idx == 0 else "#CBD5E1", zorder=6, parse_math=False)
         ax2e.set_yticks([0, 1, 2])
@@ -1221,15 +1230,14 @@ def build_all_charts_and_manifest(
         ax2e.set_xticks([45, 60, 75, 90, 100])
         ax2e.set_title("2E. Junk / Malware (Balanced LOTO N=975)", fontsize=10.2, fontweight="bold", color=TEXT_MAIN, pad=8)
 
-        # Panel 2F: Swarm Liveliness AUROC (Public OOF N=757)
         ax2f = fig1.add_subplot(gs1[1, 4])
         style_ax(ax2f)
         m2f_list = ["Armiger Ultra (Fair Hybrid)", "Way-4 Combined Priors", "DHT Seeder Baseline"]
-        s2f_list = [p2f_pub_stats["models"][m] for m in m2f_list]
+        s2f_list = [p2f_pub["models"][m] for m in m2f_list]
         y2f = np.arange(len(m2f_list))
         ax2f.barh(y2f, [s["point_pct"] for s in s2f_list], height=0.55, color=[C_ULTRA, C_INT8, "#64748B"], zorder=3)
         draw_ci_whiskers(ax2f, y2f, s2f_list)
-        for idx, (m_name, s_item) in enumerate(zip(["Ultra OOF", "Way-4 Priors", "DHT Seeders"], s2f_list)):
+        for idx, (m_name, s_item) in enumerate(zip(["Ultra v3.3 OOF", "Way-4 Priors", "DHT Seeders"], s2f_list)):
             hi_x = max(s_item["point_pct"], s_item["ci95_hi"])
             ax2f.text(hi_x + 1.2, idx, f"{s_item['point_pct']:.2f}% ({m_name})", va="center", ha="left", fontsize=7.8, fontweight="bold" if idx == 0 else "normal", color=TEXT_MAIN if idx == 0 else "#CBD5E1", zorder=6, parse_math=False)
         ax2f.set_yticks(y2f)
@@ -1240,7 +1248,7 @@ def build_all_charts_and_manifest(
         ax2f.set_title("2F. Swarm Liveliness AUROC (OOF N=757)", fontsize=10.2, fontweight="bold", color=TEXT_MAIN, pad=8)
 
         legend_handles = [
-            Patch(facecolor=C_ULTRA, edgecolor=C_ULTRA_EDGE, label="Armiger Ultra (Fair Hybrid; INT8 Parity Logged)"),
+            Patch(facecolor=C_ULTRA, edgecolor=C_ULTRA_EDGE, label="Armiger Ultra v3.3.0 (Newly Evaluated on Common-Support LOTO & OOF)"),
             Patch(facecolor=C_GPT, label="OpenAI GPT Fast Tier (LOTO Support vs {google, meta})"),
             Patch(facecolor=C_GEMINI, label="Google Gemini Flash (LOTO Support vs {openai, meta})"),
             Patch(facecolor=C_INT8, label="Way-4 Priors / Seeder Baselines (Swarm OOF N=757)"),
@@ -1253,12 +1261,19 @@ def build_all_charts_and_manifest(
         sha_chart1 = save_clean_rgb_png(fig1, assets_dir / "armiger_vs_llms_overall_and_6dims.png")
 
         # ==========================================================================
-        # RENDER CHART 2: armiger_vs_llms_cost_comparison.png (100% receipt-driven)
+        # RENDER CHART 2: armiger_vs_llms_cost_comparison.png
         # ==========================================================================
-        fig2, (ax2_l, ax2_r) = plt.subplots(1, 2, figsize=(23.5, 9.2), gridspec_kw={"wspace": 0.14})
+        models_cost_labels = [
+            "Armiger v3.3.0 (M4 Pro CPU INT8)",
+            "Armiger Ultra v3.3.0 (M4 Pro CPU FP32)",
+            "Google Gemini Flash",
+            "OpenAI GPT (Fast Tier)",
+            "Meta Muse Spark 1.3",
+        ]
+        fig2, (ax2_l, ax2_r) = plt.subplots(1, 2, figsize=(23.5, 9.2), facecolor=BG_CANVAS, gridspec_kw={"wspace": 0.14})
         fig2.subplots_adjust(top=0.80, bottom=0.16, left=0.18, right=0.98)
         fig2.suptitle(
-            "Cost & Measured Hardware Throughput: Armiger ONNX vs. Logged Teacher LLM Runs",
+            "Cost & Measured Hardware Throughput: Armiger v3.3.0 ONNX vs. Logged Teacher LLM Runs",
             fontsize=17.5, fontweight="bold", color=TEXT_MAIN, y=0.96,
         )
         fig2.text(
@@ -1266,7 +1281,6 @@ def build_all_charts_and_manifest(
             "Left: Operational Cost per 1,000,000 Classified Torrents ($ USD)  |  Right: Logged Mean Tokens/Call & Live Measured M4 Pro CPU Latency",
             ha="center", fontsize=11.3, style="italic", color=TEXT_SUB, parse_math=False,
         )
-
         cost_labels = [
             f"$0.00 API (~${batched_cost[0]:.4f} Local CPU Power / 1M Items)",
             f"$0.00 API (~${batched_cost[1]:.4f} Local CPU Power / 1M Items)",
@@ -1274,18 +1288,20 @@ def build_all_charts_and_manifest(
             f"${batched_cost[3]:.2f} Batched (${realtime_cost[3]:.2f} Real-Time / 1M)",
             f"${batched_cost[4]:.2f} Batched (${realtime_cost[4]:.2f} Real-Time / 1M)",
         ]
+        in_rates = [float(cost_rec[m]["in_usd_per_1m_tokens"]) for m in models_cost]
+        out_rates = [float(cost_rec[m]["out_usd_per_1m_tokens"]) for m in models_cost]
+        rate_labels = [str(cost_rec[m]["rate_label"]) for m in models_cost]
 
         style_ax(ax2_l)
-        yc = np.arange(len(models_cost))
+        yc = np.arange(len(models_cost_labels))
         ax2_l.axhspan(-0.5, 1.5, color=BG_HIGHLIGHT, alpha=0.75, zorder=1)
-        for idx in range(len(models_cost)):
+        for idx in range(len(models_cost_labels)):
             ax2_l.barh(idx, realtime_cost[idx], height=0.56, color=colors_cost[idx], alpha=0.28, edgecolor=colors_cost[idx], linestyle="--", linewidth=1.2, zorder=2)
             ax2_l.barh(idx, batched_cost[idx], height=0.56, color=colors_cost[idx], zorder=3)
             x_pos = max(realtime_cost[idx], batched_cost[idx]) + 14.0
             ax2_l.text(x_pos, idx, cost_labels[idx], va="center", ha="left", fontsize=9.0, fontweight="bold" if idx < 2 else "normal", color=TEXT_MAIN if idx < 2 else "#CBD5E1", parse_math=False)
-
         ax2_l.set_yticks(yc)
-        ax2_l.set_yticklabels(models_cost, fontsize=10.0, fontweight="bold", color=TEXT_MAIN)
+        ax2_l.set_yticklabels(models_cost_labels, fontsize=10.0, fontweight="bold", color=TEXT_MAIN)
         ax2_l.invert_yaxis()
         ax2_l.set_xlim(0, 1480)
         ax2_l.set_xticks([0, 200, 400, 600, 800, 1000])
@@ -1298,16 +1314,12 @@ def build_all_charts_and_manifest(
 
         style_ax(ax2_r)
         ax2_r.axhspan(-0.5, 1.5, color=BG_HIGHLIGHT, alpha=0.75, zorder=1)
-        in_rates = [float(cost_rec[m]["in_usd_per_1m_tokens"]) for m in models_cost]
-        out_rates = [float(cost_rec[m]["out_usd_per_1m_tokens"]) for m in models_cost]
-        rate_labels = [str(cost_rec[m]["rate_label"]) for m in models_cost]
-        for idx in range(len(models_cost)):
+        for idx in range(len(models_cost_labels)):
             ax2_r.barh(idx - 0.14, in_rates[idx], height=0.28, color=colors_cost[idx], alpha=0.55, hatch="//", edgecolor=colors_cost[idx], zorder=3)
             ax2_r.barh(idx + 0.14, out_rates[idx], height=0.28, color=colors_cost[idx], zorder=3)
             ax2_r.text(max(in_rates[idx], out_rates[idx]) + 0.08, idx + 0.05, rate_labels[idx], va="center", ha="left", fontsize=8.8, fontweight="bold" if idx < 2 else "normal", color=TEXT_MAIN if idx < 2 else "#CBD5E1", parse_math=False)
-
         ax2_r.set_yticks(yc)
-        ax2_r.set_yticklabels([""] * len(models_cost))
+        ax2_r.set_yticklabels([""] * len(models_cost_labels))
         ax2_r.invert_yaxis()
         ax2_r.set_xlim(0, 4.2)
         ax2_r.set_xticks([0, 0.5, 1.0, 1.5, 2.0, 2.5])
@@ -1329,17 +1341,27 @@ def build_all_charts_and_manifest(
         # ==========================================================================
         # RENDER CHART 3: armiger_vs_torrent_classifiers_6dims.png
         # ==========================================================================
-        fig3 = plt.figure(figsize=(24.5, 14.8))
+        models_9_v33 = [
+            "Armiger Ultra v3.3.0",
+            "MIMMO BERT (360M)",
+            "MIMMO Cascade",
+            "RTN (rank-torrent-name)",
+            "PTT / Parsett",
+            "GuessIt",
+            "PTN (parse-torrent-title)",
+            "Anitomy",
+            "Bitmagnet Built-In",
+        ]
+        fig3 = plt.figure(figsize=(24.5, 14.8), facecolor=BG_CANVAS)
         fig3.suptitle(
-            "Armiger Ultra vs. Open-Source Torrent Classifiers & Parsers Across 7 Core Dimensions",
+            "Armiger Ultra v3.3.0 vs. Open-Source Torrent Classifiers & Parsers Across 7 Core Dimensions",
             fontsize=17.5, fontweight="bold", color=TEXT_MAIN, y=0.975,
         )
         fig3.text(
             0.5, 0.942,
-            "Identical-Reference Evaluation on oct15_confirmation (N = 2,835 / N = 545 Audio), zero_cue_2000 (N = 2,000), & Swarm Holdouts (±95% Clustered CIs)",
-            ha="center", fontsize=11.3, style="italic", color=TEXT_SUB, parse_math=False,
+            "Identical-Reference Evaluation on the Newest Held-Out Benchmark Suite (2026-10-26: N = 2,484 Category / N = 449 Audio / N = 697 Junk) & Swarm Holdouts (±95% Bootstrap CIs)",
+            ha="center", fontsize=11.1, style="italic", color=TEXT_SUB, parse_math=False,
         )
-
         gs3 = GridSpec(
             7, 4, figure=fig3,
             height_ratios=[1.0, 1.0, 1.0, 0.42, 1.25, 0.48, 1.25],
@@ -1347,100 +1369,97 @@ def build_all_charts_and_manifest(
             hspace=0.18, wspace=0.15,
             top=0.89, bottom=0.06, left=0.12, right=0.98,
         )
-        y9 = np.arange(len(models_9))
 
+        y9 = np.arange(len(models_9_v33))
         ax1 = fig3.add_subplot(gs3[0:3, 0])
         style_ax(ax1)
         ax1.axhspan(-0.5, 0.5, color=BG_HIGHLIGHT, alpha=0.75, zorder=1)
-        cat_11_s = [c3_p1_stats["models"][m] for m in models_9]
-        cat_11cls = [s["point_pct"] for s in cat_11_s]
-        cat_vid = [c3_p1_vid_stats["models"][m]["point_pct"] for m in models_9]
+        cat_10_s = [ho["p1_cat10"][m] for m in models_9_v33]
+        cat_10cls = [s["point_pct"] for s in cat_10_s]
+        cat_vid = [ho["p1_vid"][m]["point_pct"] for m in models_9_v33]
         ax1.barh(y9 - 0.16, cat_vid, height=0.32, color=colors_9, zorder=3)
-        ax1.barh(y9 + 0.16, cat_11cls, height=0.32, color=colors_9, alpha=0.45, hatch="//", edgecolor=colors_9, zorder=3)
-        draw_ci_whiskers(ax1, y9 + 0.16, cat_11_s)
+        ax1.barh(y9 + 0.16, cat_10cls, height=0.32, color=colors_9, alpha=0.45, hatch="//", edgecolor=colors_9, zorder=3)
+        draw_ci_whiskers(ax1, y9 + 0.16, cat_10_s)
         ax1.set_yticks(y9)
-        ax1.set_yticklabels(models_9, fontsize=9.5, fontweight="bold", color=TEXT_MAIN)
+        ax1.set_yticklabels(models_9_v33, fontsize=9.5, fontweight="bold", color=TEXT_MAIN)
         ax1.invert_yaxis()
-        ax1.set_xlim(25, 148)
-        ax1.set_xticks([30, 40, 50, 60, 70, 80, 90, 100])
-        ax1.set_xlabel("Solid = Video Subset (N=1,296); Hatched = 11-Class (N=2,835)", fontsize=8.6, color=TEXT_SUB, labelpad=6)
-        ax1.set_title("1. Category Detection (%)\n(oct15_confirmation, Identical N = 2,835)", fontsize=11, fontweight="bold", color=TEXT_MAIN, pad=8)
-        for idx, (v_vid, v_11) in enumerate(zip(cat_vid, cat_11cls)):
-            lbl = f"{v_11:.2f}% 11-Cls (Video {v_vid:.1f}%)"
-            ax1.text(max(v_vid, v_11) + 1.1, idx, lbl, va="center", ha="left", fontsize=8.2, fontweight="bold" if idx == 0 else "normal", color=TEXT_MAIN if idx == 0 else "#CBD5E1")
+        ax1.set_xlim(10, 148)
+        ax1.set_xticks([20, 40, 60, 80, 100])
+        ax1.set_xlabel("Solid = Video Subset (N=784); Hatched = All 10 Classes (N=2,484)", fontsize=8.6, color=TEXT_SUB, labelpad=6)
+        ax1.set_title("1. Category Detection (%)\n(2026-10-26 Held-Out Suite, Identical N = 2,484)", fontsize=11, fontweight="bold", color=TEXT_MAIN, pad=8)
+        for idx, (v_vid, v_10) in enumerate(zip(cat_vid, cat_10cls)):
+            lbl = f"{v_10:.2f}% 10-Cls (Video {v_vid:.1f}%)"
+            ax1.text(max(v_vid, v_10) + 1.2, idx, lbl, va="center", ha="left", fontsize=8.2, fontweight="bold" if idx == 0 else "normal", color=TEXT_MAIN if idx == 0 else "#CBD5E1")
 
         ax2 = fig3.add_subplot(gs3[0:3, 1])
         style_ax(ax2)
         ax2.axhspan(-0.5, 0.5, color=BG_HIGHLIGHT, alpha=0.75, zorder=1)
-        p2_s = [c3_p2_stats["models"][m] for m in models_9]
+        p2_s = [ho["p2_match"][m] for m in models_9_v33]
         cat_match = [s["point_pct"] for s in p2_s]
         ax2.barh(y9, cat_match, height=0.58, color=colors_9, zorder=3)
         draw_ci_whiskers(ax2, y9, p2_s)
         ax2.set_yticks(y9)
-        ax2.set_yticklabels([""] * len(models_9))
+        ax2.set_yticklabels([""] * len(models_9_v33))
         ax2.invert_yaxis()
-        ax2.set_xlim(35, 128)
-        ax2.set_xticks([40, 50, 60, 70, 80, 90, 100])
-        ax2.set_xlabel("oct15_confirmation video subset (Identical N = 1,296)", fontsize=8.8, color=TEXT_SUB, labelpad=6)
-        ax2.set_title("2. Catalog Matching Rate (%)\n(Clean Title + Correct Movie/TV Routing, N = 1,296)", fontsize=11, fontweight="bold", color=TEXT_MAIN, pad=8)
+        ax2.set_xlim(10, 122)
+        ax2.set_xticks([20, 40, 60, 80, 100])
+        ax2.set_xlabel("2026-10-26 held-out video subset (Identical N = 784)", fontsize=8.8, color=TEXT_SUB, labelpad=6)
+        ax2.set_title("2. Catalog Matching Rate (%)\n(Clean Title + Correct Movie/TV Routing, N = 784)", fontsize=11, fontweight="bold", color=TEXT_MAIN, pad=8)
         for idx, s_item in enumerate(p2_s):
             v = s_item["point_pct"]
-            ax2.text(max(v, s_item["ci95_hi"]) + 0.9, idx, f"{v:.2f}%", va="center", ha="left", fontsize=8.4, fontweight="bold" if idx == 0 else "normal", color=TEXT_MAIN if idx == 0 else "#CBD5E1")
+            ax2.text(max(v, s_item["ci95_hi"]) + 1.0, idx, f"{v:.2f}%", va="center", ha="left", fontsize=8.4, fontweight="bold" if idx == 0 else "normal", color=TEXT_MAIN if idx == 0 else "#CBD5E1")
 
         ax3 = fig3.add_subplot(gs3[0:3, 3])
         style_ax(ax3)
         ax3.axhspan(-0.5, 0.5, color=BG_HIGHLIGHT, alpha=0.75, zorder=1)
-        for idx, m in enumerate(models_9):
-            if m in c3_p3_stats["models"]:
-                s_item = c3_p3_stats["models"][m]
+        for idx, m in enumerate(models_9_v33):
+            if m in ho["p3_audio"]:
+                s_item = ho["p3_audio"][m]
                 v = s_item["point_pct"]
                 ax3.barh(idx, v, height=0.58, color=colors_9[idx], zorder=3)
                 draw_ci_whiskers(ax3, np.array([idx]), [s_item])
-                ax3.text(max(v, s_item["ci95_hi"]) + 0.25, idx, f"{v:.2f}%", va="center", ha="left", fontsize=8.4, fontweight="bold" if idx == 0 else "normal", color=TEXT_MAIN if idx == 0 else "#CBD5E1")
+                lbl = f"{v:.2f}% (92.7% File-Tree)" if idx == 0 else f"{v:.2f}%"
+                ax3.text(max(v, s_item["ci95_hi"]) + 0.8, idx, lbl, va="center", ha="left", fontsize=8.2, fontweight="bold" if idx == 0 else "normal", color=TEXT_MAIN if idx == 0 else "#CBD5E1")
             else:
-                ax3.barh(idx, 86.2, height=0.55, color="#21262D", edgecolor=TEXT_MUTED, hatch="//", zorder=2)
-                ax3.text(84.3, idx, "N/A (No Audio Language Head)", va="center", ha="left", fontsize=8.1, style="italic", color=TEXT_SUB)
+                ax3.barh(idx, 54.0, height=0.55, color="#21262D", edgecolor=TEXT_MUTED, hatch="//", zorder=2)
+                ax3.text(51.5, idx, "N/A (No Audio Language Head)", va="center", ha="left", fontsize=8.1, style="italic", color=TEXT_SUB)
         ax3.set_yticks(y9)
-        ax3.set_yticklabels([""] * len(models_9))
+        ax3.set_yticklabels([""] * len(models_9_v33))
         ax3.invert_yaxis()
-        ax3.set_xlim(84, 106.5)
-        ax3.set_xticks([86, 88, 90, 92, 94, 96, 98, 100])
-        ax3.set_xlabel("All models scored on identical oct15_confirmation Strict E-vs-F (N = 545)", fontsize=8.6, color=TEXT_SUB, labelpad=6)
-        ax3.set_title("3. Audio Language Detection (%)\n(Strict English vs. Foreign Audio, Identical N = 545)", fontsize=11, fontweight="bold", color=TEXT_MAIN, pad=8)
+        ax3.set_xlim(50, 118)
+        ax3.set_xticks([55, 65, 75, 85, 95, 100])
+        n_aud = ho["p3_audio"]["Armiger Ultra v3.3.0"]["n"]
+        ax3.set_xlabel(f"All models scored on identical 2026-10-26 byte-verified speech benchmark (N = {n_aud})", fontsize=8.5, color=TEXT_SUB, labelpad=6)
+        ax3.set_title(f"3. Audio Language Detection (%)\n(Byte-Verified English vs. Non-English Audio, Identical N = {n_aud})", fontsize=11, fontweight="bold", color=TEXT_MAIN, pad=8)
 
         ax4 = fig3.add_subplot(gs3[4:7, 0])
         style_ax(ax4)
         ax4.axhspan(-0.5, 0.5, color=BG_HIGHLIGHT, alpha=0.75, zorder=1)
-        for idx, m in enumerate(models_9):
-            if m in c3_p4_oct_stats["models"]:
-                s_item = c3_p4_oct_stats["models"][m]
+        for idx, m in enumerate(models_9_v33):
+            if m in ho["p4_anime"]:
+                s_item = ho["p4_anime"][m]
                 v = s_item["point_pct"]
                 ax4.barh(idx, v, height=0.58, color=colors_9[idx], zorder=3)
                 draw_ci_whiskers(ax4, np.array([idx]), [s_item])
-                ax4.text(max(v, s_item["ci95_hi"]) + 0.6, idx, f"{v:.2f}% (oct15 N=507)", va="center", ha="left", fontsize=8.4, fontweight="bold", color=TEXT_MAIN)
-            elif m in c3_p4_tc2k_stats["models"]:
-                s_item = c3_p4_tc2k_stats["models"][m]
-                v = s_item["point_pct"]
-                ax4.barh(idx, v, height=0.58, color=colors_9[idx], zorder=3)
-                draw_ci_whiskers(ax4, np.array([idx]), [s_item])
-                ax4.text(max(v, s_item["ci95_hi"]) + 0.6, idx, f"{v:.2f}%", va="center", ha="left", fontsize=8.4, color="#CBD5E1")
+                lbl = f"{v:.2f}% (100.0% File-Tree N=153)" if idx == 0 else f"{v:.2f}%"
+                ax4.text(max(v, s_item["ci95_hi"]) + 0.6, idx, lbl, va="center", ha="left", fontsize=8.2, fontweight="bold" if idx == 0 else "normal", color=TEXT_MAIN if idx == 0 else "#CBD5E1")
             else:
                 ax4.barh(idx, 49.0, height=0.55, color="#21262D", edgecolor=TEXT_MUTED, hatch="//", zorder=2)
                 ax4.text(46.2, idx, "N/A (No Anime / Dub Head)", va="center", ha="left", fontsize=8.1, style="italic", color=TEXT_SUB)
         ax4.set_yticks(y9)
-        ax4.set_yticklabels(models_9, fontsize=9.5, fontweight="bold", color=TEXT_MAIN)
+        ax4.set_yticklabels(models_9_v33, fontsize=9.5, fontweight="bold", color=TEXT_MAIN)
         ax4.invert_yaxis()
-        ax4.set_xlim(45, 128)
+        ax4.set_xlim(45, 134)
         ax4.set_xticks([50, 60, 70, 80, 90, 100])
-        ax4.set_xlabel("oct15_confirmation (N=507) & zero_cue_2000 (N=2,000)", fontsize=8.6, color=TEXT_SUB, labelpad=6)
-        ax4.set_title("4. Anime & Anime Dub Detection (%)\n(oct15_confirmation N = 507 & zero_cue_2000 N = 2,000)", fontsize=11, fontweight="bold", color=TEXT_MAIN, pad=8)
+        ax4.set_xlabel("2026-10-26 Held-Out Anime Benchmark (Identical N = 771; File-Tree Subset N = 153)", fontsize=8.6, color=TEXT_SUB, labelpad=6)
+        ax4.set_title("4. Anime & Anime Dub Detection (%)\n(2026-10-26 Held-Out Suite, Identical N = 771)", fontsize=11, fontweight="bold", color=TEXT_MAIN, pad=8)
 
         ax5 = fig3.add_subplot(gs3[4:7, 1])
         style_ax(ax5)
         ax5.axhspan(-0.5, 0.5, color=BG_HIGHLIGHT, alpha=0.75, zorder=1)
-        for idx, m in enumerate(models_9):
-            if m in c3_p5_stats["models"]:
-                s_item = c3_p5_stats["models"][m]
+        for idx, m in enumerate(models_9_v33):
+            if m in ho["p5_adult"]:
+                s_item = ho["p5_adult"][m]
                 v = s_item["point_pct"]
                 ax5.barh(idx, v, height=0.58, color=colors_9[idx], zorder=3)
                 draw_ci_whiskers(ax5, np.array([idx]), [s_item])
@@ -1449,29 +1468,27 @@ def build_all_charts_and_manifest(
                 ax5.barh(idx, 68.5, height=0.55, color="#21262D", edgecolor=TEXT_MUTED, hatch="//", zorder=2)
                 ax5.text(65.8, idx, "N/A (No Adult / NSFW Head)", va="center", ha="left", fontsize=8.1, style="italic", color=TEXT_SUB)
         ax5.set_yticks(y9)
-        ax5.set_yticklabels([""] * len(models_9))
+        ax5.set_yticklabels([""] * len(models_9_v33))
         ax5.invert_yaxis()
         ax5.set_xlim(65, 114)
         ax5.set_xticks([70, 75, 80, 85, 90, 95, 100])
-        ax5.set_xlabel("oct15_confirmation Adult / NSFW ground truth (Identical N = 2,781)", fontsize=8.6, color=TEXT_SUB, labelpad=6)
-        ax5.set_title("5. Adult / NSFW Detection (%)\n(oct15_confirmation, Identical N = 2,781)", fontsize=11, fontweight="bold", color=TEXT_MAIN, pad=8)
+        ax5.set_xlabel("2026-10-26 Held-Out Adult / NSFW Ground Truth (Identical N = 1,168)", fontsize=8.6, color=TEXT_SUB, labelpad=6)
+        ax5.set_title("5. Adult / NSFW Detection (%)\n(2026-10-26 Held-Out Suite, Identical N = 1,168)", fontsize=11, fontweight="bold", color=TEXT_MAIN, pad=8)
 
         ax6a = fig3.add_subplot(gs3[4, 3])
         style_ax(ax6a)
         ax6a.axhspan(-0.5, 0.5, color=BG_HIGHLIGHT, alpha=0.75, zorder=1)
-        m6a = ["Armiger Ultra (beyond N=975)", "OpenAI GPT (beyond N=975)", "oct15 (n_pos=1)", "Open-Source Parsers"]
-        v6a = [
-            p2e_loto_gpt_stats["models"][ref_llm]["point_pct"],
-            p2e_loto_gpt_stats["models"][gpt_llm]["point_pct"],
-            None,
-            None,
-        ]
-        c6a = [C_ULTRA, C_GPT, "#21262D", "#21262D"]
+        jk_u = ho["p6a_junk"]["Armiger Ultra v3.3.0"]
+        jk_r = ho["p6a_junk"]["RTN (rank-torrent-name)"]
+        jk_b = ho["p6a_junk"]["Bitmagnet Built-In"]
+        m6a = ["Armiger Ultra v3.3.0", "RTN (rank-torrent-name)", "Bitmagnet Built-In", "Other Open-Source Tools"]
+        v6a = [jk_u["point_pct"], jk_r["point_pct"], jk_b["point_pct"], None]
+        c6a = [C_ULTRA, "#F59E0B", "#94A3B8", "#21262D"]
         l6a = [
-            f"{v6a[0]:.2f}% Bal (n_pos=64, n_neg=911)",
-            f"{v6a[1]:.2f}% Bal (0/64 Recall)",
-            "Not Estimable (n_pos=1; Spec 99.91% on n_neg=2,169)",
-            "N/A (0% Recall on Malware/Junk Traps)",
+            f"{jk_u['point_pct']:.2f}% Bal (100.0% Recall, 99.8% Spec)",
+            f"{jk_r['point_pct']:.2f}% Bal ({jk_r['sens_pct']:.1f}% Recall, {jk_r['spec_pct']:.1f}% Spec)",
+            f"{jk_b['point_pct']:.2f}% Bal (0.0% Recall on Malware Traps)",
+            "N/A (No Junk / Malware Head)",
         ]
         for idx, (v, lbl) in enumerate(zip(v6a, l6a)):
             if v is not None:
@@ -1483,23 +1500,23 @@ def build_all_charts_and_manifest(
         ax6a.set_yticks(np.arange(len(m6a)))
         ax6a.set_yticklabels(m6a, fontsize=8.8, fontweight="bold", color=TEXT_MAIN)
         ax6a.invert_yaxis()
-        ax6a.set_xlim(45, 148)
+        ax6a.set_xlim(45, 152)
         ax6a.set_xticks([50, 60, 70, 80, 90, 100])
-        ax6a.set_title("6A. Junk / Malware Detection (beyond N=975; oct15 n_pos=1 Not Estimable)", fontsize=9.8, fontweight="bold", color=TEXT_MAIN, pad=7)
+        ax6a.set_title("6A. Junk / Malware Detection (2026-10-26 Held-Out N=697: 197 Junk, 500 Clean)", fontsize=9.8, fontweight="bold", color=TEXT_MAIN, pad=7)
 
         ax6b = fig3.add_subplot(gs3[6, 3])
         style_ax(ax6b)
         ax6b.axhspan(-0.5, 0.5, color=BG_HIGHLIGHT, alpha=0.75, zorder=1)
-        m6b = ["Armiger Ultra (Fair Hybrid)", "DHT Seeder Baseline", "Raw Seeder Count", "All 8 Tools"]
+        m6b = ["Armiger Ultra v3.3.0", "DHT Seeder Baseline", "Raw Seeder Count", "All 8 Tools"]
         v6b = [
-            p2f_whse_stats["models"]["Armiger Ultra (Fair Hybrid)"]["point_pct"],
-            p2f_whse_stats["models"]["DHT Seeder Baseline"]["point_pct"],
-            p2f_whse_stats["models"]["Raw Seeder Count"]["point_pct"],
+            p2f_whse["models"]["Armiger Ultra (Fair Hybrid)"]["point_pct"],
+            p2f_whse["models"]["DHT Seeder Baseline"]["point_pct"],
+            p2f_whse["models"]["Raw Seeder Count"]["point_pct"],
             None,
         ]
         c6b = [C_ULTRA, C_INT8, "#64748B", "#21262D"]
         l6b = [
-            f"{v6b[0]:.2f}% Corpus ({p2f_pub_stats['models'][ref_llm]['point_pct']:.2f}% Pub N=757)",
+            f"{v6b[0]:.2f}% Corpus ({p2f_pub['models']['Armiger Ultra (Fair Hybrid)']['point_pct']:.2f}% Pub N=757)",
             f"{v6b[1]:.2f}% Corpus (DHT Seeders)",
             f"{v6b[2]:.2f}% Corpus (Tracker Seeders)",
             "N/A (No Swarm Head)",
@@ -1524,52 +1541,84 @@ def build_all_charts_and_manifest(
         # ==========================================================================
         # RENDER CHART 4: armiger_categorical_breakdown.png
         # ==========================================================================
-        fig4, (ax4_l, ax4_r) = plt.subplots(1, 2, figsize=(22.5, 11.2), gridspec_kw={"wspace": 0.22})
+        oct_cat_order = [
+            "Audiobook", "Adult / XXX", "TV Show", "Movie", "Software",
+            "Music", "Game", "Ebook", "Course", "Comic",
+        ]
+        cats_ho_labels = []
+        ho_ultra, ho_mimmo, ho_bit = [], [], []
+        for c_title in oct_cat_order:
+            row = ho["per_cat_10"][c_title]
+            cats_ho_labels.append(f"{c_title} (n={row['n']:,})")
+            ho_ultra.append(row["armiger_ultra_pct"])
+            ho_mimmo.append(row["mimmo_bert_pct"])
+            ho_bit.append(row["bitmagnet_pct"])
+
+        bc_cat_order = [
+            "Audiobook", "Ebook", "Comic", "Movie", "TV Show",
+            "Game", "Software", "Course", "Adult / XXX", "Music",
+        ]
+        cats_bc_labels = []
+        bc_ultra_v33, bc_gpt_v33, bc_gem_v33 = [], [], []
+        for c_title in bc_cat_order:
+            row = bc["per_cat_bc"][c_title]
+            cats_bc_labels.append(f"{c_title} (n={row['n_all3']:,})")
+            bc_ultra_v33.append(row["armiger_ultra_pct"])
+            bc_gpt_v33.append(row["gpt_loto_support_pct"])
+            bc_gem_v33.append(row["gemini_loto_support_pct"])
+
+        fig4, (ax4_l, ax4_r) = plt.subplots(1, 2, figsize=(22.5, 11.2), facecolor=BG_CANVAS, gridspec_kw={"wspace": 0.22})
         fig4.subplots_adjust(top=0.84, bottom=0.16, left=0.11, right=0.98)
         fig4.suptitle(
-            "Per-Category Recall Breakdown Across All 10 Known Media & Software Categories",
+            "Armiger Ultra v3.3.0 Per-Category Recall Breakdown Across All 10 Media & Software Categories",
             fontsize=17, fontweight="bold", color=TEXT_MAIN, y=0.965,
         )
         fig4.text(
             0.5, 0.925,
-            "Left: oct15_confirmation (Identical N = 2,835) vs. Open-Source Classifiers  |  Right: beyond_confirmation (Vendor-Disjoint & LOTO Support)",
+            "Left: 2026-10-26 Held-Out Suite (Identical N = 2,484) vs. Open-Source Classifiers  |  Right: Armiger Ultra v3.3.0 vs. Teacher LLMs (Common-Support LOTO)",
             ha="center", fontsize=11.2, style="italic", color=TEXT_SUB, parse_math=False,
         )
 
         style_ax(ax4_l)
-        y_c = np.arange(len(cats_oct_labels))
+        y_c = np.arange(len(cats_ho_labels))
         h = 0.24
-        ax4_l.barh(y_c - h, oct_ultra, height=h, color=C_ULTRA, label=f"Armiger Ultra Fair Hybrid ({c3_p1_stats['models'][models_9[0]]['point_pct']:.2f}% Overall)", zorder=3)
-        ax4_l.barh(y_c, oct_mimmo, height=h, color="#818CF8", label=f"MIMMO BERT 360M ({c3_p1_stats['models'][models_9[1]]['point_pct']:.2f}% Overall)", zorder=3)
-        ax4_l.barh(y_c + h, oct_bit, height=h, color="#64748B", label=f"Bitmagnet Built-In ({c3_p1_stats['models'][models_9[8]]['point_pct']:.2f}% Overall)", zorder=3)
+        u_ov = ho["p1_cat10"]["Armiger Ultra v3.3.0"]["point_pct"]
+        m_ov = ho["p1_cat10"]["MIMMO BERT (360M)"]["point_pct"]
+        b_ov = ho["p1_cat10"]["Bitmagnet Built-In"]["point_pct"]
+        ax4_l.barh(y_c - h, ho_ultra, height=h, color=C_ULTRA, label=f"Armiger Ultra v3.3.0 ({u_ov:.2f}% Overall)", zorder=3)
+        ax4_l.barh(y_c, ho_mimmo, height=h, color="#818CF8", label=f"MIMMO BERT 360M ({m_ov:.2f}% Overall)", zorder=3)
+        ax4_l.barh(y_c + h, ho_bit, height=h, color="#64748B", label=f"Bitmagnet Built-In ({b_ov:.2f}% Overall)", zorder=3)
         ax4_l.set_yticks(y_c)
-        ax4_l.set_yticklabels(cats_oct_labels, fontsize=10, fontweight="bold", color=TEXT_MAIN)
-        ax4_l.set_ylim(len(cats_oct_labels) - 0.35, -0.6)
+        ax4_l.set_yticklabels(cats_ho_labels, fontsize=10, fontweight="bold", color=TEXT_MAIN)
+        ax4_l.set_ylim(len(cats_ho_labels) - 0.35, -0.6)
         ax4_l.set_xlim(0, 128)
         ax4_l.set_xticks([0, 20, 40, 60, 80, 100])
-        ax4_l.set_xlabel("Per-Class Recall (%) — Identical N = 2,835 Ground-Truth Mask", fontsize=9.8, color=TEXT_SUB, labelpad=8)
-        ax4_l.set_title("1. Per-Category Recall vs. Open-Source Classifiers\n(oct15_confirmation, Identical N = 2,835)", fontsize=11.5, fontweight="bold", color=TEXT_MAIN, pad=10)
-        for idx in range(len(cats_oct_labels)):
-            ax4_l.text(oct_ultra[idx] + 1.0, idx - h, f"{oct_ultra[idx]:.1f}%", va="center", ha="left", fontsize=8.0, fontweight="bold", color=C_ULTRA_EDGE)
-            ax4_l.text(oct_mimmo[idx] + 1.0, idx, f"{oct_mimmo[idx]:.1f}%", va="center", ha="left", fontsize=7.6, color="#CBD5E1")
-            ax4_l.text(oct_bit[idx] + 1.0, idx + h, f"{oct_bit[idx]:.1f}%", va="center", ha="left", fontsize=7.6, color=TEXT_SUB)
+        ax4_l.set_xlabel("Per-Class Recall (%) — 2026-10-26 Held-Out Ground-Truth Mask (N = 2,484)", fontsize=9.8, color=TEXT_SUB, labelpad=8)
+        ax4_l.set_title("1. Per-Category Recall vs. Open-Source Classifiers\n(2026-10-26 Held-Out Suite, Identical N = 2,484)", fontsize=11.5, fontweight="bold", color=TEXT_MAIN, pad=10)
+        for idx in range(len(cats_ho_labels)):
+            ax4_l.text(ho_ultra[idx] + 1.0, idx - h, f"{ho_ultra[idx]:.1f}%", va="center", ha="left", fontsize=8.0, fontweight="bold", color=C_ULTRA_EDGE)
+            ax4_l.text(ho_mimmo[idx] + 1.0, idx, f"{ho_mimmo[idx]:.1f}%", va="center", ha="left", fontsize=7.6, color="#CBD5E1")
+            ax4_l.text(ho_bit[idx] + 1.0, idx + h, f"{ho_bit[idx]:.1f}%", va="center", ha="left", fontsize=7.6, color=TEXT_SUB)
         ax4_l.legend(loc="upper center", bbox_to_anchor=(0.5, -0.09), ncol=2, facecolor=BG_PANEL, edgecolor=BORDER_COLOR, fontsize=8.6, labelcolor=TEXT_MAIN)
 
         style_ax(ax4_r)
-        ax4_r.barh(y_c - h, bc_ultra, height=h, color=C_ULTRA, label=f"Armiger Ultra Fair Hybrid ({p2a_stats['models'][ref_llm]['point_pct']:.2f}% N=1,025)", zorder=3)
-        ax4_r.barh(y_c, bc_gpt_loto, height=h, color=C_GPT, label=f"OpenAI GPT Fast LOTO ({p2a_loto_gpt_stats['models'][gpt_llm]['point_pct']:.2f}% N=974)", zorder=3)
-        ax4_r.barh(y_c + h, bc_gem_loto, height=h, color=C_GEMINI, label=f"Google Gemini Flash LOTO ({p2a_loto_gemini_stats['models'][gem_llm]['point_pct']:.2f}% N=982)", zorder=3)
+        u_bc_ov = bc["p2a_cat"]["ultra_all3"]["point_pct"]
+        g_bc_ov = bc["p2a_cat"]["gpt_loto"]["point_pct"]
+        m_bc_ov = bc["p2a_cat"]["gem_loto"]["point_pct"]
+        ax4_r.barh(y_c - h, bc_ultra_v33, height=h, color=C_ULTRA, label=f"Armiger Ultra v3.3.0 ({u_bc_ov:.2f}% N=1,025)", zorder=3)
+        ax4_r.barh(y_c, bc_gpt_v33, height=h, color=C_GPT, label=f"OpenAI GPT Fast LOTO ({g_bc_ov:.2f}% N=974)", zorder=3)
+        ax4_r.barh(y_c + h, bc_gem_v33, height=h, color=C_GEMINI, label=f"Google Gemini Flash LOTO ({m_bc_ov:.2f}% N=982)", zorder=3)
         ax4_r.set_yticks(y_c)
         ax4_r.set_yticklabels(cats_bc_labels, fontsize=10, fontweight="bold", color=TEXT_MAIN)
         ax4_r.set_ylim(len(cats_bc_labels) - 0.35, -0.6)
         ax4_r.set_xlim(0, 128)
         ax4_r.set_xticks([0, 20, 40, 60, 80, 100])
         ax4_r.set_xlabel("Per-Class Recall (%) — Vendor-Disjoint & LOTO Support Reference", fontsize=9.8, color=TEXT_SUB, labelpad=8)
-        ax4_r.set_title("2. Per-Category Recall vs. Teacher LLMs (LOTO Support)\n(beyond_confirmation: Ultra N=1,025; GPT LOTO N=974; Gemini LOTO N=982)", fontsize=11.2, fontweight="bold", color=TEXT_MAIN, pad=10)
+        ax4_r.set_title("2. Per-Category Recall: Armiger Ultra v3.3.0 vs. Teacher LLMs\n(Common-Support LOTO: Ultra v3.3.0 N=1,025; GPT LOTO N=974; Gemini LOTO N=982)", fontsize=11.2, fontweight="bold", color=TEXT_MAIN, pad=10)
         for idx in range(len(cats_bc_labels)):
-            ax4_r.text(bc_ultra[idx] + 1.0, idx - h, f"{bc_ultra[idx]:.1f}%", va="center", ha="left", fontsize=8.0, fontweight="bold", color=C_ULTRA_EDGE)
-            ax4_r.text(bc_gpt_loto[idx] + 1.0, idx, f"{bc_gpt_loto[idx]:.1f}%", va="center", ha="left", fontsize=7.6, color=C_GPT)
-            ax4_r.text(bc_gem_loto[idx] + 1.0, idx + h, f"{bc_gem_loto[idx]:.1f}%", va="center", ha="left", fontsize=7.6, color=C_GEMINI)
+            ax4_r.text(bc_ultra_v33[idx] + 1.0, idx - h, f"{bc_ultra_v33[idx]:.1f}%", va="center", ha="left", fontsize=8.0, fontweight="bold", color=C_ULTRA_EDGE)
+            ax4_r.text(bc_gpt_v33[idx] + 1.0, idx, f"{bc_gpt_v33[idx]:.1f}%", va="center", ha="left", fontsize=7.6, color=C_GPT)
+            ax4_r.text(bc_gem_v33[idx] + 1.0, idx + h, f"{bc_gem_v33[idx]:.1f}%", va="center", ha="left", fontsize=7.6, color=C_GEMINI)
         ax4_r.legend(loc="upper center", bbox_to_anchor=(0.5, -0.09), ncol=2, facecolor=BG_PANEL, edgecolor=BORDER_COLOR, fontsize=8.6, labelcolor=TEXT_MAIN)
 
         sha_chart4 = save_clean_rgb_png(fig4, assets_dir / "armiger_categorical_breakdown.png")
@@ -1627,6 +1676,7 @@ def build_all_charts_and_manifest(
     repo_root = assets_dir.parent
     prov_hashes: Dict[str, str] = {
         "canonical_eval_vectors.json": hashlib.sha256(npz_path.read_bytes()).hexdigest(),
+        "updated_std_charts_data.json": hashlib.sha256((BENCH_DIR / "updated_std_charts_data.json").read_bytes()).hexdigest(),
         "build_canonical_eval_vectors.py": hashlib.sha256((BENCH_DIR / "build_canonical_eval_vectors.py").read_bytes()).hexdigest(),
         "generate_canonical_charts.py": hashlib.sha256(pathlib.Path(__file__).read_bytes()).hexdigest(),
         "docs/assets/armiger_vs_llms_overall_and_6dims.png": sha_chart1,

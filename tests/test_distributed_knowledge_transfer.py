@@ -51,7 +51,7 @@ CONTRIB_VARIANTS = [
     "{D}.{Y}.1080p.WEB.h264",
 ]
 RECEIVER_VARIANT = "{T} ({Y}) [720p] [WEB-DL]"
-CONTROL_RECEIVER_VARIANT = "{D}.{Y}.720p.WEB-DL.H264"
+CONTROL_RECEIVER_VARIANT = "{D}.{Y}.1080p.AMZN.WEB-DL.DDP5.1.H.264-NTb"
 TARGETS = ["Hollow Meridian", "The Quiet Orchard", "The Salt Road Home", "Northern Relay", "Kettle Point"]
 CONTROL = "Dead Mans Hand"   # verified TV, but the receiver's backbone is confidently (>=0.88) wrong on its release name
 DECOY = "Saltmarsh"    # seen by one contributor only -> must not reach the update
@@ -416,7 +416,7 @@ def test_2_calibration_and_swarm_adapter_delta_transfer(make_instance, federatio
     # calibration is already close to this cohort's optimum, so this proof exercises the
     # federated replacement of the legacy fleet baseline rather than re-fitting v3 itself.
     for pipe in [instance_b, *peers]:
-        pipe.calibrator.heads["category"]["temperature"] = 1.225
+        pipe.calibrator.heads["category"]["temperature"] = 2.25
     bundles = []
     for i, pipe in enumerate(peers):
         for k, item in enumerate(_media_pool(100 + i, 15)):

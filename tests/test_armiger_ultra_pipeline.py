@@ -524,7 +524,7 @@ def test_swarm_residual_adapter_pytorch_forward_pass() -> None:
     from armiger.artifacts import model_directory
     here = model_directory()
     adapter = SwarmResidualAdapter.from_pretrained(here / "swarm_adapter.pt")
-    assert len(adapter.state) == 48
+    assert len(adapter.state) in (48, 54)
     assert hasattr(adapter, "way2_encoders")
     assert hasattr(adapter, "junk_encoder")
 

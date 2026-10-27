@@ -1,11 +1,11 @@
 {
   "schema_version": 1,
   "source_manifest": "benchmarks/CHARTS_MANIFEST.json",
-  "source_manifest_sha256": "bf92f21aa75b652f17bf1abe19ead098e10d45f57664086eec0007d593792a1c",
+  "source_manifest_sha256": "5b8f8cf5236bc1d37c9ae5283df0f16d74f1239a6cccf12bab72c28fd2fc30b8",
   "renderer": "benchmarks/generate_readme_overview.py",
-  "renderer_sha256": "3d31e704527cf7ccd6c7ecf8bc5f0c1f57747c6091029618d344004b0468259e",
+  "renderer_sha256": "0c4b1cba58563c8c463484da74182684360af5d27ed75bed4f1e7a330fd4d786",
   "image": "docs/assets/armiger_overview.png",
-  "image_sha256": "dc898bf044d49ff73e8635bf9728ae4d0a3b5519129074c378cb3508fffb90be",
+  "image_sha256": "2631e90824398b586dfa4a4123902f2c545dc6dde41711993a06896c03b27970",
   "data": {
     "model_version": "3.0.0",
     "overall": {

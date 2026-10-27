@@ -9,7 +9,7 @@ With [Docker](https://docs.docker.com/get-started/get-docker/) running and Docke
 ```yaml
 services:
   armiger-ultra:
-    image: ghcr.io/spencernorton/armiger:3.3.1
+    image: ghcr.io/spencernorton/armiger:3.3.2
     restart: unless-stopped
     ports:
       - '127.0.0.1:8096:8096'
