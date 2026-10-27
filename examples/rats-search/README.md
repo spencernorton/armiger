@@ -10,7 +10,7 @@ Create a folder called `armiger-rats`. Save this as **`compose.yaml`** inside it
 
 ```yaml
 include:
-  - oci://ghcr.io/spencernorton/armiger-rats-search-stack:3.3.3
+  - oci://ghcr.io/spencernorton/armiger-rats-search-stack:3.3.4
 ```
 
 This loads the complete setup from our versioned package. All connections are already configured.

@@ -1,5 +1,9 @@
 # Changelog
 
+## 3.3.4
+
+- Pin `spencernorton/Armiger-Connectors` `9b00089a06df24497e45d2f2144eb14a1bb03ac2` (`v1.2.5`) in `examples/Dockerfile` to emit canonical human-readable Bitmagnet swarm viability tags (`armiger-viability-alive-viable`, `armiger-viability-degraded`, `armiger-viability-stalled`, `armiger-viability-dead`, `armiger-viability-unknown-cold`) and automatically migrate and remove legacy hash-truncated viability tags (`armiger-viability-dea-c24281f7`, `armiger-viability-deg-7c170f8b`, `armiger-viability-sus-cdc9d2c6`) on startup (`#42`).
+
 ## 3.3.3
 
 - Pin `NorviTech/armiger-ultra` revision `18ef5418b3858ee4f70c137540febb5343b8754e` with canonical BEP 46 `.torrent` metadata and `zero_cue_catalog.sqlite.zlib` webseed assets, fix package-qualified import and webseed transfer budget in `verify_dht.py`, accept unsorted KRPC framing keys (`bdecode_krpc`) from Mainline `libtorrent` routers, and prioritize responsive Mainline DHT bootstrap routers.

@@ -1,3 +1,10 @@
+## 2026-10-27 — NorviTechGH — Pin Armiger-Connectors v1.2.5 for canonical Bitmagnet viability tags and automatic legacy tag repair (v3.3.4)
+
+- **Branch:** release/v3.3.4-bitmagnet-viability-tags
+- **What changed:** Pin `spencernorton/Armiger-Connectors` `9b00089a06df24497e45d2f2144eb14a1bb03ac2` (`v1.2.5`) in `examples/Dockerfile`, update `examples/bitmagnet/README.md` and `docs/bitmagnet-configuration.md` with canonical swarm viability tags (`armiger-viability-alive-viable`, `armiger-viability-degraded`, `armiger-viability-stalled`, `armiger-viability-dead`, `armiger-viability-unknown-cold`) and automatic migration of legacy hash-truncated tags (`#42`), and bump version to `3.3.4`.
+- **Validation:** `pytest -q`, `docker compose config --quiet` across all 3 example stacks, and `git diff --check`.
+- **Follow-ups:** Merge PR and tag `v3.3.4` after `Armiger-Connectors` `v1.2.5` merges.
+
 ## 2026-10-27 — Refresh 2026-10-26 held-out chart data and validate finite overview scores
 
 - **Branch:** claude/fix-adult-chart-nan

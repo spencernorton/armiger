@@ -6,7 +6,7 @@ The packaged stack runs three services:
 
 - **`postgres` (`postgres:16-alpine`)** — Bitmagnet's PostgreSQL database.
 - **`bitmagnet` (`ghcr.io/bitmagnet-io/bitmagnet:v0.10.0`)** — Bitmagnet Web UI, GraphQL API, and raw Torznab feed on `:3333`, plus DHT crawler on `:3334/tcp` and `:3334/udp`.
-- **`armiger-ultra` (`ghcr.io/spencernorton/armiger:3.3.3`)** — Background Bitmagnet GraphQL poller, HTTP status/classification API on `:8096`, and filtered Torznab proxy on `:8097` (with the verified Ultra model bundled inside the image).
+- **`armiger-ultra` (`ghcr.io/spencernorton/armiger:3.3.4`)** — Background Bitmagnet GraphQL poller, HTTP status/classification API on `:8096`, and filtered Torznab proxy on `:8097` (with the verified Ultra model bundled inside the image).
 
 ---
 
@@ -57,7 +57,7 @@ services:
     command: [worker, run, --keys=http_server, --keys=queue_server, --keys=dht_crawler]
 
   armiger-ultra:
-    image: ghcr.io/spencernorton/armiger:3.3.3
+    image: ghcr.io/spencernorton/armiger:3.3.4
     restart: unless-stopped
     command: [python, /opt/connectors/bitmagnet/bitmagnet_connector.py]
     depends_on:
@@ -104,7 +104,7 @@ If you use Docker Compose 2.34 or newer, you can also include the published stac
 
 ```yaml
 include:
-  - oci://ghcr.io/spencernorton/armiger-bitmagnet-stack:3.3.3
+  - oci://ghcr.io/spencernorton/armiger-bitmagnet-stack:3.3.4
 ```
 
 ```bash
@@ -120,7 +120,7 @@ If you already run Bitmagnet and want to keep your existing PostgreSQL database 
 ```yaml
 services:
   armiger-ultra:
-    image: ghcr.io/spencernorton/armiger:3.3.3
+    image: ghcr.io/spencernorton/armiger:3.3.4
     restart: unless-stopped
     command: [python, /opt/connectors/bitmagnet/bitmagnet_connector.py]
     ports:
@@ -153,7 +153,7 @@ Open **[http://localhost:3333](http://localhost:3333)**. Every `BITMAGNET_POLL_S
 | **Content category** | `armiger-movie`, `armiger-tv-show`, `armiger-music`, `armiger-game`, `armiger-software`, `armiger-ebook`, `armiger-audiobook`, `armiger-comic`, `armiger-course`, `armiger-xxx`, `armiger-unknown` | Predicted primary media or software type. |
 | **Audio language** | `armiger-lang-english`, `armiger-lang-non-english`, `armiger-lang-multi-or-unknown` | Predicted audio track language class. |
 | **Release title script** | `armiger-title-english`, `armiger-title-non-english` | Whether the release title is English/Latin vs. localized non-English script. |
-| **Swarm viability** | `armiger-viability-alive-viable`, `armiger-viability-unknown-cold`, plus 30-char hash-suffixed tags for `degraded_viable`, `suspect_stalled`, and `dead_known_zero` | Estimated swarm health tier from `SwarmSurvivalNet` and tracker priors (bounded to Bitmagnet's 30-character tag limit). |
+| **Swarm viability** | `armiger-viability-alive-viable`, `armiger-viability-degraded`, `armiger-viability-stalled`, `armiger-viability-dead`, `armiger-viability-unknown-cold` | Estimated swarm health tier from `SwarmSurvivalNet` and tracker priors. Legacy hash-truncated viability tags (`armiger-viability-dea-c24281f7`, `armiger-viability-deg-7c170f8b`, `armiger-viability-sus-cdc9d2c6`) are automatically replaced and removed on startup. |
 | **Anime & dub status** | `armiger-anime`, plus `armiger-dub-dual-audio-or-dub`, `armiger-dub-subbed-only`, or `armiger-dub-raw-or-vernacular` | Added when the item is classified as anime, along with its dub/subtitle classification. |
 | **English subtitles** | `armiger-eng-subs` | Added when English subtitles (`has_eng_subs`) are detected in the release metadata or file list. |
 
@@ -177,6 +177,7 @@ When Prowlarr or an `*Arr` app searches through `:8097/torznab`, Armiger classif
 - **Health & model status (`GET http://localhost:8096/healthz`):** returns `"status": "ok"`, active model variant (`ultra` or `int8`), catalog/adapter readiness, active DHT sequence (`active_seq`), bundle Merkle root (`active_bundle_merkle_root`), `model_source` (`baked_image` or `dht_live_overlay`), `last_dht_check_ts`, and `sharing_status`.
 - **Container logs (`docker compose logs -f armiger-ultra`):** shows startup configuration (`variant`, `interval`, `batch`) and polling errors if Bitmagnet is still starting.
 - **On-demand batch classification (`POST http://localhost:8096/v1/bitmagnet/classify`):** accepts `{"torrents": [{"infoHash": "...", "name": "...", "size": 123, "files": [{"path": "...", "size": 123}]}], "applyMutations": false}` and returns normalized predictions plus the prepared GraphQL tag/delete mutations.
+- **Legacy viability tag repair (`POST http://localhost:8096/v1/bitmagnet/repair-tags`):** scans Bitmagnet for legacy hash-truncated viability tags (`armiger-viability-dea-c24281f7`, `armiger-viability-deg-7c170f8b`, `armiger-viability-sus-cdc9d2c6`), writes the canonical replacement tags via `torrent.putTags`, and removes the legacy tags via `torrent.deleteTags`.
 
 ---
 
