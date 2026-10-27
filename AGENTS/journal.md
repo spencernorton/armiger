@@ -1,3 +1,10 @@
+## 2026-10-27 — Refresh 2026-10-26 held-out chart data and validate finite overview scores
+
+- **Branch:** claude/fix-adult-chart-nan
+- **What changed:** Update `benchmarks/updated_std_charts_data.json` to the complete 2026-10-26 held-out evaluation output (`N = 2,484` across all 10 categories, including `n = 75` and `100.0%` recall on `Adult / XXX` and `95.65%` on `Comic`). Validate positive sample counts and finite `[0, 100]` scores via `score(...)` inside `benchmarks/generate_readme_overview.py` (`render()`) so `NaN` or empty category strata fail fast, and regenerate all 5 evaluation PNGs (`docs/assets/armiger_overview.png`, `docs/assets/armiger_categorical_breakdown.png`, `docs/assets/armiger_vs_llms_overall_and_6dims.png`, `docs/assets/armiger_vs_llms_cost_comparison.png`, `docs/assets/armiger_vs_torrent_classifiers_6dims.png`) and their provenance manifests (`benchmarks/CHARTS_MANIFEST.json`, `benchmarks/README_OVERVIEW.json`).
+- **Validation:** Verified `pytest -q` (`benchmarks/test_chart_integrity.py`, `tests/test_readme_overview.py`, and full unit suite) and `git diff --check`.
+- **Follow-ups:** None.
+
 ## 2026-10-27 — Release 3.3.3: BEP 46 webseed metadata alignment, KRPC interop, and HF repo consolidation
 
 - **Branch:** release/v3.3.3-dht-webseed-and-hf-cleanup

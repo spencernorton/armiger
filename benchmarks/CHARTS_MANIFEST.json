@@ -65,13 +65,13 @@
   ],
   "provenance_sha256": {
     "canonical_eval_vectors.json": "62992cc441d321938446c54d52732a65b36da2d83c41d837d34b5c7674156aa9",
-    "updated_std_charts_data.json": "50aaebf2108d805f864697d15709a42627b96146c62dcae7c8956311deb495a5",
+    "updated_std_charts_data.json": "1557912936c0c826c56ab9935e1817deac8c02f223cb209e29eceba996ee9a42",
     "build_canonical_eval_vectors.py": "8165b1551e37b31f08c87757078cf991ac2c605a9dbc79328c6075a8dd7e7987",
     "generate_canonical_charts.py": "5e1717da6f6a70a4d6d3b81e30df4e136c22c7936f266cf4a6a41e603f20d52c",
-    "docs/assets/armiger_vs_llms_overall_and_6dims.png": "f8a60d44fb15ad621c7aabd0489e79326dcb0ffcbe7986fe418daa37a00b343e",
+    "docs/assets/armiger_vs_llms_overall_and_6dims.png": "5b219d8f2a7891fb84f7d150c36174520dff2fe6af767c2ababa35a42bf6971b",
     "docs/assets/armiger_vs_llms_cost_comparison.png": "8be499df5b936570be5576219b43e6880a138b7c15c666287e74c319d425fd1d",
-    "docs/assets/armiger_vs_torrent_classifiers_6dims.png": "5d8da7719c362e77bbca8a933d0dd71c00e5abaf693ef84f5f00ff4857e12f66",
-    "docs/assets/armiger_categorical_breakdown.png": "735671968a4b08d5c145fd6b12a58b818f331f0ccf018bf0f219b3a9a7ad5313",
+    "docs/assets/armiger_vs_torrent_classifiers_6dims.png": "9d2e96aa16ff31feb2ff415ef30531368a9ac1bd8670e17364a6704466dc0fd4",
+    "docs/assets/armiger_categorical_breakdown.png": "531c0fff588f6a5a08d55f2352c32c755e18ffcaecb9289dabcefd5dc2f21e32",
     "benchmarks/receipts/armiger_v23_eval_receipt.json": "11ad802fe2c176fe3313326e5ea157e707fee089ed1af6d029ae05254b6ca4be",
     "benchmarks/receipts/beyond_confirmation_teachers_receipt.json": "1d71c5b6ce536f421ef6c775310a013660d396a4fb5e15b5a57cf37767035d37",
     "benchmarks/receipts/curriculum_overlap_audit.json": "ffd3f58f13ef93f2950bfa141fbfd832429cb8929896fd2b56b8a83ef1f85a35",
@@ -85,7 +85,7 @@
   },
   "charts": {
     "armiger_vs_llms_overall_and_6dims.png": {
-      "sha256": "f8a60d44fb15ad621c7aabd0489e79326dcb0ffcbe7986fe418daa37a00b343e",
+      "sha256": "5b219d8f2a7891fb84f7d150c36174520dff2fe6af767c2ababa35a42bf6971b",
       "composite_6dim_mean": {
         "Armiger Ultra (Fair Hybrid)": {
           "point_pct": 95.66,
@@ -698,7 +698,7 @@
       }
     },
     "armiger_vs_torrent_classifiers_6dims.png": {
-      "sha256": "5d8da7719c362e77bbca8a933d0dd71c00e5abaf693ef84f5f00ff4857e12f66",
+      "sha256": "9d2e96aa16ff31feb2ff415ef30531368a9ac1bd8670e17364a6704466dc0fd4",
       "panel_1_category_11class_oct15": {
         "panel_name": "chart3_1_oct15_cat11",
         "n": 2835,
@@ -1368,7 +1368,7 @@
       }
     },
     "armiger_categorical_breakdown.png": {
-      "sha256": "735671968a4b08d5c145fd6b12a58b818f331f0ccf018bf0f219b3a9a7ad5313",
+      "sha256": "531c0fff588f6a5a08d55f2352c32c755e18ffcaecb9289dabcefd5dc2f21e32",
       "left_oct15_confirmation_n2835": {
         "Audiobook": {
           "n": 95,

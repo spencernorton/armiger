@@ -124,17 +124,21 @@ def render(data: dict, path: Path) -> None:
     ]
     overall_row = {
         "label": "Overall",
-        "n": ho["p1_cat10"]["Armiger Ultra v3.3.0"]["n"],
+        "n": int(ho["p1_cat10"]["Armiger Ultra v3.3.0"]["n"]),
         "scores": {
-            "Armiger Ultra v3.3.0": ho["p1_cat10"]["Armiger Ultra v3.3.0"]["point_pct"],
-            "MIMMO BERT (360M)": ho["p1_cat10"]["MIMMO BERT (360M)"]["point_pct"],
-            "Bitmagnet Built-In": ho["p1_cat10"]["Bitmagnet Built-In"]["point_pct"],
+            "Armiger Ultra v3.3.0": score(ho["p1_cat10"]["Armiger Ultra v3.3.0"]["point_pct"]),
+            "MIMMO BERT (360M)": score(ho["p1_cat10"]["MIMMO BERT (360M)"]["point_pct"]),
+            "Bitmagnet Built-In": score(ho["p1_cat10"]["Bitmagnet Built-In"]["point_pct"]),
         },
     }
-    cat_rows = [
-        {"label": lbl, "n": ho["per_cat_10"][k]["n"], "scores": {m: ho["per_cat_10"][k][f] for m, f in classifiers}}
-        for k, lbl in categories_order
-    ]
+    cat_rows = []
+    for k, lbl in categories_order:
+        row_n = ho["per_cat_10"][k]["n"]
+        if not isinstance(row_n, int) or row_n <= 0:
+            raise ValueError(f"Invalid sample count for {lbl}")
+        cat_rows.append(
+            {"label": lbl, "n": row_n, "scores": {m: score(ho["per_cat_10"][k][f]) for m, f in classifiers}}
+        )
 
     with plt.rc_context({"font.family": "DejaVu Sans", "text.color": white}):
         fig = plt.figure(figsize=(16, 10), dpi=120, facecolor=bg)
