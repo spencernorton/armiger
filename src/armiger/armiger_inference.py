@@ -469,8 +469,11 @@ class ArmigerStandaloneONNX:
     ) -> None:
         import onnxruntime as ort
 
-        from .artifacts import model_directory
-        base = model_directory()
+        try:
+            from .artifacts import model_directory
+            base = model_directory()
+        except ImportError:
+            base = Path(__file__).resolve().parent
         if onnx_path is None:
             for cand in ("armiger.onnx", "armiger.int8.onnx", "armiger_ultra.fp32.onnx"):
                 if (base / cand).exists():
@@ -486,14 +489,28 @@ class ArmigerStandaloneONNX:
         _get_vocab_ext_map(self.vocab_path)
         self.calibration_path = Path(calibration_path) if calibration_path else (base / "calibration.json")
         self.session = ort.InferenceSession(str(self.onnx_path), providers=["CPUExecutionProvider"])
-        self.head_names = [o.name for o in self.session.get_outputs()]
+        self.head_names = [o.name for o in self.session.get_outputs() if o.name != "bio64"]
+        self._batch_fn = build_onnx_batch_inputs
+        try:
+            for inp in self.session.get_inputs():
+                if getattr(inp, "name", "") == "stats":
+                    sh = getattr(inp, "shape", None)
+                    if isinstance(sh, (list, tuple)) and len(sh) >= 2 and type(sh[1]) is int and sh[1] == 41:
+                        try:
+                            from .r13_features import build_onnx_batch_inputs as _r13_batch_fn
+                        except ImportError:
+                            from r13_features import build_onnx_batch_inputs as _r13_batch_fn  # type: ignore
+                        self._batch_fn = _r13_batch_fn
+                        break
+        except Exception:
+            pass
 
     @staticmethod
     def _apply_v3_post_neural_guard(row: Mapping[str, Any], item_res: Dict[str, Any]) -> Dict[str, Any]:
         return _apply_v3_post_neural_guard(row, item_res)
 
     def predict_batch(self, rows: Sequence[Mapping[str, Any]]) -> List[Dict[str, Any]]:
-        feed = build_onnx_batch_inputs(rows)
+        feed = getattr(self, "_batch_fn", build_onnx_batch_inputs)(rows)
         raw_outs = self.session.run(self.head_names, feed)
         logits_by_head = dict(zip(self.head_names, raw_outs))
         results: List[Dict[str, Any]] = []
@@ -507,7 +524,10 @@ class ArmigerStandaloneONNX:
                     exps = np.exp(shifted)
                     probs_2d = exps / np.maximum(1e-12, np.sum(exps, axis=-1, keepdims=True))
                     raw_nm = str(rows[i].get("name") or rows[i].get("title") or "")
-                    from .byte_span_extractor import decode_bio_logits_viterbi, decode_bio_tags_to_spans
+                    try:
+                        from .byte_span_extractor import decode_bio_logits_viterbi, decode_bio_tags_to_spans
+                    except ImportError:
+                        from byte_span_extractor import decode_bio_logits_viterbi, decode_bio_tags_to_spans  # type: ignore
                     raw_b = raw_nm.encode("utf-8", errors="replace")[: vec.shape[0]]
                     tag_ids = [int(x) for x in decode_bio_logits_viterbi(vec, raw_b).tolist()]
                     classes = NEURAL_HEAD_CLASSES.get(

@@ -9,6 +9,8 @@ services:
       BITMAGNET_BATCH_SIZE: "100"
       # Preload the catalog. False defers loading until first use.
       ARMIGER_USE_ZERO_CUE_CATALOG: "true"
+      # Automatically poll the DHT for signed catalog and calibration updates.
+      ARMIGER_DHT_AUTO_UPDATE: "true"
       # These two settings filter requests made through Armiger's Torznab proxy.
       ARMIGER_REQUIRE_ENGLISH_AUDIO: "false"
       ARMIGER_ALLOW_ENGLISH_SUBS: "true"

@@ -1,6 +1,6 @@
 # Armiger Ultra settings for Bitmagnet
 
-These settings apply to the `armiger-ultra` service in the [Bitmagnet setup](../examples/bitmagnet/README.md), using `ghcr.io/spencernorton/armiger:3.3.1`. The image bundles the verified Ultra model and the [pinned Bitmagnet connector](https://github.com/spencernorton/Armiger-Connectors/blob/58679a4f0fd28de4ebee9133a23a6a10bb6adaf0/bitmagnet/bitmagnet_connector.py). Defaults below are the effective defaults of that packaged setup.
+These settings apply to the `armiger-ultra` service in the [Bitmagnet setup](../examples/bitmagnet/README.md), using `ghcr.io/spencernorton/armiger:3.3.2`. The image bundles the verified Ultra model and the [pinned Bitmagnet connector](https://github.com/spencernorton/Armiger-Connectors/blob/58679a4f0fd28de4ebee9133a23a6a10bb6adaf0/bitmagnet/bitmagnet_connector.py). Defaults below are the effective defaults of that packaged setup.
 
 ## Change a setting
 
@@ -70,6 +70,7 @@ The poller labels recent, untagged entries. Changing model or filtering settings
 | `ARMIGER_VARIANT` | `ultra` | Uses the FP32 Ultra model. `int8` selects the INT8 model while retaining the Ultra plugins; `cpu` and `armiger` are aliases for that selection. INT8 requests the additional pinned `all` bundle, which is not fully bundled in this image. |
 | `ARMIGER_AUTO_DOWNLOAD` | `true` | Allows missing model files to be downloaded and verified against the package's pinned manifest. `false` requires the selected files to be present and valid already. |
 | `ARMIGER_USE_ZERO_CUE_CATALOG` | `true` | Preloads the title catalog during startup. `false` defers loading until it is first used; it does not disable catalog lookups. |
+| `ARMIGER_DHT_AUTO_UPDATE` | `true` | Enables (`true`) or disables (`false`) background polling for signed DHT catalog and calibration updates (`pull_only`). |
 | `ARMIGER_DHT_RSI_MODE` | `pull_only` | Selects the update engine's policy: `off`, `pull_only` or `anonymous_contribute`. The packaged connector explicitly keeps outbound sharing disabled. This variable does not configure trusted publishers or start a peer-network service. See [distributed updates](distributed-updates.md). |
 
 All variants in this connector use the Ultra pipeline. For the separate lightweight standalone path, see the [Python reference](reference.md#standalone-onnx).

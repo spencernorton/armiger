@@ -50,6 +50,7 @@ KNOWN_RELEASE_DIGESTS = {
         ("3eb5d460bf8408fd0bc104f1cf84ddcd1e71cb8f3d2cbbfab69f38be3eb6776c", 74060),
     },
     "config.json": {
+        ("047286ecbccd7360a597cf9eff21a688f9f842a427c1e1f877b367d3ce42e7eb", 5629),
         ("bacf41ee0a941200229108785bd9207deca265e83d1daf95b4fb49aef0071db1", 5562),
         ("f2dfa7c8901585c6718391c60efa8c327f00168ded250a581565675fed42a985", 5561),
         ("210760e3802332bd8c3987a2c1e82790c40ecad566034321b501f04e069fee94", 8503),
@@ -60,6 +61,7 @@ KNOWN_RELEASE_DIGESTS = {
         ("4368a1ebfe2fb3bf5fd7258d7fb8e7bf21134ff698ee90f6dc66c85f891e1a05", 3741),
     },
     "validated_zero_cue_catalog.json": {
+        ("8a8b7a4ba97cb22c3aa1f75ab33762052deb09580df464b1eabfe622a2837d26", 26039500),
         ("930942f45bbcf4a04c696abddbed2348851bea4c8435d9e48de3209b8a0bc81f", 21298000),
         ("3f42219f7e9ac1b38e7aa0f1301ae96298dd58e7d71960c371a4cdaf86c3d0b2", 25990894),
         ("77a018fb4bd85c1b8dd4794bb21a4ab1a4c42cb75890f023c627e93fd0b45dc6", 44249032),
