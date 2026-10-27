@@ -5,8 +5,8 @@ services:
   armiger-ultra:
     environment:
       # Polling: the shipped defaults are 5 seconds and 100 items.
-      BITMAGNET_POLL_SECONDS: "10"
-      BITMAGNET_BATCH_SIZE: "50"
+      BITMAGNET_POLL_SECONDS: "5"
+      BITMAGNET_BATCH_SIZE: "100"
       # Preload the catalog. False defers loading until first use.
       ARMIGER_USE_ZERO_CUE_CATALOG: "true"
       # These two settings filter requests made through Armiger's Torznab proxy.

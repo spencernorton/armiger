@@ -1,6 +1,6 @@
 # Armiger Ultra settings for Bitmagnet
 
-These settings apply to the `armiger-ultra` service in the [Bitmagnet setup](../examples/bitmagnet/README.md), using `ghcr.io/spencernorton/armiger:3.3.0`. The image bundles the verified Ultra model and the [pinned Bitmagnet connector](https://github.com/spencernorton/Armiger-Connectors/blob/a18596f8a371afcd7df339f3fe6fb288749f55fe/bitmagnet/bitmagnet_connector.py). Defaults below are the effective defaults of that packaged setup.
+These settings apply to the `armiger-ultra` service in the [Bitmagnet setup](../examples/bitmagnet/README.md), using `ghcr.io/spencernorton/armiger:3.3.1`. The image bundles the verified Ultra model and the [pinned Bitmagnet connector](https://github.com/spencernorton/Armiger-Connectors/blob/58679a4f0fd28de4ebee9133a23a6a10bb6adaf0/bitmagnet/bitmagnet_connector.py). Defaults below are the effective defaults of that packaged setup.
 
 ## Change a setting
 
@@ -10,8 +10,8 @@ Keep the existing two-line `compose.yaml`. Create **`compose.override.yaml`** in
 services:
   armiger-ultra:
     environment:
-      BITMAGNET_POLL_SECONDS: "10"
-      BITMAGNET_BATCH_SIZE: "50"
+      BITMAGNET_POLL_SECONDS: "5"
+      BITMAGNET_BATCH_SIZE: "100"
       ARMIGER_REQUIRE_ENGLISH_AUDIO: "false"
       ARMIGER_ALLOW_ENGLISH_SUBS: "true"
 ```
@@ -24,7 +24,7 @@ docker compose up -d
 docker compose logs --tail=50 armiger-ultra
 ```
 
-Compose automatically merges the override into the included setup. The example changes the poll interval from five to ten seconds and the maximum batch from one hundred to fifty. The startup log reports the active interval and batch size. For more common settings, save the [commented example](../examples/bitmagnet/compose.override.example.yaml) as `compose.override.yaml`. Docker documents [overrides for included Compose files](https://docs.docker.com/compose/how-tos/multiple-compose-files/include/#using-overrides-with-included-compose-files).
+Compose automatically merges the override into the included setup. The startup log reports the active interval and batch size. For more common settings, save the [commented example](../examples/bitmagnet/compose.override.example.yaml) as `compose.override.yaml`. Docker documents [overrides for included Compose files](https://docs.docker.com/compose/how-tos/multiple-compose-files/include/#using-overrides-with-included-compose-files).
 
 Keep boolean values quoted as `"true"` or `"false"`. The connector's boolean flags recognise `true`, ignoring case; use the quoted forms shown here. Use positive numbers for polling and batch size.
 
@@ -43,8 +43,8 @@ services:
 Then save `.env` beside the two Compose files:
 
 ```dotenv
-BITMAGNET_POLL_SECONDS=10
-BITMAGNET_BATCH_SIZE=50
+BITMAGNET_POLL_SECONDS=5
+BITMAGNET_BATCH_SIZE=100
 ```
 
 Apply with `docker compose up -d`. An explicit `environment` entry takes precedence over the same variable in a container `env_file`. If you use `-f` explicitly, include both Compose files in the command.
@@ -55,8 +55,10 @@ Apply with `docker compose up -d`. An explicit `environment` entry takes precede
 | --- | --- | --- |
 | `ARMIGER_CONNECTOR_MODE` | `both` | `both` runs the poller and HTTP services. `http` serves requests without background polling. `poll` runs only the poller. Keep `both` with the supplied health check; `poll` has no HTTP health endpoint. |
 | `BITMAGNET_POLL_SECONDS` | `5.0` | Seconds between polling cycles. Higher values reduce how often new items are checked. |
-| `BITMAGNET_BATCH_SIZE` | `100` | Maximum recent Bitmagnet records requested in each cycle. Already tagged or recently seen items are skipped. |
+| `BITMAGNET_BATCH_SIZE` | `100` | Maximum untagged Bitmagnet records classified in each cycle. When a Bitmagnet crawl flush exceeds one batch, the poller pages past items already tagged earlier in the active flush on subsequent cycles. |
 | `BITMAGNET_GRAPHQL_URL` | `http://bitmagnet:3333/graphql` | Internal Bitmagnet endpoint used to read items and write tags or enabled prune mutations. Use the service name inside Compose. |
+
+Stock Bitmagnet buffers newly crawled DHT torrents in a batching channel (`persistTorrents`) that flushes at 1,000 items or every 60 seconds. With the default `5.0`-second poll interval and `100`-item batch size, the poller paginates through each 60-second flush across consecutive cycles (up to 1,200 torrents per minute) while keeping individual ONNX inference and `torrent.files` requests small. If you increase Bitmagnet's `DHT_CRAWLER_SCALING_FACTOR` above 30, or prefer less frequent polling (such as `BITMAGNET_POLL_SECONDS=15` or `30`), increase `BITMAGNET_BATCH_SIZE` proportionally so `(60 / BITMAGNET_POLL_SECONDS) * BITMAGNET_BATCH_SIZE` exceeds your crawler's per-minute intake.
 
 The poller labels recent, untagged entries. Changing model or filtering settings does not automatically reclassify entries that already have an `armiger-` or `armiger:` tag. There is no force-relabel environment flag in this connector.
 
