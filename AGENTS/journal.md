@@ -5,6 +5,16 @@
 - **Validation:** Verified all environment variable names and defaults against `examples/bitmagnet/docker-compose.yml`, `bitmagnet_connector.py` (`v1.2.3`), and `src/armiger/` (`v3.3.2`), ran `docker compose config --quiet`, and ran `pytest -q`.
 - **Follow-ups:** None.
 
+## 2026-10-26 — Clarify Bitmagnet env variable options, pre-populated defaults, and literal Compose values
+
+### What changed
+- Replaced `${VAR:-default}` variable interpolation in `examples/bitmagnet/docker-compose.yml` with literal default values (`ghcr.io/spencernorton/armiger:3.3.2`) and embedded the full copy-pasteable `docker-compose.yml` directly into `examples/bitmagnet/README.md`.
+- Added explicit `Required / Optional` and `Valid options / range` columns to all environment variable tables in `examples/bitmagnet/README.md` and `docs/bitmagnet-configuration.md`, plus a clear section explaining which settings are required vs. optional.
+- Simplified the distributed model updates section so the 5 user-facing toggles are presented clearly and the 4 pre-populated release-channel/mirror defaults are placed in an expandable advanced section with their actual built-in values.
+
+### Why
+- Make `examples/bitmagnet/docker-compose.yml` directly copy-pasteable without `.env` files or variable interpolation, show the valid options/ranges for every setting, and clarify that distributed updates are pre-configured out of the box.
+
 ## 2026-10-26 — Release model bundle 3.3.0 (R13.3), updated evaluation charts, and configurable DHT auto-update
 
 - **Branch:** release/v3.3.2-r13-3
