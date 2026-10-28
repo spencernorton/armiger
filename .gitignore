@@ -13,3 +13,4 @@ venv/
 .env
 models/
 models-cpu/
+out/

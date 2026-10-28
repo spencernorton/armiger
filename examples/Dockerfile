@@ -2,7 +2,9 @@ FROM python:3.12-slim
 WORKDIR /app
 COPY pyproject.toml README.md LICENSE NOTICE ./
 COPY src ./src
-RUN python -m pip install --no-cache-dir ".[ultra]" && useradd --create-home --uid 10001 armiger
+RUN python -m pip install --no-cache-dir torch --index-url https://download.pytorch.org/whl/cpu \
+    && python -m pip install --no-cache-dir ".[ultra]" \
+    && useradd --create-home --uid 10001 armiger
 # Immutable connector source. Model downloads contain data only.
 ADD --chmod=0444 --checksum=sha256:86adfd358b09d4964ae51145aa3dfac121d9972f20f26ca5ad0bb588978caf2b https://raw.githubusercontent.com/spencernorton/Armiger-Connectors/9b00089a06df24497e45d2f2144eb14a1bb03ac2/bitmagnet/bitmagnet_connector.py /opt/connectors/bitmagnet/bitmagnet_connector.py
 ADD --chmod=0444 --checksum=sha256:ecb2c234da0c5654fe9edb11dc0426b0a2f0c6ea27d825e8e544cbc741b801ae https://raw.githubusercontent.com/spencernorton/Armiger-Connectors/9b00089a06df24497e45d2f2144eb14a1bb03ac2/rats-search/rats_search_connector.py /opt/connectors/rats-search/rats_search_connector.py

@@ -1,3 +1,10 @@
+## 2026-10-28 — Require native runtime and stock-upstream release acceptance (3.4.2)
+
+- **Branch:** codex/runtime-acceptance
+- **What changed:** Make release/version contracts, both native runtime checks, existing Python/model tests and installed-wheel smoke prerequisites of the required test check. Exercise actual documented standalone/Bitmagnet/Rats commands as UID10001. Add disposable stock Bitmagnet/Postgres fixtures for350-record pagination, deletion shifts, later arrivals, exact canonical tag persistence and legacy repair. Qualify the actual x86 Rats/Manticore backend. Publish only the tested filesystem/configuration, promote native manifest digests and read back OCI stack commands. Expose the same acceptance workflow to exact Connectors revisions. Use CPU PyTorch in the CPU image and bump software/quickstarts to3.4.2; model bundle stays3.4.0.
+- **Validation:** Work in progress. Initial real3.4.1 native-arm64 startup/inference and stock Bitmagnet pagination/deletion/repair/new-wave readback pass. Seven release/promotion failure-case tests and actionlint pass. Candidate3.4.2 CPU image builds; full candidate and native CI acceptance remain in progress.
+- **Release:** Pending required checks and post-merge publication proof; no production stack deployment.
+
 ## 2026-10-28 — Fix non-root connector startup permissions (3.4.1)
 
 - **Branch:** fix/connector-permissions
