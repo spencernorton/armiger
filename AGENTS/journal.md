@@ -1,3 +1,10 @@
+## 2026-10-28 — Fix non-root connector startup permissions (3.4.1)
+
+- **Branch:** fix/connector-permissions
+- **What changed:** Restore directory traversal for `/opt/connectors`, both connector subdirectories and `/models` after remote `ADD --chmod=0444`. Keep downloaded files read-only, and verify both connector scripts and offline Ultra model integrity after switching to UID 10001. Bump the library and setup images to 3.4.1; retain model bundle 3.4.0.
+- **Validation:** Reproduce the original permission error using the pinned connector ADD instructions; build the corrected image and check both connector entrypoints and offline model access as its default user. Run the unit suite, installed-wheel smoke, and all three Compose configuration checks.
+- **Follow-ups:** Merge after required checks and verify the published 3.4.1 image.
+
 ## 2026-10-27 — NorviTechGH — Align .torrent bundle names and metadata with v3.4.0 (seq=10)
 
 - **Branch:** fix/v340-torrent-bundle-names

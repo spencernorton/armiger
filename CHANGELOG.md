@@ -1,5 +1,10 @@
 # Changelog
 
+## 3.4.1
+
+- Fix `Permission denied` on fresh Bitmagnet and Rats Search connector startup by restoring searchable permissions on bundled connector and model directories while keeping downloaded files read-only (#48).
+- Verify both connector scripts and every bundled Ultra model file as the non-root runtime user during image builds. Update all supported Compose setups to the corrected image.
+
 ## 3.4.0
 
 - Update the pinned model bundle to `3.4.0` (`v3.0-gold-r13.4` on `NorviTech/armiger-ultra` at `43c4a795e1a2e55826478b4b57ff7c95e3c77730`, DHT `seq=9` / `seq=3009`), sync the `v3.4.0` `calibration.json` parameters and bundle plugin manifests, and refresh the canonical evaluation and overview charts (`91.87%` 10-class category accuracy, `85.08%` video slice, `84.44%` title matching, `90.20%` byte-verified speech).
