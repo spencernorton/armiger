@@ -1,5 +1,9 @@
 # Changelog
 
+## 3.4.0
+
+- Update the pinned model bundle to `3.4.0` (`v3.0-gold-r13.4` on `NorviTech/armiger-ultra` at `43c4a795e1a2e55826478b4b57ff7c95e3c77730`, DHT `seq=9` / `seq=3009`), sync the `v3.4.0` `calibration.json` parameters and bundle plugin manifests, and refresh the canonical evaluation and overview charts (`91.87%` 10-class category accuracy, `85.08%` video slice, `84.44%` title matching, `90.20%` byte-verified speech).
+
 ## 3.3.4
 
 - Pin `spencernorton/Armiger-Connectors` `9b00089a06df24497e45d2f2144eb14a1bb03ac2` (`v1.2.5`) in `examples/Dockerfile` to emit canonical human-readable Bitmagnet swarm viability tags (`armiger-viability-alive-viable`, `armiger-viability-degraded`, `armiger-viability-stalled`, `armiger-viability-dead`, `armiger-viability-unknown-cold`) and automatically migrate and remove legacy hash-truncated viability tags (`armiger-viability-dea-c24281f7`, `armiger-viability-deg-7c170f8b`, `armiger-viability-sus-cdc9d2c6`) on startup (`#42`).

@@ -42,17 +42,17 @@ except ImportError:
 DEFAULT_RELEASE_PUBKEY_HEX = "3599362bd52dad8b89398b904d3081c2cb483d13376f7ffb49f3748208731e76"
 DEFAULT_RELEASE_SALT = "armiger:weights:ultra"
 
-HF_BASE_URL = "https://huggingface.co/NorviTech/armiger-ultra/resolve/18ef5418b3858ee4f70c137540febb5343b8754e"
+HF_BASE_URL = "https://huggingface.co/NorviTech/armiger-ultra/resolve/43c4a795e1a2e55826478b4b57ff7c95e3c77730"
 ARTIFACT_MANIFEST: Dict[str, Dict[str, Any]] = {
     "armiger.int8.onnx": {
-        "sha256": "c0e96936038988c7465b7fe041c4dc3c92df5a8cb4f56c2666271cd4d3e79420",
-        "size_bytes": 17599636,
+        "sha256": "02d185e673e8552a6b09d921b1bf8bc6e64cdb4ba984ffacdbe804b487132271",
+        "size_bytes": 17604743,
         "tiers": ("int8", "ultra"),
         "url": f"{HF_BASE_URL}/armiger.int8.onnx",
     },
     "armiger_ultra.fp32.onnx": {
-        "sha256": "6f94aef676e5bec4968378437769cfdc768fefcc6a21854b8319b33456ebd2ec",
-        "size_bytes": 33254585,
+        "sha256": "ebed96dfef6f78842768ecdad646f6e5d838681feed9a4919d4b95aa0f912ea4",
+        "size_bytes": 33258907,
         "tiers": ("ultra",),
         "url": f"{HF_BASE_URL}/armiger_ultra.fp32.onnx",
     },
@@ -63,7 +63,7 @@ ARTIFACT_MANIFEST: Dict[str, Dict[str, Any]] = {
         "url": f"{HF_BASE_URL}/swarm_adapter.pt",
     },
     "calibration.json": {
-        "sha256": "300387779dc16292dd9e6be038ce9dd60e5bdb0ee929b383dcd4e51715f8b5f8",
+        "sha256": "ea7a4df70747160b41ae0cbca0292562f097bbbea7b5d549c5348f743e30b33c",
         "size_bytes": 76612,
         "tiers": ("int8", "ultra"),
         "url": f"{HF_BASE_URL}/calibration.json",
@@ -75,7 +75,7 @@ ARTIFACT_MANIFEST: Dict[str, Dict[str, Any]] = {
         "url": f"{HF_BASE_URL}/vocab.json",
     },
     "config.json": {
-        "sha256": "da965d165bc45b5dafb2ae2fcb45781b1c37cebd9fc3026604c12d060d6e523f",
+        "sha256": "caf3c30c7f6380b84af4f61ebc0afa80707b9137ec3be4e2d03e09c3e05a0ad4",
         "size_bytes": 5201,
         "tiers": ("int8", "ultra"),
         "url": f"{HF_BASE_URL}/config.json",

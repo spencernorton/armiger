@@ -1,3 +1,10 @@
+## 2026-10-27 — NorviTechGH — Release 3.4.0: v3.0-gold-r13.4 model bundle, DHT seq=9 pointers, and updated benchmark charts
+
+- **Branch:** release/v3.4.0
+- **What changed:** Pin `NorviTech/armiger-ultra` revision `43c4a795e1a2e55826478b4b57ff7c95e3c77730` (`v3.4.0`, `v3.0-gold-r13.4`, DHT `seq=9` / `seq=3009`) across `src/armiger/model_manifest.json`, `src/armiger/artifacts.py`, `src/armiger/oci_vpn_guard.py`, and `examples/Dockerfile`. Sync `calibration.json` with the `v3.4.0` bundle parameters, refresh `benchmarks/updated_std_charts_data.json` and all 5 canonical evaluation and README overview charts (`91.87%` 10-class category accuracy, `85.08%` video slice, `84.44%` title matching, `90.20%` byte-verified speech), and bump package and container tags to `3.4.0`.
+- **Validation:** `pytest -q` (`benchmarks/test_chart_integrity.py`, `tests/test_readme_overview.py`, and full unit suite), live Mainline DHT + BitTorrent P2P + BEP-19 webseed verification (`seq=9`), and `git diff --check`.
+- **Follow-ups:** Merge PR, tag `v3.4.0`, and publish GitHub Release with `.torrent` assets.
+
 ## 2026-10-27 — NorviTechGH — Pin Armiger-Connectors v1.2.5 for canonical Bitmagnet viability tags and automatic legacy tag repair (v3.3.4)
 
 - **Branch:** release/v3.3.4-bitmagnet-viability-tags
