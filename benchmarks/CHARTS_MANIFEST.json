@@ -65,13 +65,13 @@
   ],
   "provenance_sha256": {
     "canonical_eval_vectors.json": "62992cc441d321938446c54d52732a65b36da2d83c41d837d34b5c7674156aa9",
-    "updated_std_charts_data.json": "1557912936c0c826c56ab9935e1817deac8c02f223cb209e29eceba996ee9a42",
+    "updated_std_charts_data.json": "5c6e288117412ee5181227d08e0141e54f8cecdd5a0d27787f8c9ebcebff3d7f",
     "build_canonical_eval_vectors.py": "8165b1551e37b31f08c87757078cf991ac2c605a9dbc79328c6075a8dd7e7987",
-    "generate_canonical_charts.py": "5e1717da6f6a70a4d6d3b81e30df4e136c22c7936f266cf4a6a41e603f20d52c",
-    "docs/assets/armiger_vs_llms_overall_and_6dims.png": "5b219d8f2a7891fb84f7d150c36174520dff2fe6af767c2ababa35a42bf6971b",
-    "docs/assets/armiger_vs_llms_cost_comparison.png": "8be499df5b936570be5576219b43e6880a138b7c15c666287e74c319d425fd1d",
-    "docs/assets/armiger_vs_torrent_classifiers_6dims.png": "9d2e96aa16ff31feb2ff415ef30531368a9ac1bd8670e17364a6704466dc0fd4",
-    "docs/assets/armiger_categorical_breakdown.png": "531c0fff588f6a5a08d55f2352c32c755e18ffcaecb9289dabcefd5dc2f21e32",
+    "generate_canonical_charts.py": "60b7b8f6fea2c05bd1eefe3f1e9dc178121c603d50a56d02ad627e4bd1490ec2",
+    "docs/assets/armiger_vs_llms_overall_and_6dims.png": "eba3632a8a4105a707da862f72c8da57e50ac17a82d0bda5707f2ec0e95c1706",
+    "docs/assets/armiger_vs_llms_cost_comparison.png": "f54527eba38037fafec4a5ee601bfae055a33b01f3af397a6011e0b1aeba7b24",
+    "docs/assets/armiger_vs_torrent_classifiers_6dims.png": "2490250fba73df24eaeda445f9acbda7580fb703d94fac8241fc4eed564acb11",
+    "docs/assets/armiger_categorical_breakdown.png": "79ea7d7b5838f3deba2748793a142c56df866d0a9f577b57195bf83cba1cf39a",
     "benchmarks/receipts/armiger_v23_eval_receipt.json": "11ad802fe2c176fe3313326e5ea157e707fee089ed1af6d029ae05254b6ca4be",
     "benchmarks/receipts/beyond_confirmation_teachers_receipt.json": "1d71c5b6ce536f421ef6c775310a013660d396a4fb5e15b5a57cf37767035d37",
     "benchmarks/receipts/curriculum_overlap_audit.json": "ffd3f58f13ef93f2950bfa141fbfd832429cb8929896fd2b56b8a83ef1f85a35",
@@ -81,11 +81,11 @@
     "benchmarks/receipts/suite_a_parsers_receipt.json": "ea2ebe045156b992f5912e5a840654dbc7fc75a5f66eecf19b74808967a7190e",
     "benchmarks/receipts/swarm_oof_receipt.json": "541a1ea9171f968f0fc27db45774de0a13b7c459040b4638628171e5ad97cc39",
     "benchmarks/receipts/v23_curriculum_overlap_audit.json": "ffd3f58f13ef93f2950bfa141fbfd832429cb8929896fd2b56b8a83ef1f85a35",
-    "src/armiger/model_manifest.json": "8dca7c4629458e89dc6b566a3559471e8e9d504cc55da85b2262d271985e9798"
+    "src/armiger/model_manifest.json": "5d295331a4038b6bab507c4eb638c9b57ceaa6fa4a78f27d3ee4ecbdde39f9f8"
   },
   "charts": {
     "armiger_vs_llms_overall_and_6dims.png": {
-      "sha256": "5b219d8f2a7891fb84f7d150c36174520dff2fe6af767c2ababa35a42bf6971b",
+      "sha256": "eba3632a8a4105a707da862f72c8da57e50ac17a82d0bda5707f2ec0e95c1706",
       "composite_6dim_mean": {
         "Armiger Ultra (Fair Hybrid)": {
           "point_pct": 95.66,
@@ -648,7 +648,7 @@
       }
     },
     "armiger_vs_llms_cost_comparison.png": {
-      "sha256": "8be499df5b936570be5576219b43e6880a138b7c15c666287e74c319d425fd1d",
+      "sha256": "f54527eba38037fafec4a5ee601bfae055a33b01f3af397a6011e0b1aeba7b24",
       "deployment_targets": [
         "Armiger (15.7 MB M4 Pro CPU INT8)",
         "Armiger Ultra (M4 Pro CPU FP32)",
@@ -698,7 +698,7 @@
       }
     },
     "armiger_vs_torrent_classifiers_6dims.png": {
-      "sha256": "9d2e96aa16ff31feb2ff415ef30531368a9ac1bd8670e17364a6704466dc0fd4",
+      "sha256": "2490250fba73df24eaeda445f9acbda7580fb703d94fac8241fc4eed564acb11",
       "panel_1_category_11class_oct15": {
         "panel_name": "chart3_1_oct15_cat11",
         "n": 2835,
@@ -1368,7 +1368,7 @@
       }
     },
     "armiger_categorical_breakdown.png": {
-      "sha256": "531c0fff588f6a5a08d55f2352c32c755e18ffcaecb9289dabcefd5dc2f21e32",
+      "sha256": "79ea7d7b5838f3deba2748793a142c56df866d0a9f577b57195bf83cba1cf39a",
       "left_oct15_confirmation_n2835": {
         "Audiobook": {
           "n": 95,

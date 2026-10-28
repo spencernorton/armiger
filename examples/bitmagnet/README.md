@@ -6,7 +6,7 @@ The packaged stack runs three services:
 
 - **`postgres` (`postgres:16-alpine`)** — Bitmagnet's PostgreSQL database.
 - **`bitmagnet` (`ghcr.io/bitmagnet-io/bitmagnet:v0.10.0`)** — Bitmagnet Web UI, GraphQL API, and raw Torznab feed on `:3333`, plus DHT crawler on `:3334/tcp` and `:3334/udp`.
-- **`armiger-ultra` (`ghcr.io/spencernorton/armiger:3.3.4`)** — Background Bitmagnet GraphQL poller, HTTP status/classification API on `:8096`, and filtered Torznab proxy on `:8097` (with the verified Ultra model bundled inside the image).
+- **`armiger-ultra` (`ghcr.io/spencernorton/armiger:3.4.0`)** — Background Bitmagnet GraphQL poller, HTTP status/classification API on `:8096`, and filtered Torznab proxy on `:8097` (with the verified Ultra model bundled inside the image).
 
 ---
 
@@ -57,7 +57,7 @@ services:
     command: [worker, run, --keys=http_server, --keys=queue_server, --keys=dht_crawler]
 
   armiger-ultra:
-    image: ghcr.io/spencernorton/armiger:3.3.4
+    image: ghcr.io/spencernorton/armiger:3.4.0
     restart: unless-stopped
     command: [python, /opt/connectors/bitmagnet/bitmagnet_connector.py]
     depends_on:
@@ -104,7 +104,7 @@ If you use Docker Compose 2.34 or newer, you can also include the published stac
 
 ```yaml
 include:
-  - oci://ghcr.io/spencernorton/armiger-bitmagnet-stack:3.3.4
+  - oci://ghcr.io/spencernorton/armiger-bitmagnet-stack:3.4.0
 ```
 
 ```bash
@@ -120,7 +120,7 @@ If you already run Bitmagnet and want to keep your existing PostgreSQL database 
 ```yaml
 services:
   armiger-ultra:
-    image: ghcr.io/spencernorton/armiger:3.3.4
+    image: ghcr.io/spencernorton/armiger:3.4.0
     restart: unless-stopped
     command: [python, /opt/connectors/bitmagnet/bitmagnet_connector.py]
     ports:

@@ -26,6 +26,7 @@ def model_directory(directory: str | Path | None = None) -> Path:
 # Allow both the baked HF revision digests and DHT-promoted v3.0-gold-r13.3 digests
 KNOWN_RELEASE_DIGESTS = {
     "armiger_ultra.fp32.onnx": {
+        ("ebed96dfef6f78842768ecdad646f6e5d838681feed9a4919d4b95aa0f912ea4", 33258907),
         ("6f94aef676e5bec4968378437769cfdc768fefcc6a21854b8319b33456ebd2ec", 33254585),
         ("ed27945bb6cb024d4486392c2c714df4558c1fc581f86568ab53ace7d40f19f1", 32626152),
         ("9d8a556ddba4f66052db27bc19cf2a303067a5c537e6a8d084145f665301f536", 33254585),
@@ -33,6 +34,7 @@ KNOWN_RELEASE_DIGESTS = {
         ("d092b49428dbca550d4099b168e231c35b0cc60c7632a60e55d0be63646317dc", 25387489),
     },
     "armiger.int8.onnx": {
+        ("02d185e673e8552a6b09d921b1bf8bc6e64cdb4ba984ffacdbe804b487132271", 17604743),
         ("c0e96936038988c7465b7fe041c4dc3c92df5a8cb4f56c2666271cd4d3e79420", 17599636),
         ("93ed3d6f0ce8af8f0b788fa75575a07deaeb3cfe23ca2df4275b74eca2237c9f", 16967970),
         ("116e3a291a036c667794a028cf5b06441371a76d03edba04da741f11d87882f9", 17599636),
@@ -45,11 +47,13 @@ KNOWN_RELEASE_DIGESTS = {
         ("74aa36c7701092d198a8238462c0b7a44a55f238ba26f6c506b984a83b1c0ca1", 316931),
     },
     "calibration.json": {
+        ("ea7a4df70747160b41ae0cbca0292562f097bbbea7b5d549c5348f743e30b33c", 76612),
         ("300387779dc16292dd9e6be038ce9dd60e5bdb0ee929b383dcd4e51715f8b5f8", 76612),
         ("eb201c12539367aa7f3af8ab55b71113a680ad3f4c57a41a589621dccc957de9", 76610),
         ("3eb5d460bf8408fd0bc104f1cf84ddcd1e71cb8f3d2cbbfab69f38be3eb6776c", 74060),
     },
     "config.json": {
+        ("caf3c30c7f6380b84af4f61ebc0afa80707b9137ec3be4e2d03e09c3e05a0ad4", 5201),
         ("da965d165bc45b5dafb2ae2fcb45781b1c37cebd9fc3026604c12d060d6e523f", 5201),
         ("047286ecbccd7360a597cf9eff21a688f9f842a427c1e1f877b367d3ce42e7eb", 5629),
         ("bacf41ee0a941200229108785bd9207deca265e83d1daf95b4fb49aef0071db1", 5562),

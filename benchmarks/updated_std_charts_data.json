@@ -1,11 +1,11 @@
 {
   "heldout_20261026": {
     "p1_cat10": {
-      "Armiger Ultra v3.3.0": {
+      "Armiger Ultra v3.4.0": {
         "n": 2484,
-        "point_pct": 91.14,
-        "ci95_lo": 90.02,
-        "ci95_hi": 92.23
+        "point_pct": 91.87,
+        "ci95_lo": 90.78,
+        "ci95_hi": 92.91
       },
       "MIMMO BERT (360M)": {
         "n": 2484,
@@ -57,11 +57,11 @@
       }
     },
     "p1_vid": {
-      "Armiger Ultra v3.3.0": {
+      "Armiger Ultra v3.4.0": {
         "n": 784,
-        "point_pct": 84.18,
-        "ci95_lo": 81.51,
-        "ci95_hi": 86.61
+        "point_pct": 85.08,
+        "ci95_lo": 82.53,
+        "ci95_hi": 87.37
       },
       "MIMMO BERT (360M)": {
         "n": 784,
@@ -127,13 +127,13 @@
       },
       "TV Show": {
         "n": 380,
-        "armiger_ultra_pct": 81.58,
+        "armiger_ultra_pct": 82.11,
         "mimmo_bert_pct": 43.16,
         "bitmagnet_pct": 14.47
       },
       "Movie": {
         "n": 404,
-        "armiger_ultra_pct": 86.63,
+        "armiger_ultra_pct": 87.87,
         "mimmo_bert_pct": 24.5,
         "bitmagnet_pct": 17.08
       },
@@ -151,7 +151,7 @@
       },
       "Game": {
         "n": 231,
-        "armiger_ultra_pct": 72.29,
+        "armiger_ultra_pct": 77.06,
         "mimmo_bert_pct": 0.0,
         "bitmagnet_pct": 0.0
       },
@@ -175,11 +175,11 @@
       }
     },
     "p2_match": {
-      "Armiger Ultra v3.3.0": {
+      "Armiger Ultra v3.4.0": {
         "n": 784,
-        "point_pct": 83.55,
-        "ci95_lo": 80.87,
-        "ci95_hi": 86.1
+        "point_pct": 84.44,
+        "ci95_lo": 81.88,
+        "ci95_hi": 86.86
       },
       "MIMMO BERT (360M)": {
         "n": 784,
@@ -231,11 +231,11 @@
       }
     },
     "p3_audio": {
-      "Armiger Ultra v3.3.0": {
+      "Armiger Ultra v3.4.0": {
         "n": 449,
-        "point_pct": 88.42,
-        "ci95_lo": 85.52,
-        "ci95_hi": 91.31
+        "point_pct": 90.2,
+        "ci95_lo": 87.31,
+        "ci95_hi": 92.87
       },
       "RTN (rank-torrent-name)": {
         "n": 449,
@@ -275,7 +275,7 @@
       }
     },
     "p4_anime": {
-      "Armiger Ultra v3.3.0": {
+      "Armiger Ultra v3.4.0": {
         "n": 797,
         "point_pct": 87.33,
         "ci95_lo": 84.94,
@@ -319,7 +319,7 @@
       "ci95_hi": 100.0
     },
     "p5_adult": {
-      "Armiger Ultra v3.3.0": {
+      "Armiger Ultra v3.4.0": {
         "n": 1358,
         "point_pct": 100.0,
         "ci95_lo": 100.0,
@@ -357,7 +357,7 @@
       }
     },
     "p6a_junk": {
-      "Armiger Ultra v3.3.0": {
+      "Armiger Ultra v3.4.0": {
         "n": 697,
         "point_pct": 99.9,
         "ci95_lo": 99.7,
@@ -383,19 +383,19 @@
       }
     }
   },
-  "beyond_confirmation_v330": {
+  "beyond_confirmation_v340": {
     "p2a_cat": {
       "ultra_all3": {
         "n": 1025,
-        "point_pct": 92.78,
-        "ci95_lo": 91.12,
-        "ci95_hi": 94.34
+        "point_pct": 92.88,
+        "ci95_lo": 91.22,
+        "ci95_hi": 94.44
       },
       "ultra_vs_gpt": {
         "n": 974,
-        "point_pct": 94.15,
-        "ci95_lo": 92.61,
-        "ci95_hi": 95.59
+        "point_pct": 94.25,
+        "ci95_lo": 92.81,
+        "ci95_hi": 95.69
       },
       "gpt_loto": {
         "n": 974,
@@ -405,9 +405,9 @@
       },
       "ultra_vs_gem": {
         "n": 982,
-        "point_pct": 94.3,
-        "ci95_lo": 92.87,
-        "ci95_hi": 95.72
+        "point_pct": 94.4,
+        "ci95_lo": 92.97,
+        "ci95_hi": 95.82
       },
       "gem_loto": {
         "n": 982,
@@ -419,15 +419,15 @@
     "p2b_match": {
       "ultra_all3": {
         "n": 1025,
-        "point_pct": 92.68,
-        "ci95_lo": 91.02,
-        "ci95_hi": 94.24
+        "point_pct": 92.88,
+        "ci95_lo": 91.22,
+        "ci95_hi": 94.44
       },
       "ultra_vs_gpt": {
         "n": 974,
-        "point_pct": 94.05,
-        "ci95_lo": 92.51,
-        "ci95_hi": 95.48
+        "point_pct": 94.25,
+        "ci95_lo": 92.81,
+        "ci95_hi": 95.69
       },
       "gpt_loto": {
         "n": 974,
@@ -437,9 +437,9 @@
       },
       "ultra_vs_gem": {
         "n": 982,
-        "point_pct": 94.3,
-        "ci95_lo": 92.87,
-        "ci95_hi": 95.72
+        "point_pct": 94.4,
+        "ci95_lo": 92.97,
+        "ci95_hi": 95.82
       },
       "gem_loto": {
         "n": 982,
@@ -670,8 +670,8 @@
         "n_all3": 135,
         "n_loto_no_gpt": 133,
         "n_loto_no_gemini": 133,
-        "armiger_ultra_all3_pct": 97.78,
-        "armiger_ultra_pct": 98.51,
+        "armiger_ultra_all3_pct": 98.52,
+        "armiger_ultra_pct": 99.25,
         "gpt_loto_support_pct": 99.25,
         "gemini_loto_support_pct": 99.25
       },
