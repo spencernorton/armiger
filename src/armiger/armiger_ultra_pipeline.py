@@ -1410,7 +1410,7 @@ class ArmigerUltraPipeline:
             except ImportError:
                 from armiger.oci_sqlite_catalog import build_torrent_bundle
             bobj = build_torrent_bundle(
-                bundle_name=f"armiger-weights-{self.variant}-v2.1.0",
+                bundle_name=f"armiger-weights-{self.variant}-v3.4.0",
                 files_map=files_map,
                 pubkey_32=b"\x00" * 32,
                 salt=f"armiger:weights:{self.variant}".encode("utf-8"),
@@ -2460,7 +2460,7 @@ class ArmigerUltraPipeline:
                 verified_files_map[str(fname)] = fbytes
 
             recomputed = build_torrent_bundle(
-                bundle_name=f"armiger-weights-{self.variant}-v2.1.0",
+                bundle_name=f"armiger-weights-{self.variant}-v3.4.0",
                 files_map=verified_files_map,
                 pubkey_32=bytes.fromhex(eff_pubkey),
                 salt=eff_salt,
@@ -2763,7 +2763,7 @@ class ArmigerUltraPipeline:
                     }
 
         recomputed_bundle = build_torrent_bundle(
-            bundle_name=f"armiger-weights-{self.variant}-v2.1.0",
+            bundle_name=f"armiger-weights-{self.variant}-v3.4.0",
             files_map=files_map,
             pubkey_32=bytes.fromhex(eff_pubkey),
             salt=eff_salt,
