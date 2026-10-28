@@ -42,7 +42,7 @@ except ImportError:
 DEFAULT_RELEASE_PUBKEY_HEX = "3599362bd52dad8b89398b904d3081c2cb483d13376f7ffb49f3748208731e76"
 DEFAULT_RELEASE_SALT = "armiger:weights:ultra"
 
-HF_BASE_URL = "https://huggingface.co/NorviTech/armiger-ultra/resolve/43c4a795e1a2e55826478b4b57ff7c95e3c77730"
+HF_BASE_URL = "https://huggingface.co/NorviTech/armiger-ultra/resolve/aa760eeea91fba887124e535dcd1df7496591cea"
 ARTIFACT_MANIFEST: Dict[str, Dict[str, Any]] = {
     "armiger.int8.onnx": {
         "sha256": "02d185e673e8552a6b09d921b1bf8bc6e64cdb4ba984ffacdbe804b487132271",

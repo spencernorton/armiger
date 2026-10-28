@@ -1,3 +1,8 @@
+## 2026-10-27 — NorviTechGH — Align .torrent bundle names and metadata with v3.4.0 (seq=10)
+
+- **Branch:** fix/v340-torrent-bundle-names
+- **What changed:** Update `.torrent` bundle names (`armiger-weights-{variant}-v3.4.0`, `armiger-zero-cue-db-v3.4.0`, `armiger-v3.4.0-gold-r13-4`) and embedded metainfo `comment` / `created by` strings from `v2.1.0` to `v3.4.0`, and pin `NorviTech/armiger-ultra` commit `aa760eeea91fba887124e535dcd1df7496591cea`.
+
 ## 2026-10-27 — NorviTechGH — Release 3.4.0: v3.0-gold-r13.4 model bundle, DHT seq=9 pointers, and updated benchmark charts
 
 - **Branch:** release/v3.4.0

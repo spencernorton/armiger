@@ -81,7 +81,7 @@
     "benchmarks/receipts/suite_a_parsers_receipt.json": "ea2ebe045156b992f5912e5a840654dbc7fc75a5f66eecf19b74808967a7190e",
     "benchmarks/receipts/swarm_oof_receipt.json": "541a1ea9171f968f0fc27db45774de0a13b7c459040b4638628171e5ad97cc39",
     "benchmarks/receipts/v23_curriculum_overlap_audit.json": "ffd3f58f13ef93f2950bfa141fbfd832429cb8929896fd2b56b8a83ef1f85a35",
-    "src/armiger/model_manifest.json": "5d295331a4038b6bab507c4eb638c9b57ceaa6fa4a78f27d3ee4ecbdde39f9f8"
+    "src/armiger/model_manifest.json": "8f0ad9dcafef9073e07af8b84f8b4f112cd4212fa1549d4f57dc0a64c485b0ad"
   },
   "charts": {
     "armiger_vs_llms_overall_and_6dims.png": {
