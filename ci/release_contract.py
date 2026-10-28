@@ -75,7 +75,14 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--consumer", action="store_true", help="Validate a connector candidate without requesting a release")
+    parser.add_argument("--external-only", action="store_true", help="Check published guide references independently of native builds")
     args = parser.parse_args()
+    if args.external_only:
+        report = {"external_images": external_guides(Registry())}
+        args.output.parent.mkdir(parents=True, exist_ok=True)
+        args.output.write_text(json.dumps(report, indent=2))
+        print(json.dumps(report, indent=2))
+        return
     version = tomllib.loads((ROOT / "pyproject.toml").read_text())["project"]["version"]
     assert re.fullmatch(r"\d+\.\d+\.\d+", version), version
     references = local_guides(ROOT, version)
@@ -88,7 +95,7 @@ def main():
         changed = subprocess.check_output(["git", "diff", "--no-renames", "--name-only", revision, "HEAD"], cwd=ROOT, text=True).splitlines()
     needed = release_needed(version, published, changed)
     report = {"version": version, "release_needed": needed and not args.consumer,
-              "local_image_references": references, "external_images": external_guides(registry)}
+              "local_image_references": references}
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(report, indent=2))
     if os.environ.get("GITHUB_OUTPUT"):

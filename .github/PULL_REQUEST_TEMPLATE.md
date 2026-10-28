@@ -4,6 +4,7 @@
 
 ## Checklist
 
+- [ ] Commits are signed off with `git commit -s` (`Signed-off-by:`).
 - [ ] Zero copyrighted media titles, scene/release-group names, or private-tracker names in plaintext ([use policy](LEGAL.md)).
 - [ ] All unit and integration tests pass (`pytest -v`).
 - [ ] Required `test` includes both native runtime checks and real stock-upstream acceptance ([release validation](../docs/release-validation.md)).

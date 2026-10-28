@@ -51,6 +51,24 @@ jobs:
           name: release-contract
           path: out/release-contract.json
           retention-days: 14
+  guides:
+    needs: contract
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: spencernorton/armiger
+          ref: ${{ needs.contract.outputs.source }}
+          persist-credentials: false
+      - name: Check published Connectors and model-card image references
+        run: python3 -m ci.release_contract --external-only --output out/guide-contract.json
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        if: always()
+        with:
+          name: guide-contract
+          path: out/guide-contract.json
+          retention-days: 14
   verify:
     needs: contract
     runs-on: ubuntu-24.04
@@ -179,7 +197,7 @@ jobs:
   test:
     name: test
     if: always()
-    needs: [contract, verify, runtime]
+    needs: [contract, guides, verify, runtime]
     runs-on: ubuntu-24.04
     steps:
       - name: Require release contract, both Python checks and both native runtime checks

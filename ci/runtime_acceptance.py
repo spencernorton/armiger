@@ -273,8 +273,8 @@ def main():
             result["rats_image_id"] = backend["Id"]
             # Reach the actual REST API as well as the connector's real-model HTTP API.
             recent = request(stack.url(8095, "rats-search") + "/api/search.recent?limit=1")
-            assert isinstance(recent, list), recent
-            result["rats-search"]["rest"] = {"recent_items": len(recent)}
+            assert recent.get("success") is True and isinstance(recent.get("data"), list), recent
+            result["rats-search"]["rest"] = {"recent_items": len(recent["data"])}
             probe = """import json,sys
 sys.path.insert(0,'/opt/connectors/rats-search')
 from rats_search_connector import execute_manticore_mysql41
