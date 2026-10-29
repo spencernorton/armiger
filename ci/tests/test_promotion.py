@@ -2,7 +2,7 @@
 from copy import deepcopy
 import unittest
 
-from ci.candidates import same_payload
+from ci.candidates import FALSE_DEFAULTS, same_payload
 from ci.promote import check_receipts, EXPECTED
 
 
@@ -40,6 +40,22 @@ class PromotionTests(unittest.TestCase):
         for case in cases:
             with self.subTest(case=case), self.assertRaises(AssertionError):
                 same_payload(local, case)
+
+    def test_legacy_api_false_defaults_match_omitted_oci_fields(self):
+        local = {"Architecture": "arm64", "Os": "linux", "RootFS": {"Layers": ["sha256:original"]},
+                 "Config": {key: False for key in FALSE_DEFAULTS}}
+        remote = {"architecture": "arm64", "os": "linux", "rootfs": {"diff_ids": ["sha256:original"]},
+                  "config": {}}
+        same_payload(local, remote)
+        local["Config"], remote["config"] = remote["config"], local["Config"]
+        same_payload(local, remote)
+        for key, value in [(key, True) for key in FALSE_DEFAULTS] + [
+            ("StopTimeout", 0), ("UnknownFlag", False), ("OpenStdin", 0)
+        ]:
+            with self.subTest(key=key, value=value), self.assertRaises(AssertionError):
+                altered = deepcopy(remote)
+                altered["config"] = {key: value}
+                same_payload(local, altered)
 
 
 if __name__ == "__main__":

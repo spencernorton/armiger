@@ -1,3 +1,10 @@
+## 2026-10-28 — Compare equivalent legacy Docker and OCI configuration defaults
+
+- **Branch:** codex/registry-config-defaults
+- **What changed:** Accept omitted versus false values for the six legacy Docker container flags returned by older image-inspect APIs. Keep filesystem, user, command, environment and meaningful zero-valued settings subject to the existing strict comparison.
+- **Validation:** Reproduce the publication failure using Docker API 1.48 inspection of the released 3.4.1 image and its independently fetched GHCR configuration. Add regression cases for both omission directions, enabled flags, unknown flags and explicit zero settings. The first 3.4.2 main run passed both native runtime suites and stopped before release promotion at this representation difference.
+- **Release:** The 3.4.2 version and mutable aliases remain unpublished pending a complete passing publication run.
+
 ## 2026-10-28 — Prove upstream writes, filtered search and failed-release detection
 
 - **Branch:** codex/runtime-acceptance
