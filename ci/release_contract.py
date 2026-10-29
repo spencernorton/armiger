@@ -27,13 +27,15 @@ def image_affecting(path):
     }
 
 
-def release_needed(version, published, changed):
+def release_needed(version, published, changed, *, same_source=False):
     if published is None:
         return True
     affected = sorted(p for p in changed if image_affecting(p))
     if affected:
         raise AssertionError(f"Software {version} is already published; bump the version for image-affecting changes: {affected}")
-    return False
+    # A retry at the owning commit must finish/verify publication, even when a
+    # prior attempt created the version index before failing later in promotion.
+    return same_source
 
 
 def local_guides(root, version):
@@ -88,19 +90,21 @@ def main():
     references = local_guides(ROOT, version)
     registry = Registry()
     published = registry.manifest("spencernorton/armiger", version, missing_ok=True)
-    changed = []
+    changed, revision = [], ""
     if published is not None:
         revision = published[0].get("annotations", {}).get("org.opencontainers.image.revision", "")
         assert re.fullmatch(r"[a-f0-9]{40}", revision), "Existing release lacks verifiable source provenance"
         changed = subprocess.check_output(["git", "diff", "--no-renames", "--name-only", revision, "HEAD"], cwd=ROOT, text=True).splitlines()
-    needed = release_needed(version, published, changed)
+    head = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip()
+    needed = release_needed(version, published, changed, same_source=revision == head)
     report = {"version": version, "release_needed": needed and not args.consumer,
-              "local_image_references": references}
+              "local_image_references": references, "published_source": revision}
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(report, indent=2))
     if os.environ.get("GITHUB_OUTPUT"):
         with open(os.environ["GITHUB_OUTPUT"], "a") as output:
             output.write(f"version={version}\nrelease_needed={str(report['release_needed']).lower()}\n")
+            output.write(f"published_source={revision}\n")
     print(json.dumps(report, indent=2))
 
 

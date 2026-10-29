@@ -105,8 +105,9 @@ class Stack:
                             "-U", "bitmagnet", "-d", "bitmagnet", input=sql)
 
     def image_is_running(self, expected, service="armiger-ultra"):
-        container = self.compose("ps", "-q", service)
+        container = self.compose("ps", "--all", "-q", service)
         details = json.loads(run("docker", "inspect", container))[0]
+        assert details["State"]["Running"], f"{service} exited: {details['State']}"
         image_id = json.loads(run("docker", "image", "inspect", expected))[0]["Id"]
         assert details["Image"] == image_id, (details["Image"], image_id)
         if service == "armiger-ultra":
@@ -149,8 +150,9 @@ def seed(stack, start, stop, *, historical=False):
       select decode(lpad(to_hex(i),40,'0'),'hex'),'Tears.of.Steel.2012.1080p.mkv',2400000000,false,
         'multi',1,'{base}'::timestamptz+i*interval '1 second','{base}'::timestamptz+i*interval '1 second'
       from generate_series({start},{stop}) i;
-    insert into torrent_contents(info_hash,size,files_count,seeders,leechers,created_at,updated_at)
-      select info_hash,size,files_count,20,2,created_at,updated_at from torrents
+    insert into torrent_contents(info_hash,size,files_count,seeders,leechers,created_at,updated_at,tsv)
+      select info_hash,size,files_count,20,2,created_at,updated_at,
+        to_tsvector('simple','Tears of Steel 2012 1080p') from torrents
       where info_hash between decode(lpad(to_hex({start}),40,'0'),'hex') and decode(lpad(to_hex({stop}),40,'0'),'hex');
     insert into torrent_files(info_hash,index,path,size,created_at,updated_at)
       select info_hash,0,case when encode(info_hash,'hex') in ('{325:040x}','{340:040x}')
@@ -180,6 +182,15 @@ def classify(stack, connector=None):
         result = request(url + "/v1/classify", ITEM)
         assert result["category"] == "movie", result
     return url, {"health": health, "classification": result}
+
+
+def rats_sql(stack, sql):
+    code = """import json,sys
+sys.path.insert(0,'/opt/connectors/rats-search')
+from rats_search_connector import execute_manticore_mysql41
+print(json.dumps(execute_manticore_mysql41('127.0.0.1',9306,sys.argv[1])))
+"""
+    return json.loads(stack.compose("exec", "-T", "armiger-ultra", "python", "-c", code, sql))
 
 
 def bitmagnet(image, evidence):
@@ -242,6 +253,15 @@ print(json.dumps([BitmagnetConnector.build_put_tags_mutation([f'{i:040x}'],['arm
         # The proxy must actually reach stock upstream and produce parseable capabilities.
         with urllib.request.urlopen(stack.url(8097) + "/torznab?t=caps", timeout=15) as response:
             assert ET.fromstring(response.read()).tag == "caps"
+        with urllib.request.urlopen(url + "/torznab?t=search&q=Tears&limit=10", timeout=30) as response:
+            upstream_xml = response.read()
+            (evidence / "bitmagnet-upstream.xml").write_bytes(upstream_xml)
+            assert ET.fromstring(upstream_xml).findall("./channel/item"), "Stock search cannot find seeded metadata"
+        with urllib.request.urlopen(stack.url(8097) + "/torznab?t=search&q=Tears&limit=10", timeout=30) as response:
+            filtered_xml = response.read()
+            (evidence / "bitmagnet-filtered.xml").write_bytes(filtered_xml)
+            assert ET.fromstring(filtered_xml).findall("./channel/item"), "Real Torznab search returned no admitted fixtures"
+            assert int(response.headers["X-Armiger-Admitted"]) > 0
         return {"burst": 350, "batch_size": 100, "deleted": 2, "new_arrivals": 50,
                 "processed": len(expected), "legacy_repaired": 3, "canonical_tiers": len(expected_tags), "api": api}
 
@@ -264,7 +284,7 @@ def main():
     with Stack("rats-search", args.image, args.evidence, args.rats_image, http_only=not args.rats_image) as stack:
         stack.compose("up", "-d", timeout=240)
         stack.image_is_running(args.image)
-        _, result["rats-search"] = classify(stack, "rats-search")
+        rats_url, result["rats-search"] = classify(stack, "rats-search")
         result["rats-search"]["upstream"] = "real Rats/Manticore" if args.rats_image else "HTTP entrypoint only; full stack required on amd64"
         if args.rats_image:
             stack.image_is_running(args.rats_image, "rats-search")
@@ -275,16 +295,26 @@ def main():
             recent = request(stack.url(8095, "rats-search") + "/api/search.recent?limit=1")
             assert recent.get("success") is True and isinstance(recent.get("data"), list), recent
             result["rats-search"]["rest"] = {"recent_items": len(recent["data"])}
-            probe = """import json,sys
-sys.path.insert(0,'/opt/connectors/rats-search')
-from rats_search_connector import execute_manticore_mysql41
-tables=execute_manticore_mysql41('127.0.0.1',9306,'SHOW TABLES')
-assert any('torrents' in row.values() for row in tables),tables
-print(json.dumps(execute_manticore_mysql41('127.0.0.1',9306,'SELECT COUNT(*) FROM torrents')))
-"""
             result["rats-search"]["manticore"] = eventually(
-                lambda: json.loads(stack.compose("exec", "-T", "armiger-ultra", "python", "-c", probe)),
+                lambda: rats_sql(stack, "SELECT COUNT(*) FROM torrents"),
                 "real Manticore SQL handshake and torrents table")
+            row_id = (1 << 63) - 1  # Production rowIdFromHash for the fixture's all-f hash.
+            rats_sql(stack, f"INSERT INTO torrents(id,hash,name,size,files,added,contentType,contentCategory) VALUES "
+                     f"({row_id},'{ITEM['infoHash']}','Tears.of.Steel.2012.1080p.mkv',2400000000,1,1,2,3)")
+            applied = request(rats_url + "/v1/rats-search/classify", {"items": [ITEM], "applyChanges": True})
+            assert applied["applied"] == {"removed": 0, "updated": 1, "collisionsSkipped": 0}, applied
+            persisted = rats_sql(stack, f"SELECT contentType,contentCategory FROM torrents WHERE id={row_id}")[0]
+            assert {k.lower(): int(v) for k, v in persisted.items()} == {"contenttype": 1, "contentcategory": 1}, persisted
+            # Distinct hashes sharing the first63bits must never overwrite each other's metadata.
+            collision_hash = "f" * 16 + "e" * 24
+            rats_sql(stack, f"REPLACE INTO torrents(id,hash,name,size,files,added,contentType,contentCategory) VALUES "
+                     f"({row_id},'{collision_hash}','Tears.of.Steel.2012.1080p.mkv',2400000000,1,1,2,3)")
+            collision = request(rats_url + "/v1/rats-search/classify", {"items": [ITEM], "applyChanges": True})
+            assert collision["applied"] == {"removed": 0, "updated": 0, "collisionsSkipped": 1}, collision
+            untouched = rats_sql(stack, f"SELECT contentType,contentCategory FROM torrents WHERE id={row_id}")[0]
+            assert {k.lower(): int(v) for k, v in untouched.items()} == {"contenttype": 2, "contentcategory": 3}, untouched
+            result["rats-search"]["mutation_readback"] = persisted
+            result["rats-search"]["collision_preserved"] = untouched
     (args.evidence / f"runtime-{image['Architecture']}.json").write_text(json.dumps(result, indent=2))
     print(json.dumps({"image_id": result["image_id"], "architecture": result["architecture"],
                       "checks": ["standalone", "bitmagnet", "rats-search"],

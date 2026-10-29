@@ -34,15 +34,48 @@ def command(*args):
     return subprocess.check_output([str(x) for x in args], text=True).strip()
 
 
+def check_published(registry, version, source):
+    releases = {}
+    for repo in sorted({repo for repo, _ in EXPECTED}):
+        index, digest = registry.manifest(repo, version)
+        assert index.get("annotations", {}).get("org.opencontainers.image.revision") == source
+        platforms = {(x.get("platform", {}).get("os"), x.get("platform", {}).get("architecture"))
+                     for x in index["manifests"]
+                     if x.get("annotations", {}).get("vnd.docker.reference.type") != "attestation-manifest"}
+        assert platforms == {("linux", arch) for name, arch in EXPECTED if name == repo}, platforms
+        for name, arch in EXPECTED:
+            if name == repo:
+                labels = registry.native(repo, version, arch)["config"]["config"]["Labels"]
+                assert labels["org.opencontainers.image.revision"] == source
+                assert labels["org.opencontainers.image.version"] == version
+        releases[repo] = digest
+    assert registry.manifest("spencernorton/armiger-ultra", version)[1] == releases["spencernorton/armiger"]
+    for setup in ("bitmagnet", "rats-search"):
+        expected = normalized_compose(json.loads(command("docker", "compose", "-f", ROOT / f"examples/{setup}/docker-compose.yml",
+                                                         "config", "--format", "json")))
+        ref = f"ghcr.io/spencernorton/armiger-{setup}-stack:{version}"
+        actual = normalized_compose(json.loads(command("docker", "compose", "-f", "oci://" + ref, "config", "--format", "json")))
+        assert actual == expected, "Published stack is incomplete or differs from the supported setup"
+        releases[f"spencernorton/armiger-{setup}-stack"] = registry.manifest(f"spencernorton/armiger-{setup}-stack", version)[1]
+    return releases
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--evidence", type=Path, required=True)
     parser.add_argument("--version", required=True)
     parser.add_argument("--source", required=True)
+    parser.add_argument("--verify-only", action="store_true", help="Read-only completeness check for an unchanged existing release")
     args = parser.parse_args()
+    registry = Registry()
+    if args.verify_only:
+        releases = check_published(registry, args.version, args.source)
+        args.evidence.mkdir(parents=True, exist_ok=True)
+        (args.evidence / "published.json").write_text(json.dumps(releases, indent=2))
+        print(json.dumps(releases, indent=2))
+        return
     receipts = [r for path in args.evidence.glob("candidates-*.json") for r in json.loads(path.read_text())]
     check_receipts(receipts, args.version, args.source)
-    registry = Registry()
     # Check every candidate before moving any user-facing tag. Promote by digest, never by mutable candidate tag.
     for receipt in receipts:
         native = registry.native(receipt["repository"], receipt["manifest_digest"], receipt["architecture"])
@@ -61,9 +94,6 @@ def main():
             releases[repo] = existing[1]
             continue
         tags = [f"ghcr.io/{repo}:{args.version}"]
-        if repo.endswith("/armiger"):
-            tags += [f"ghcr.io/{repo}:latest", f"ghcr.io/spencernorton/armiger-ultra:{args.version}",
-                     "ghcr.io/spencernorton/armiger-ultra:3.3.0", "ghcr.io/spencernorton/armiger-ultra:latest"]
         sources = [f"ghcr.io/{repo}@{r['manifest_digest']}" for r in receipts if r["repository"] == repo]
         command("docker", "buildx", "imagetools", "create", "--annotation",
                 f"index:org.opencontainers.image.revision={args.source}",
@@ -93,6 +123,22 @@ def main():
         published = normalized_compose(json.loads(command("docker", "compose", "-f", "oci://" + ref, "config", "--format", "json")))
         assert published == model, "Published OCI stack differs from the documented/tested commands and images"
         releases[repo] = registry.manifest(repo, args.version)[1]
+    # Advance mutable entrypoints only after both immutable images and OCI
+    # stacks have passed readback. The versioned Ultra alias is immutable too.
+    digest = releases["spencernorton/armiger"]
+    ultra = registry.manifest("spencernorton/armiger-ultra", args.version, missing_ok=True)
+    if ultra is not None:
+        assert ultra[1] == digest, "Refusing to replace an existing Ultra release"
+    aliases = ["ghcr.io/spencernorton/armiger:latest", "ghcr.io/spencernorton/armiger-ultra:latest",
+               "ghcr.io/spencernorton/armiger-ultra:3.3.0"]
+    if ultra is None:
+        aliases.append(f"ghcr.io/spencernorton/armiger-ultra:{args.version}")
+    command("docker", "buildx", "imagetools", "create", *[part for tag in aliases for part in ("--tag", tag)],
+            f"ghcr.io/spencernorton/armiger@{digest}")
+    for tag in aliases:
+        repo, version = tag.removeprefix("ghcr.io/").split(":")
+        assert registry.manifest(repo, version)[1] == digest, f"Alias differs from accepted release: {tag}"
+    check_published(registry, args.version, args.source)
     (args.evidence / "published.json").write_text(json.dumps(releases, indent=2))
     print(json.dumps(releases, indent=2))
 

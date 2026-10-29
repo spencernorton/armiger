@@ -25,6 +25,7 @@ jobs:
       version: ${{ steps.release.outputs.version }}
       release_needed: ${{ steps.release.outputs.release_needed }}
       source: ${{ steps.source.outputs.sha }}
+      published_source: ${{ steps.release.outputs.published_source }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -224,7 +225,7 @@ jobs:
         run: python3 -c 'import json,os; results=json.loads(os.environ["RESULTS"]); assert all(j["result"]=="success" for j in results.values()), results'
   publish:
     name: Promote tested images and verify published stacks
-    if: github.repository == 'spencernorton/armiger' && github.ref == 'refs/heads/main' && needs.contract.outputs.release_needed == 'true' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+    if: github.repository == 'spencernorton/armiger' && github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
     needs: [test, contract, runtime]
     runs-on: ubuntu-24.04
     timeout-minutes: 15
@@ -248,9 +249,15 @@ jobs:
           REGISTRY_USER: ${{ github.actor }}
           SOFTWARE_VERSION: ${{ needs.contract.outputs.version }}
           SOURCE_REVISION: ${{ needs.contract.outputs.source }}
+          PUBLISHED_SOURCE: ${{ needs.contract.outputs.published_source }}
+          RELEASE_NEEDED: ${{ needs.contract.outputs.release_needed }}
         run: |
           printf '%s' "$REGISTRY_TOKEN" | docker login ghcr.io -u "$REGISTRY_USER" --password-stdin
-          python3 -m ci.promote --evidence out/received --version "$SOFTWARE_VERSION" --source "$SOURCE_REVISION"
+          if [ "$RELEASE_NEEDED" = true ]; then
+            python3 -m ci.promote --evidence out/received --version "$SOFTWARE_VERSION" --source "$SOURCE_REVISION"
+          else
+            python3 -m ci.promote --verify-only --evidence out/received --version "$SOFTWARE_VERSION" --source "$PUBLISHED_SOURCE"
+          fi
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         if: always()
         with:

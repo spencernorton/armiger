@@ -24,12 +24,15 @@ running Armiger image matches the candidate and uses its default UID10001.
   Readback through the real GraphQL API requires every eligible record tagged.
   Three legacy viability tags must migrate, and all six supported tier inputs
   must serialize to the exact readable canonical tags and persist upstream.
-  The Torznab proxy must retrieve real stock capabilities.
+  The Torznab proxy must retrieve real stock capabilities and admit actual
+  search results for the licensed fixtures.
 - Rats: both native Armiger images start the documented connector entrypoint
   and perform real-model HTTP classification. On amd64, CI also builds/starts
   the supported x86 Rats backend with Manticore, reaches its real recent-search
-  REST endpoint and queries its torrents table through the production SQL
-  client. On arm64 the connector HTTP entrypoint runs alone; the bundled Rats
+  REST endpoint, applies a classification through the real HTTP/SQL path and
+  reads the changed category back from Manticore. A colliding infohash must
+  preserve the other row's metadata. On arm64 the connector HTTP entrypoint
+  runs alone; the bundled Rats
   backend is x86-only and full-stack acceptance is required on the amd64 job.
 
 The fixtures contain metadata only; no copyrighted media or public torrents
@@ -64,7 +67,8 @@ receipts (Armiger amd64+arm64, Rats amd64), checks their identities again, and
 creates release indexes from those exact native manifest digests. It never
 rebuilds an image after acceptance. Published indexes, aliases and both OCI
 Compose stacks are read back and checked against the receipts/documented
-commands. Logs and JSON evidence are retained as Actions artifacts for14days;
+commands. Mutable latest/legacy aliases advance only after OCI readback. Logs
+and JSON evidence are retained as Actions artifacts for14days;
 publication proof is retained for30days. A partial or ambiguous publication
 remains a failed workflow.
 
@@ -76,6 +80,12 @@ errors, not evidence that a version is unpublished. Local setup image/OCI
 versions must match the software version. External Connectors/HF guide image
 references must exist and resolve to a release containing the3.4.1 startup fix.
 Software version and model-bundle version remain separate.
+
+An unchanged-version main run still verifies the existing release's platforms,
+immutable alias and published stacks. It cannot turn an incomplete release
+green by skipping publication. To recover a partial publication, rerun the
+failed promotion job to reuse that run's original receipts. A full rebuild that
+changes an already-released payload is rejected and needs a new version.
 
 Connectors can invoke this workflow with their exact repository/commit inputs.
 CI checks out a fixed Armiger revision, replaces the two pinned connector ADDs
