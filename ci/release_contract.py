@@ -92,8 +92,7 @@ def main():
     published = registry.manifest("spencernorton/armiger", version, missing_ok=True)
     changed, revision = [], ""
     if published is not None:
-        revision = published[0].get("annotations", {}).get("org.opencontainers.image.revision", "")
-        assert re.fullmatch(r"[a-f0-9]{40}", revision), "Existing release lacks verifiable source provenance"
+        revision, _ = registry.release_identity("spencernorton/armiger", version, ("amd64", "arm64"))
         changed = subprocess.check_output(["git", "diff", "--no-renames", "--name-only", revision, "HEAD"], cwd=ROOT, text=True).splitlines()
     head = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip()
     needed = release_needed(version, published, changed, same_source=revision == head)

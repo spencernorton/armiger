@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -51,3 +52,25 @@ class Registry:
         assert config["architecture"] == arch and config["os"] == "linux", config
         return {"manifest_digest": digest, "config_digest": config_ref,
                 "config": config, "manifest": manifest}
+
+    def release_identity(self, repo, version, architectures):
+        """Bind a Docker manifest list or OCI index to every native image config."""
+        index, digest = self.manifest(repo, version)
+        assert index["mediaType"] in ("application/vnd.oci.image.index.v1+json",
+                                      "application/vnd.docker.distribution.manifest.list.v2+json")
+        platforms = {(x.get("platform", {}).get("os"), x.get("platform", {}).get("architecture"))
+                     for x in index["manifests"]
+                     if x.get("annotations", {}).get("vnd.docker.reference.type") != "attestation-manifest"}
+        assert platforms == {("linux", arch) for arch in architectures}, platforms
+        sources = set()
+        for arch in architectures:
+            labels = self.native(repo, version, arch)["config"]["config"]["Labels"]
+            assert labels["org.opencontainers.image.version"] == version, "Native image version differs"
+            source = labels["org.opencontainers.image.revision"]
+            assert re.fullmatch(r"[a-f0-9]{40}", source), "Native image lacks source provenance"
+            sources.add(source)
+        assert len(sources) == 1, "Native images identify different source revisions"
+        source = sources.pop()
+        annotation = index.get("annotations", {}).get("org.opencontainers.image.revision")
+        assert annotation in (None, source), "Index and native source provenance disagree"
+        return source, digest

@@ -1,3 +1,10 @@
+## 2026-10-28 — Validate release source in every native image config (3.4.3)
+
+- **Branch:** codex/native-release-provenance
+- **What changed:** Support Docker manifest lists as well as OCI indexes by validating every native config's source/version labels, complete supported platforms and any index annotation that is present. Tested native manifest/config digests remain required for promotion and immutable retries. Bump software and local quickstarts to 3.4.3 because the stopped 3.4.2 publication created an incomplete immutable image tag.
+- **Validation:** Main 3.4.2 CI passed both native runtime/push jobs, Python suites and the aggregate before its final metadata assertion caught the Docker-list annotation mismatch. Independent receipt reads prove all three pushed config digests equal the tested local image IDs. New failure cases reject missing platforms, mixed/missing/invalid source labels, wrong versions and contradictory annotations. Real 3.4.1 OCI and partial 3.4.2 Docker-list source readback are checked before merging. Final 3.4.3 native CI and full publication remain required.
+- **Release:** 3.4.2 remains an incomplete registry tag with no release announcement or mutable-alias promotion. Model bundle 3.4.0 is unchanged.
+
 ## 2026-10-28 — Compare equivalent legacy Docker and OCI configuration defaults
 
 - **Branch:** codex/registry-config-defaults
