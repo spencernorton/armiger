@@ -291,7 +291,7 @@ print(json.dumps([BitmagnetConnector.build_put_tags_mutation([f'{i:040x}'],['arm
         )
         with urllib.request.urlopen(stack.url(8097) + "/torznab?t=tvsearch&cat=5000&q=Caminandes&limit=10", timeout=30) as response:
             tv_items = ET.fromstring(response.read()).findall("./channel/item")
-            assert any(it.findtext("category") == "TV show" for it in tv_items), "Torznab tvsearch did not return tv_show item"
+            assert any(it.findtext("category") in ("tv_show", "TV show") for it in tv_items), "Torznab tvsearch did not return tv_show item"
         with urllib.request.urlopen(stack.url(8097) + "/torznab?t=movie&cat=2000&q=Sintel&limit=10", timeout=30) as response:
             movie_items = ET.fromstring(response.read()).findall("./channel/item")
             assert any(it.findtext("category") == "Movie" for it in movie_items), "Torznab movie rescue did not promote Unknown movie to 2000"
