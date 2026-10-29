@@ -10,6 +10,11 @@ import subprocess
 from ci.registry import Registry
 
 
+# Docker API 1.48 includes these legacy container defaults in image inspect;
+# newer APIs and OCI image configs can omit them without changing the image.
+FALSE_DEFAULTS = frozenset({"AttachStdin", "AttachStdout", "AttachStderr", "Tty", "OpenStdin", "StdinOnce"})
+
+
 def inspect(image):
     return json.loads(subprocess.check_output(["docker", "image", "inspect", image], text=True))[0]
 
@@ -22,6 +27,8 @@ def same_payload(local, remote):
     for key in left.keys() | right.keys():
         a, b = left.get(key), right.get(key)
         if a != b:
+            if key in FALSE_DEFAULTS and ((a is False and b is None) or (a is None and b is False)):
+                continue
             assert a in (None, "", [], {}) and b in (None, "", [], {}), f"Pushed {key} differs from tested image"
 
 
