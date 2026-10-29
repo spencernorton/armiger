@@ -136,39 +136,57 @@ jobs:
           CONNECTOR_REPOSITORY: ${{ inputs.connector_repository }}
           CONNECTOR_REVISION: ${{ inputs.connector_revision }}
         run: python3 -m ci.pin_connectors --repository "$CONNECTOR_REPOSITORY" --revision "$CONNECTOR_REVISION"
-      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
-      - name: Build the native Armiger candidate
-        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
+      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
-          context: .
-          file: examples/Dockerfile
-          platforms: linux/${{ matrix.arch }}
-          load: true
-          provenance: false
-          tags: armiger-ci:${{ matrix.arch }}
-          labels: |
-            org.opencontainers.image.source=https://github.com/spencernorton/armiger
-            org.opencontainers.image.revision=${{ needs.contract.outputs.source }}
-            org.opencontainers.image.version=${{ needs.contract.outputs.version }}
-            io.armiger.tested-connector-revision=${{ inputs.connector_revision }}
-          cache-from: type=gha,scope=armiger-${{ matrix.arch }}
-          cache-to: type=gha,scope=armiger-${{ matrix.arch }},mode=max
+          path: ${{ runner.temp }}/armiger-build-cache
+          key: armiger-${{ matrix.arch }}-${{ hashFiles('examples/Dockerfile', 'pyproject.toml', 'src/**') }}
+          restore-keys: armiger-${{ matrix.arch }}-
+      - name: Set up the installed Docker builder
+        run: docker buildx create --use --driver docker-container
+      - name: Build the native Armiger candidate
+        env:
+          CI_ARCH: ${{ matrix.arch }}
+          SOFTWARE_VERSION: ${{ needs.contract.outputs.version }}
+          SOURCE_REVISION: ${{ needs.contract.outputs.source }}
+          CONNECTOR_REVISION: ${{ inputs.connector_revision }}
+        run: |
+          CACHE_ARGS=()
+          if [ -f "$RUNNER_TEMP/armiger-build-cache/index.json" ]; then
+            CACHE_ARGS+=(--cache-from "type=local,src=$RUNNER_TEMP/armiger-build-cache")
+          fi
+          docker buildx build --platform "linux/$CI_ARCH" --file examples/Dockerfile --load --provenance=false \
+            --label "org.opencontainers.image.source=https://github.com/spencernorton/armiger" \
+            --label "org.opencontainers.image.revision=$SOURCE_REVISION" \
+            --label "org.opencontainers.image.version=$SOFTWARE_VERSION" \
+            --label "io.armiger.tested-connector-revision=$CONNECTOR_REVISION" \
+            --tag "armiger-ci:$CI_ARCH" "${CACHE_ARGS[@]}" \
+            --cache-to "type=local,dest=$RUNNER_TEMP/armiger-build-cache-new,mode=max" .
+          rm -rf "$RUNNER_TEMP/armiger-build-cache"
+          mv "$RUNNER_TEMP/armiger-build-cache-new" "$RUNNER_TEMP/armiger-build-cache"
+      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        if: matrix.arch == 'amd64'
+        with:
+          path: ${{ runner.temp }}/rats-build-cache
+          key: rats-amd64-${{ hashFiles('examples/rats-search/Dockerfile') }}
+          restore-keys: rats-amd64-
       - name: Build the supported native Rats backend
         if: matrix.arch == 'amd64'
-        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
-        with:
-          context: .
-          file: examples/rats-search/Dockerfile
-          platforms: linux/amd64
-          load: true
-          provenance: false
-          tags: rats-ci:amd64
-          labels: |
-            org.opencontainers.image.source=https://github.com/spencernorton/armiger
-            org.opencontainers.image.revision=${{ needs.contract.outputs.source }}
-            org.opencontainers.image.version=${{ needs.contract.outputs.version }}
-          cache-from: type=gha,scope=rats-amd64
-          cache-to: type=gha,scope=rats-amd64,mode=max
+        env:
+          SOFTWARE_VERSION: ${{ needs.contract.outputs.version }}
+          SOURCE_REVISION: ${{ needs.contract.outputs.source }}
+        run: |
+          CACHE_ARGS=()
+          if [ -f "$RUNNER_TEMP/rats-build-cache/index.json" ]; then
+            CACHE_ARGS+=(--cache-from "type=local,src=$RUNNER_TEMP/rats-build-cache")
+          fi
+          docker buildx build --platform linux/amd64 --file examples/rats-search/Dockerfile --load --provenance=false \
+            --label "org.opencontainers.image.source=https://github.com/spencernorton/armiger" \
+            --label "org.opencontainers.image.revision=$SOURCE_REVISION" \
+            --label "org.opencontainers.image.version=$SOFTWARE_VERSION" \
+            --tag rats-ci:amd64 "${CACHE_ARGS[@]}" \
+            --cache-to "type=local,dest=$RUNNER_TEMP/rats-build-cache-new,mode=max" .
+          rm -rf "$RUNNER_TEMP/rats-build-cache"
+          mv "$RUNNER_TEMP/rats-build-cache-new" "$RUNNER_TEMP/rats-build-cache"
       - name: Start documented commands and prove upstream results
         env:
           CI_ARCH: ${{ matrix.arch }}
