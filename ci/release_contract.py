@@ -50,6 +50,24 @@ def local_guides(root, version):
     init = (root / "src/armiger/__init__.py").read_text()
     assert f'__version__ = "{version}"' in init, "Package and release versions disagree"
     assert f"Library **{version}**" in (root / "README.md").read_text(), "README software version is stale"
+    dockerfile_path = root / "examples/Dockerfile"
+    if dockerfile_path.is_file():
+        add_re = re.compile(
+            r"(?m)^ADD --chmod=0444 --checksum=sha256:([a-f0-9]{64}) "
+            r"https://raw\.githubusercontent\.com/([A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+)/([a-f0-9]{40})/"
+            r"(bitmagnet/bitmagnet_connector\.py|rats-search/rats_search_connector\.py) "
+            r"/opt/connectors/\4$"
+        )
+        matches = add_re.findall(dockerfile_path.read_text())
+        assert len(matches) == 2 and {m[3] for m in matches} == {
+            "bitmagnet/bitmagnet_connector.py",
+            "rats-search/rats_search_connector.py",
+        }, "Missing pinned connector ADD lines in examples/Dockerfile"
+        assert len({(m[1], m[2]) for m in matches}) == 1, "Connector ADD lines disagree on revision"
+        repo, rev = matches[0][1], matches[0][2]
+        assert f"https://github.com/{repo}/blob/{rev}/bitmagnet/bitmagnet_connector.py" in (
+            root / "docs/bitmagnet-configuration.md"
+        ).read_text(), "docs/bitmagnet-configuration.md connector revision disagrees with examples/Dockerfile"
     return references
 
 

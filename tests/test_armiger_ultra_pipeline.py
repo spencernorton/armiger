@@ -544,3 +544,57 @@ def test_swarm_residual_adapter_pytorch_forward_pass() -> None:
     assert res_warm["p_junk_adapter"] > 0.90
     assert res_warm["adapter_junk_logit_delta"] > 1.0
     assert res_warm["is_honeypot_blocked"] is True
+
+
+def test_single_file_extension_synthesis() -> None:
+    """Verify single-file torrents carrying `extension` without `files` synthesize a virtual file path."""
+    from armiger.armiger_inference import encode_torrent_features
+    from armiger.armiger_ultra_pipeline import _file_tree_structural_override
+
+    feats_no_ext = encode_torrent_features({
+        "name": "Brandon Sanderson - The Way of Kings",
+        "size": 950_000_000,
+        "files": [],
+    })
+    feats_with_ext = encode_torrent_features({
+        "name": "Brandon Sanderson - The Way of Kings",
+        "size": 950_000_000,
+        "files": [],
+        "extension": "m4b",
+    })
+    assert feats_no_ext["ext"] != feats_with_ext["ext"] and feats_no_ext["stats"] != feats_with_ext["stats"]
+
+    override_m4b = _file_tree_structural_override({
+        "name": "Unlabeled Upload 2025",
+        "files": [],
+        "size": 850_000_000,
+        "extension": ".m4b",
+    })
+    assert override_m4b == ("audiobook", "structural_m4b")
+
+    override_cbz = _file_tree_structural_override({
+        "name": "Mystery Issue 001",
+        "files": None,
+        "size": 45_000_000,
+        "extension": "cbz",
+    })
+    assert override_cbz == ("comic", "structural_comic_archive")
+
+    from armiger.armiger_ultra_pipeline import ArmigerUltraPipeline
+    from armiger.artifacts import model_directory
+
+    pipe = ArmigerUltraPipeline.from_directory(
+        model_directory(), preload_catalog=False, rsi_mode="pull_only", opt_in_sharing=False
+    )
+    tv_pred = pipe.classify({"name": "Caminandes.Season.01.Complete.1080p.WEBRip", "size": 3_200_000_000})
+    assert tv_pred.category == "tv_show"
+    assert tv_pred.junk == "clean"
+    assert tv_pred.honeypot_trap["is_honeypot_trap"] is False
+
+    mov_pred = pipe.classify({"name": "Sintel.Open.Movie.1080p.BluRay", "size": 4_100_000_000})
+    assert mov_pred.category == "movie"
+    assert mov_pred.junk == "clean"
+    assert mov_pred.honeypot_trap["is_honeypot_trap"] is False
+
+    exe_pred = pipe.classify({"name": "Fake.Movie.2024.1080p.BluRay.exe", "size": 15_000_000})
+    assert exe_pred.junk == "junk"

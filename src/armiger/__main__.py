@@ -11,11 +11,11 @@ def main():
     commands = parser.add_subparsers(dest="command", required=True)
     download = commands.add_parser("download", help="download and verify pinned model data")
     download.add_argument("--directory")
-    download.add_argument("--variant", choices=("ultra", "cpu", "all"), default="ultra")
+    download.add_argument("--variant", choices=("ultra", "fp32", "cpu", "int8", "all"), default="ultra")
     download.add_argument("--offline", action="store_true")
     classify = commands.add_parser("classify", help="classify one JSON object from stdin")
     classify.add_argument("--model-dir")
-    classify.add_argument("--variant", choices=("ultra", "cpu"), default="ultra")
+    classify.add_argument("--variant", choices=("ultra", "fp32", "cpu", "int8"), default="ultra")
     server = commands.add_parser("serve", help="run the standalone Ultra HTTP service")
     server.add_argument("--model-dir")
     server.add_argument("--host", default="127.0.0.1")
@@ -32,7 +32,7 @@ def main():
     directory = model_directory(args.model_dir)
     download_model(directory, variant=args.variant, offline=True)
     item = json.load(sys.stdin)
-    if args.variant == "cpu":
+    if args.variant in ("cpu", "int8"):
         from . import ArmigerStandaloneONNX
         result = ArmigerStandaloneONNX(directory / "armiger.int8.onnx", directory / "vocab.json", directory / "calibration.json").predict(item)
     else:

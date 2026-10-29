@@ -79,6 +79,7 @@ class Stack:
         if setup == "bitmagnet":
             # Use the stock HTTP/queue workers; synthetic fixtures need no public DHT/TMDB traffic.
             model["services"]["bitmagnet"]["command"] = ["worker", "run", "--keys=http_server", "--keys=queue_server"]
+            model["services"]["bitmagnet"].setdefault("environment", {})["TMDB_ENABLED"] = "false"
             app["environment"]["ARMIGER_PRUNE_MALWARE"] = "true"
         if setup == "rats-search":
             if http_only:
@@ -260,10 +261,43 @@ print(json.dumps([BitmagnetConnector.build_put_tags_mutation([f'{i:040x}'],['arm
         with urllib.request.urlopen(stack.url(8097) + "/torznab?t=search&q=Tears&limit=10", timeout=30) as response:
             filtered_xml = response.read()
             (evidence / "bitmagnet-filtered.xml").write_bytes(filtered_xml)
-            assert ET.fromstring(filtered_xml).findall("./channel/item"), "Real Torznab search returned no admitted fixtures"
+            items = ET.fromstring(filtered_xml).findall("./channel/item")
+            assert items, "Real Torznab search returned no admitted fixtures"
+            assert items[0].findtext("category") == "Movie", ET.tostring(items[0], encoding="unicode")
             assert int(response.headers["X-Armiger-Admitted"]) > 0
+        # Seed a sourced Unknown TV show (to verify POST /import contentType hint writeback) and a sourceless
+        # Unknown Movie (to verify Torznab t=movie&cat=2000 fallback rescue + 8000->2000 category promotion).
+        stack.sql(f"""
+        begin;
+        insert into torrent_sources(key,name,created_at,updated_at)
+          values ('dht','DHT',now(),now()) on conflict do nothing;
+        insert into torrents(info_hash,name,size,private,files_status,files_count,created_at,updated_at) values
+          (decode('{2001:040x}','hex'),'Caminandes.Season.01.Complete.1080p.WEBRip',3200000000,false,'multi',1,'2026-03-01 00:00:01+00','2026-03-01 00:00:01+00'),
+          (decode('{2002:040x}','hex'),'Sintel.Open.Movie.1080p.BluRay',4100000000,false,'multi',1,'2026-03-01 00:00:02+00','2026-03-01 00:00:02+00');
+        insert into torrents_torrent_sources(source,info_hash,seeders,leechers,created_at,updated_at) values
+          ('dht',decode('{2001:040x}','hex'),18,2,'2026-03-01 00:00:01+00','2026-03-01 00:00:01+00');
+        insert into torrent_contents(info_hash,size,files_count,seeders,leechers,created_at,updated_at,tsv) values
+          (decode('{2001:040x}','hex'),3200000000,1,18,2,'2026-03-01 00:00:01+00','2026-03-01 00:00:01+00',to_tsvector('simple','Caminandes Season 01 Complete 1080p WEBRip')),
+          (decode('{2002:040x}','hex'),4100000000,1,25,3,'2026-03-01 00:00:02+00','2026-03-01 00:00:02+00',to_tsvector('simple','Sintel Open Movie 1080p BluRay'));
+        insert into torrent_files(info_hash,index,path,size,created_at,updated_at) values
+          (decode('{2001:040x}','hex'),0,'Caminandes.S01E01.1080p.mkv',3200000000,'2026-03-01 00:00:01+00','2026-03-01 00:00:01+00'),
+          (decode('{2002:040x}','hex'),0,'Sintel.Open.Movie.1080p.mkv',4100000000,'2026-03-01 00:00:02+00','2026-03-01 00:00:02+00');
+        commit;
+        """)
+        eventually(
+            lambda: stack.sql(f"select content_type from torrent_contents where info_hash=decode('{2001:040x}','hex');") == "tv_show",
+            "Bitmagnet /import contentType hint writeback for sourced Unknown TV show",
+            timeout=60,
+        )
+        with urllib.request.urlopen(stack.url(8097) + "/torznab?t=tvsearch&cat=5000&q=Caminandes&limit=10", timeout=30) as response:
+            tv_items = ET.fromstring(response.read()).findall("./channel/item")
+            assert any(it.findtext("category") in ("tv_show", "TV show") for it in tv_items), "Torznab tvsearch did not return tv_show item"
+        with urllib.request.urlopen(stack.url(8097) + "/torznab?t=movie&cat=2000&q=Sintel&limit=10", timeout=30) as response:
+            movie_items = ET.fromstring(response.read()).findall("./channel/item")
+            assert any(it.findtext("category") == "Movie" for it in movie_items), "Torznab movie rescue did not promote Unknown movie to 2000"
         return {"burst": 350, "batch_size": 100, "deleted": 2, "new_arrivals": 50,
-                "processed": len(expected), "legacy_repaired": 3, "canonical_tiers": len(expected_tags), "api": api}
+                "processed": len(expected), "legacy_repaired": 3, "canonical_tiers": len(expected_tags),
+                "content_type_hint_verified": True, "torznab_category_rescue_verified": True, "api": api}
 
 
 def main():

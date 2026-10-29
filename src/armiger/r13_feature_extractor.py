@@ -102,10 +102,14 @@ def inference_input(row: Mapping[str, Any]) -> dict[str, Any]:
     source = row.get("inference_input", row)
     if not isinstance(source, Mapping):
         raise TypeError("inference_input must be a mapping")
-    return {"name": str(source.get("name") or source.get("title") or ""),
-            "files": normalize_files(source.get("files")),
-            "size": _safe_nonneg_int(source.get("size")),
-            "infohash": str(source.get("infohash") or "").lower()}
+    out = {"name": str(source.get("name") or source.get("title") or ""),
+           "files": normalize_files(source.get("files")),
+           "size": _safe_nonneg_int(source.get("size")),
+           "infohash": str(source.get("infohash") or "").lower()}
+    ext = str(source.get("extension") or source.get("ext") or "").strip()
+    if ext:
+        out["extension"] = ext
+    return out
 
 
 def _utf8_prefix(text: str, max_bytes: int) -> str:

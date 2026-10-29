@@ -25,6 +25,15 @@ def main():
         dockerfile, count = re.subn(pattern, f"ADD --chmod=0444 --checksum=sha256:{checksum} {url} {destination}", dockerfile)
         assert count == 1, f"Missing unique pinned connector ADD: {relative}"
     path.write_text(dockerfile)
+    cfg_doc = Path(__file__).resolve().parents[1] / "docs/bitmagnet-configuration.md"
+    if cfg_doc.is_file():
+        doc_text = cfg_doc.read_text()
+        doc_text = re.sub(
+            r"https://github\.com/[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+/blob/[a-f0-9]{40}/bitmagnet/bitmagnet_connector\.py",
+            f"https://github.com/{args.repository}/blob/{args.revision}/bitmagnet/bitmagnet_connector.py",
+            doc_text,
+        )
+        cfg_doc.write_text(doc_text)
     print(json.dumps({"connector_repository": args.repository, "connector_revision": args.revision}))
 
 

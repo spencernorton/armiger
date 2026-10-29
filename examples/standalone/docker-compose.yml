@@ -1,6 +1,6 @@
 services:
   armiger-ultra:
-    image: ghcr.io/spencernorton/armiger:3.8.0
+    image: ghcr.io/spencernorton/armiger:3.8.1
     restart: unless-stopped
     environment:
       ARMIGER_DHT_AUTO_UPDATE: ${ARMIGER_DHT_AUTO_UPDATE:-true}
