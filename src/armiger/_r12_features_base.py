@@ -474,8 +474,22 @@ def encode_torrent_features(
     all_items: List[Tuple[str, int]] = _normalize_file_entries(raw_files)
     all_items.sort(key=lambda x: -x[1])
     items: List[Tuple[str, int]] = all_items[:max_files]
+    ext_map = _get_vocab_ext_map()
     if not items and (row.get("ext") or row.get("extension") or "." in name):
-        items.append((name, total_size))
+        ext_hint = str(row.get("extension") or row.get("ext") or "").strip().lstrip(".").lower()
+        if ext_hint:
+            synth_path = f"{name}.{ext_hint}" if name and not name.lower().endswith(f".{ext_hint}") else (name or f"file.{ext_hint}")
+            items.append((synth_path, total_size))
+        else:
+            _, _, split_ext, _ = _prep_split_path(name)
+            if split_ext and (split_ext in _PREP_EXT_TO_KIND or split_ext in ext_map):
+                items.append((name, total_size))
+            elif (
+                _SIDE_VID_CLAIM_RE.search(name)
+                and not _SIDE_VPN_TRAP_RE.search(name)
+                and not _SIDE_SW_APP_TITLE_RE.search(name)
+            ):
+                items.append((f"{name}.mkv", total_size))
 
     # R12: opaque/folder names expose their primary media filenames to the
     # byte/char/word encoders; derivative-group features use the full tree.
@@ -649,6 +663,8 @@ def encode_torrent_features(
             side[11] = 1.0
         if vc and vid_share > 0 and 0 < base_stats[1] < 14.22:
             side[12] = 1.0
+    elif _SIDE_VPN_TRAP_RE.search(name):
+        side[11] = 1.0
 
     # R12: strip negated subtitle clauses ("no english subs", ...) before the
     # side[13] subtitle cue; previously side[13] was never populated at all.

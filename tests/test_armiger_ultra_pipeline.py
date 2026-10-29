@@ -579,3 +579,22 @@ def test_single_file_extension_synthesis() -> None:
         "extension": "cbz",
     })
     assert override_cbz == ("comic", "structural_comic_archive")
+
+    from armiger.armiger_ultra_pipeline import ArmigerUltraPipeline
+    from armiger.artifacts import model_directory
+
+    pipe = ArmigerUltraPipeline.from_directory(
+        model_directory(), preload_catalog=False, rsi_mode="pull_only", opt_in_sharing=False
+    )
+    tv_pred = pipe.classify({"name": "Caminandes.Season.01.Complete.1080p.WEBRip", "size": 3_200_000_000})
+    assert tv_pred.category == "tv_show"
+    assert tv_pred.junk == "clean"
+    assert tv_pred.honeypot_trap["is_honeypot_trap"] is False
+
+    mov_pred = pipe.classify({"name": "Sintel.Open.Movie.1080p.BluRay", "size": 4_100_000_000})
+    assert mov_pred.category == "movie"
+    assert mov_pred.junk == "clean"
+    assert mov_pred.honeypot_trap["is_honeypot_trap"] is False
+
+    exe_pred = pipe.classify({"name": "Fake.Movie.2024.1080p.BluRay.exe", "size": 15_000_000})
+    assert exe_pred.junk == "junk"

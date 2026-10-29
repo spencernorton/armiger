@@ -211,12 +211,22 @@ def encode_torrent_features(
             all_items.append((p, sz))
     all_items.sort(key=lambda x: -x[1])
     items: List[Tuple[str, int]] = all_items[:max_files]
+    ext_map = _get_vocab_ext_map()
     if not items and (row.get("ext") or row.get("extension") or "." in name):
         ext_hint = str(row.get("extension") or row.get("ext") or "").strip().lstrip(".").lower()
-        synth_path = f"{name}.{ext_hint}" if ext_hint and not name.lower().endswith(f".{ext_hint}") else name
-        items.append((synth_path, total_size))
-
-    ext_map = _get_vocab_ext_map()
+        if ext_hint:
+            synth_path = f"{name}.{ext_hint}" if name and not name.lower().endswith(f".{ext_hint}") else (name or f"file.{ext_hint}")
+            items.append((synth_path, total_size))
+        else:
+            _, _, split_ext, _ = _prep_split_path(name)
+            if split_ext and (split_ext in _PREP_EXT_TO_KIND or split_ext in ext_map):
+                items.append((name, total_size))
+            elif (
+                _SIDE_VID_CLAIM_RE.search(name)
+                and not _SIDE_VPN_TRAP_RE.search(name)
+                and not _SIDE_SW_APP_TITLE_RE.search(name)
+            ):
+                items.append((f"{name}.mkv", total_size))
     exts: List[int] = []
     sizes: List[int] = []
     depths: List[int] = []
@@ -375,6 +385,8 @@ def encode_torrent_features(
             side[11] = 1.0
         if vc and vid_share > 0 and 0 < base_stats[1] < 14.22:
             side[12] = 1.0
+    elif _SIDE_VPN_TRAP_RE.search(name):
+        side[11] = 1.0
 
     ag = bool(_SIDE_ANIME_KW_RE.search(name)) or has_sub_grp or has_dub_grp
     if ag:
