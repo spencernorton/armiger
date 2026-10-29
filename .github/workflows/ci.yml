@@ -1,6 +1,13 @@
 name: CI
 on:
   workflow_call:
+    inputs:
+      connector_repository:
+        type: string
+        default: ''
+      connector_revision:
+        type: string
+        default: ''
   pull_request:
   push:
     branches: [main]
@@ -11,7 +18,60 @@ concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 jobs:
+  contract:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      version: ${{ steps.release.outputs.version }}
+      release_needed: ${{ steps.release.outputs.release_needed }}
+      source: ${{ steps.source.outputs.sha }}
+      published_source: ${{ steps.release.outputs.published_source }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: spencernorton/armiger
+          ref: ${{ github.repository == 'spencernorton/armiger' && github.sha || 'main' }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Bind every job to this Armiger source revision
+        id: source
+        run: echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+      - name: Test release failure cases
+        run: python3 -m unittest discover -s ci/tests -v
+      - name: Check versions, provenance and runnable quickstarts
+        id: release
+        env:
+          CONSUMER: ${{ github.repository != 'spencernorton/armiger' }}
+        run: |
+          CONTRACT_ARGS=(--output out/release-contract.json)
+          if [ "$CONSUMER" = true ]; then CONTRACT_ARGS+=(--consumer); fi
+          python3 -m ci.release_contract "${CONTRACT_ARGS[@]}"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        if: always()
+        with:
+          name: release-contract
+          path: out/release-contract.json
+          retention-days: 14
+  guides:
+    needs: contract
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: spencernorton/armiger
+          ref: ${{ needs.contract.outputs.source }}
+          persist-credentials: false
+      - name: Check published Connectors and model-card image references
+        run: python3 -m ci.release_contract --external-only --output out/guide-contract.json
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        if: always()
+        with:
+          name: guide-contract
+          path: out/guide-contract.json
+          retention-days: 14
   verify:
+    needs: contract
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     strategy:
@@ -20,6 +80,8 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          repository: spencernorton/armiger
+          ref: ${{ needs.contract.outputs.source }}
           persist-credentials: false
       - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
         with:
@@ -31,8 +93,12 @@ jobs:
       - name: Download verified model data
         run: python -m armiger download --variant all
       - name: Test runtime and evaluation integrity
+        env:
+          ARMIGER_DHT_AUTO_UPDATE: 'false'
         run: python -m pytest -q
       - name: Build and verify installed wheel outside checkout
+        env:
+          ARMIGER_DHT_AUTO_UPDATE: 'false'
         run: |
           python -m build
           python -m pip install --force-reinstall --no-deps dist/*.whl
@@ -43,20 +109,9 @@ jobs:
           docker compose -f examples/bitmagnet/docker-compose.yml config --quiet
           docker compose -f examples/rats-search/docker-compose.yml config --quiet
           docker compose -f examples/standalone/docker-compose.yml config --quiet
-  test:
-    name: test
-    if: always()
-    needs: verify
-    runs-on: ubuntu-24.04
-    steps:
-      - name: Require both supported Python checks
-        env:
-          RESULT: ${{ needs.verify.result }}
-        run: test "$RESULT" = success
-  publish:
-    name: Build ${{ matrix.image }} (${{ matrix.arch }})
-    if: github.repository == 'spencernorton/armiger' && github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
-    needs: test
+  runtime:
+    name: Real containers (${{ matrix.arch }})
+    needs: contract
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 40
     permissions:
@@ -66,101 +121,148 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - image: armiger
-            dockerfile: examples/Dockerfile
-            arch: amd64
+          - arch: amd64
             runner: ubuntu-24.04
-          - image: armiger
-            dockerfile: examples/Dockerfile
-            arch: arm64
+          - arch: arm64
             runner: ubuntu-24.04-arm
-          - image: armiger-rats-search
-            dockerfile: examples/rats-search/Dockerfile
-            arch: amd64
-            runner: ubuntu-24.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          repository: spencernorton/armiger
+          ref: ${{ needs.contract.outputs.source }}
           persist-credentials: false
-      - name: Publish native image without replacing an existing release
+      - name: Test the calling Connectors revision
+        if: inputs.connector_revision != ''
+        env:
+          CONNECTOR_REPOSITORY: ${{ inputs.connector_repository }}
+          CONNECTOR_REVISION: ${{ inputs.connector_revision }}
+        run: python3 -m ci.pin_connectors --repository "$CONNECTOR_REPOSITORY" --revision "$CONNECTOR_REVISION"
+      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: ${{ runner.temp }}/armiger-build-cache
+          key: armiger-${{ matrix.arch }}-${{ hashFiles('examples/Dockerfile', 'pyproject.toml', 'src/**') }}
+          restore-keys: armiger-${{ matrix.arch }}-
+      - name: Set up the installed Docker builder
+        run: docker buildx create --use --driver docker-container
+      - name: Build the native Armiger candidate
+        env:
+          CI_ARCH: ${{ matrix.arch }}
+          SOFTWARE_VERSION: ${{ needs.contract.outputs.version }}
+          SOURCE_REVISION: ${{ needs.contract.outputs.source }}
+          CONNECTOR_REVISION: ${{ inputs.connector_revision }}
+        run: |
+          CACHE_ARGS=()
+          if [ -f "$RUNNER_TEMP/armiger-build-cache/index.json" ]; then
+            CACHE_ARGS+=(--cache-from "type=local,src=$RUNNER_TEMP/armiger-build-cache")
+          fi
+          docker buildx build --platform "linux/$CI_ARCH" --file examples/Dockerfile --load --provenance=false \
+            --label "org.opencontainers.image.source=https://github.com/spencernorton/armiger" \
+            --label "org.opencontainers.image.revision=$SOURCE_REVISION" \
+            --label "org.opencontainers.image.version=$SOFTWARE_VERSION" \
+            --label "io.armiger.tested-connector-revision=$CONNECTOR_REVISION" \
+            --tag "armiger-ci:$CI_ARCH" "${CACHE_ARGS[@]}" \
+            --cache-to "type=local,dest=$RUNNER_TEMP/armiger-build-cache-new,mode=max" .
+          rm -rf "$RUNNER_TEMP/armiger-build-cache"
+          mv "$RUNNER_TEMP/armiger-build-cache-new" "$RUNNER_TEMP/armiger-build-cache"
+      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        if: matrix.arch == 'amd64'
+        with:
+          path: ${{ runner.temp }}/rats-build-cache
+          key: rats-amd64-${{ hashFiles('examples/rats-search/Dockerfile') }}
+          restore-keys: rats-amd64-
+      - name: Build the supported native Rats backend
+        if: matrix.arch == 'amd64'
+        env:
+          SOFTWARE_VERSION: ${{ needs.contract.outputs.version }}
+          SOURCE_REVISION: ${{ needs.contract.outputs.source }}
+        run: |
+          CACHE_ARGS=()
+          if [ -f "$RUNNER_TEMP/rats-build-cache/index.json" ]; then
+            CACHE_ARGS+=(--cache-from "type=local,src=$RUNNER_TEMP/rats-build-cache")
+          fi
+          docker buildx build --platform linux/amd64 --file examples/rats-search/Dockerfile --load --provenance=false \
+            --label "org.opencontainers.image.source=https://github.com/spencernorton/armiger" \
+            --label "org.opencontainers.image.revision=$SOURCE_REVISION" \
+            --label "org.opencontainers.image.version=$SOFTWARE_VERSION" \
+            --tag rats-ci:amd64 "${CACHE_ARGS[@]}" \
+            --cache-to "type=local,dest=$RUNNER_TEMP/rats-build-cache-new,mode=max" .
+          rm -rf "$RUNNER_TEMP/rats-build-cache"
+          mv "$RUNNER_TEMP/rats-build-cache-new" "$RUNNER_TEMP/rats-build-cache"
+      - name: Start documented commands and prove upstream results
+        env:
+          CI_ARCH: ${{ matrix.arch }}
+        run: |
+          RUNTIME_ARGS=(--image "armiger-ci:$CI_ARCH" --evidence "out/$CI_ARCH")
+          if [ "$CI_ARCH" = amd64 ]; then RUNTIME_ARGS+=(--rats-image rats-ci:amd64); fi
+          python3 -m ci.runtime_acceptance "${RUNTIME_ARGS[@]}"
+      - name: Push exactly these tested payloads as run-specific candidates
+        if: github.repository == 'spencernorton/armiger' && github.ref == 'refs/heads/main' && needs.contract.outputs.release_needed == 'true' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
         env:
           REGISTRY_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           REGISTRY_USER: ${{ github.actor }}
-          IMAGE: ghcr.io/spencernorton/${{ matrix.image }}
-          ARCH: ${{ matrix.arch }}
-          DOCKERFILE: ${{ matrix.dockerfile }}
+          CI_ARCH: ${{ matrix.arch }}
+          SOFTWARE_VERSION: ${{ needs.contract.outputs.version }}
+          SOURCE_REVISION: ${{ needs.contract.outputs.source }}
         run: |
-          VERSION=$(python3 -c 'import tomllib; print(tomllib.load(open("pyproject.toml", "rb"))["project"]["version"])')
           printf '%s' "$REGISTRY_TOKEN" | docker login ghcr.io -u "$REGISTRY_USER" --password-stdin
-          if docker buildx imagetools inspect "$IMAGE:$VERSION" > /dev/null 2>&1; then
-            echo "$IMAGE:$VERSION is already released; leaving it unchanged."
-            exit 0
-          fi
-          TAG="$IMAGE:sha-$GITHUB_SHA-$ARCH"
-          if docker buildx imagetools inspect "$TAG" > /dev/null 2>&1; then
-            echo "$TAG already exists; leaving it unchanged."
-          else
-            docker buildx create --use --driver docker-container
-            EXTRA_TAG=""
-            if [ "${{ matrix.image }}" = "armiger" ]; then
-              EXTRA_TAG="--tag ghcr.io/spencernorton/armiger-ultra:sha-$GITHUB_SHA-$ARCH"
-            fi
-            docker buildx build --platform "linux/$ARCH" --file "$DOCKERFILE" \
-              --label "org.opencontainers.image.revision=$GITHUB_SHA" \
-              --label "org.opencontainers.image.version=$VERSION" \
-              --tag "$TAG" $EXTRA_TAG --push .
-          fi
-  publish-index:
-    name: Publish release manifests
-    if: github.repository == 'spencernorton/armiger' && github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
-    needs: publish
+          python3 -m ci.candidates --evidence "out/$CI_ARCH" --version "$SOFTWARE_VERSION" --source "$SOURCE_REVISION"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        if: always()
+        with:
+          name: runtime-evidence-${{ matrix.arch }}
+          path: out/${{ matrix.arch }}/
+          retention-days: 14
+          overwrite: true
+  test:
+    name: test
+    if: always()
+    needs: [contract, guides, verify, runtime]
     runs-on: ubuntu-24.04
+    steps:
+      - name: Require release contract, both Python checks and both native runtime checks
+        env:
+          RESULTS: ${{ toJSON(needs) }}
+        run: python3 -c 'import json,os; results=json.loads(os.environ["RESULTS"]); assert all(j["result"]=="success" for j in results.values()), results'
+  publish:
+    name: Promote tested images and verify published stacks
+    if: github.repository == 'spencernorton/armiger' && github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+    needs: [test, contract, runtime]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
     permissions:
       contents: read
       packages: write
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          repository: spencernorton/armiger
+          ref: ${{ needs.contract.outputs.source }}
           persist-credentials: false
-      - name: Publish only after all native builds succeed
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          pattern: runtime-evidence-*
+          merge-multiple: true
+          path: out/received
+      - name: Verify candidate identities, promote their digests and read back OCI stacks
         env:
           REGISTRY_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           REGISTRY_USER: ${{ github.actor }}
+          SOFTWARE_VERSION: ${{ needs.contract.outputs.version }}
+          SOURCE_REVISION: ${{ needs.contract.outputs.source }}
+          PUBLISHED_SOURCE: ${{ needs.contract.outputs.published_source }}
+          RELEASE_NEEDED: ${{ needs.contract.outputs.release_needed }}
         run: |
-          VERSION=$(python3 -c 'import tomllib; print(tomllib.load(open("pyproject.toml", "rb"))["project"]["version"])')
           printf '%s' "$REGISTRY_TOKEN" | docker login ghcr.io -u "$REGISTRY_USER" --password-stdin
-          for IMAGE in armiger armiger-rats-search; do
-            BASE="ghcr.io/spencernorton/$IMAGE:$VERSION"
-            if docker buildx imagetools inspect "$BASE" > /dev/null 2>&1; then
-              echo "$BASE already exists; leaving it unchanged."
-            elif [ "$IMAGE" = armiger ]; then
-              docker buildx imagetools create --annotation "index:org.opencontainers.image.revision=$GITHUB_SHA" \
-                --tag "$BASE" \
-                --tag "ghcr.io/spencernorton/armiger:latest" \
-                --tag "ghcr.io/spencernorton/armiger-ultra:$VERSION" \
-                --tag "ghcr.io/spencernorton/armiger-ultra:3.3.0" \
-                --tag "ghcr.io/spencernorton/armiger-ultra:latest" \
-                "ghcr.io/spencernorton/$IMAGE:sha-$GITHUB_SHA-amd64" "ghcr.io/spencernorton/$IMAGE:sha-$GITHUB_SHA-arm64"
-            else
-              docker buildx imagetools create --annotation "index:org.opencontainers.image.revision=$GITHUB_SHA" --tag "$BASE" "ghcr.io/spencernorton/$IMAGE:sha-$GITHUB_SHA-amd64"
-            fi
-          done
-          for SETUP in bitmagnet rats-search; do
-            STACK="ghcr.io/spencernorton/armiger-$SETUP-stack:$VERSION"
-            if docker buildx imagetools inspect --raw "$STACK" > /dev/null 2>&1; then
-              echo "$STACK already exists; leaving it unchanged."
-              continue
-            fi
-            docker compose -f "examples/$SETUP/docker-compose.yml" config --format json > "$RUNNER_TEMP/$SETUP-raw.json"
-            python3 - "$RUNNER_TEMP/$SETUP-raw.json" "$RUNNER_TEMP/$SETUP.json" <<'PYTHON'
-          import json, sys
-          from pathlib import Path
-          model = json.loads(Path(sys.argv[1]).read_text())
-          model.pop("name", None)
-          for kind in ("volumes", "networks"):
-              for resource in model.get(kind, {}).values():
-                  resource.pop("name", None)
-          Path(sys.argv[2]).write_text(json.dumps(model))
-          PYTHON
-            docker compose -f "$RUNNER_TEMP/$SETUP.json" publish --yes "$STACK"
-          done
+          if [ "$RELEASE_NEEDED" = true ]; then
+            python3 -m ci.promote --evidence out/received --version "$SOFTWARE_VERSION" --source "$SOURCE_REVISION"
+          else
+            python3 -m ci.promote --verify-only --evidence out/received --version "$SOFTWARE_VERSION" --source "$PUBLISHED_SOURCE"
+          fi
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        if: always()
+        with:
+          name: published-release-proof
+          path: |
+            out/received/published.json
+            out/received/release-*.json
+          retention-days: 30

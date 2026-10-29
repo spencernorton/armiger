@@ -13,4 +13,6 @@ python -m build
 
 Tests use `ARMIGER_MODEL_DIR` or the default verified model cache. The release check installs the wheel outside the checkout and runs inference. Sign commits with `git commit -s` to certify the [Developer Certificate of Origin](https://developercertificate.org/).
 
+Changes to images, connector pins or setup commands also require the native container and stock-upstream checks in [release validation](../docs/release-validation.md).
+
 Keep setup instructions short and executable. Bitmagnet and Rats Search Compose guides are supported entry points; verify them whenever dependencies or model loading change. Put detailed measurements in [evaluation](../docs/evaluation.md), not the README.
