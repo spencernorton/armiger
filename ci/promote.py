@@ -37,17 +37,8 @@ def command(*args):
 def check_published(registry, version, source):
     releases = {}
     for repo in sorted({repo for repo, _ in EXPECTED}):
-        index, digest = registry.manifest(repo, version)
-        assert index.get("annotations", {}).get("org.opencontainers.image.revision") == source
-        platforms = {(x.get("platform", {}).get("os"), x.get("platform", {}).get("architecture"))
-                     for x in index["manifests"]
-                     if x.get("annotations", {}).get("vnd.docker.reference.type") != "attestation-manifest"}
-        assert platforms == {("linux", arch) for name, arch in EXPECTED if name == repo}, platforms
-        for name, arch in EXPECTED:
-            if name == repo:
-                labels = registry.native(repo, version, arch)["config"]["config"]["Labels"]
-                assert labels["org.opencontainers.image.revision"] == source
-                assert labels["org.opencontainers.image.version"] == version
+        actual_source, digest = registry.release_identity(repo, version, [arch for name, arch in EXPECTED if name == repo])
+        assert actual_source == source, "Published source differs from acceptance"
         releases[repo] = digest
     assert registry.manifest("spencernorton/armiger-ultra", version)[1] == releases["spencernorton/armiger"]
     for setup in ("bitmagnet", "rats-search"):
@@ -87,7 +78,8 @@ def main():
     for repo in sorted({r["repository"] for r in receipts}):
         existing = registry.manifest(repo, args.version, missing_ok=True)
         if existing:
-            assert existing[0].get("annotations", {}).get("org.opencontainers.image.revision") == args.source, "Refusing to replace an existing release"
+            actual_source, _ = registry.release_identity(repo, args.version, [arch for name, arch in EXPECTED if name == repo])
+            assert actual_source == args.source, "Refusing to replace an existing release"
             for receipt in [r for r in receipts if r["repository"] == repo]:
                 actual = registry.native(repo, args.version, receipt["architecture"])
                 assert actual["manifest_digest"] == receipt["manifest_digest"], "Rerun produced a different release payload; choose a new version"
@@ -98,8 +90,8 @@ def main():
         command("docker", "buildx", "imagetools", "create", "--annotation",
                 f"index:org.opencontainers.image.revision={args.source}",
                 *[part for tag in tags for part in ("--tag", tag)], *sources)
-        manifest, digest = registry.manifest(repo, args.version)
-        assert manifest["annotations"]["org.opencontainers.image.revision"] == args.source
+        actual_source, digest = registry.release_identity(repo, args.version, [arch for name, arch in EXPECTED if name == repo])
+        assert actual_source == args.source, "Published source differs from acceptance"
         for receipt in [r for r in receipts if r["repository"] == repo]:
             actual = registry.native(repo, args.version, receipt["architecture"])
             assert actual["manifest_digest"] == receipt["manifest_digest"]

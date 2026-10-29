@@ -65,7 +65,9 @@ local image, and records its manifest/config digests, source and version.
 After all required checks succeed, `ci/promote.py` requires all three native
 receipts (Armiger amd64+arm64, Rats amd64), checks their identities again, and
 creates release indexes from those exact native manifest digests. It never
-rebuilds an image after acceptance. Published indexes, aliases and both OCI
+rebuilds an image after acceptance. Source/version provenance must agree in every native image config; Docker
+manifest lists and OCI indexes are both supported, and any index annotation
+must agree with those configs. Published indexes, aliases and both OCI
 Compose stacks are read back and checked against the receipts/documented
 commands. Mutable latest/legacy aliases advance only after OCI readback. Logs
 and JSON evidence are retained as Actions artifacts for14days;
