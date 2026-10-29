@@ -1,6 +1,6 @@
 {
-  "calibrated_onnx_fp32_sha256": "ebed96dfef6f78842768ecdad646f6e5d838681feed9a4919d4b95aa0f912ea4",
-  "calibration_version": "v3.0-gold-r13_3-val-only",
+  "calibrated_onnx_fp32_sha256": "3125e70b22303f1a548e7b890d2b1c078858eed1b987cc9d63c52188fbc630c0",
+  "calibration_version": "v3.0-gold-r13_6-val-only",
   "feature_stats_dim": 41,
   "fitted_snapshot_id": "snap_r13_20261024T140340Z_064c8e6ccb1f",
   "fp32_vs_int8_val_parity": {

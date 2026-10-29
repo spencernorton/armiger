@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "armiger"
-version = "3.4.3"
+version = "3.8.0"
 description = "Local ONNX classification of torrent and media metadata with optional enrichment"
 readme = "README.md"
 license = {text = "Apache-2.0"}
