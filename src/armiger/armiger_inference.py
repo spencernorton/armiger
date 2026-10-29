@@ -212,7 +212,9 @@ def encode_torrent_features(
     all_items.sort(key=lambda x: -x[1])
     items: List[Tuple[str, int]] = all_items[:max_files]
     if not items and (row.get("ext") or row.get("extension") or "." in name):
-        items.append((name, total_size))
+        ext_hint = str(row.get("extension") or row.get("ext") or "").strip().lstrip(".").lower()
+        synth_path = f"{name}.{ext_hint}" if ext_hint and not name.lower().endswith(f".{ext_hint}") else name
+        items.append((synth_path, total_size))
 
     ext_map = _get_vocab_ext_map()
     exts: List[int] = []

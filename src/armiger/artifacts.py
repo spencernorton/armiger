@@ -15,6 +15,12 @@ PRESETS = {
     "ultra": (*_COMMON, "armiger_ultra.fp32.onnx", "swarm_adapter.pt", "validated_zero_cue_catalog.json"),
     "all": tuple(MANIFEST["files"]),
 }
+VARIANT_ALIASES = {
+    "int8": "cpu",
+    "armiger": "cpu",
+    "fp32": "ultra",
+    "armiger_ultra": "ultra",
+}
 
 
 def model_directory(directory: str | Path | None = None) -> Path:
@@ -95,7 +101,7 @@ def _matches(path: Path, record: dict) -> bool:
 
 def download_model(directory: str | Path | None = None, *, variant: str = "ultra", offline: bool = False) -> Path:
     """Fetch and atomically install verified data. Never download or execute Python code."""
-    names = PRESETS[variant]
+    names = PRESETS[VARIANT_ALIASES.get(variant, variant)]
     target = model_directory(directory)
     target.mkdir(parents=True, exist_ok=True)
     for name in names:

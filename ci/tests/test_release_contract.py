@@ -50,5 +50,40 @@ class ReleaseContractTests(unittest.TestCase):
                 local_guides(root, "3.4.2")
 
 
+    def test_connector_pin_drift_in_docs_is_rejected(self):
+        from ci.release_contract import ROOT
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            for rel in (
+                "docs/bitmagnet-configuration.md",
+                "docs/quickstart.md",
+                "docs/reference.md",
+                "examples/bitmagnet/README.md",
+                "examples/bitmagnet/docker-compose.yml",
+                "examples/rats-search/README.md",
+                "examples/rats-search/docker-compose.yml",
+                "examples/standalone/README.md",
+                "examples/standalone/docker-compose.yml",
+                "examples/Dockerfile",
+                "src/armiger/__init__.py",
+                "README.md",
+            ):
+                if not (ROOT / rel).is_file():
+                    continue
+                dst = root / rel
+                dst.parent.mkdir(parents=True, exist_ok=True)
+                dst.write_text((ROOT / rel).read_text())
+            version = "3.8.1"
+            self.assertGreaterEqual(local_guides(root, version), 8)
+            (root / "docs/bitmagnet-configuration.md").write_text(
+                (root / "docs/bitmagnet-configuration.md").read_text().replace(
+                    "blob/283f4461c18f2b873460c4cde8f43d03ac4e3c03/",
+                    "blob/0000000000000000000000000000000000000000/",
+                )
+            )
+            with self.assertRaisesRegex(AssertionError, "connector revision disagrees"):
+                local_guides(root, version)
+
+
 if __name__ == "__main__":
     unittest.main()

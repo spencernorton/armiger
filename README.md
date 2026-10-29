@@ -36,7 +36,7 @@ It does not inspect media payloads. Metadata predictions can be wrong and do not
 - [Other integrations](https://github.com/spencernorton/Armiger-Connectors) — DH-Waypoint, Torznab and Arr.
 - [Help and bug reports](https://github.com/spencernorton/armiger/issues) · [Contributing](.github/CONTRIBUTING.md) · [Security reporting](.github/SECURITY.md)
 
-Library **3.8.0** uses model bundle **3.8.0**. The Docker image includes verified model files. Python installs download them from a fixed [Hugging Face](https://huggingface.co/NorviTech/armiger-ultra) revision and verify them before use. Apache-2.0: [license](LICENSE), [notices](NOTICE), [use policy](.github/LEGAL.md).
+Library **3.8.1** uses model bundle **3.8.0**. The Docker image includes verified model files. Python installs download them from a fixed [Hugging Face](https://huggingface.co/NorviTech/armiger-ultra) revision and verify them before use. Apache-2.0: [license](LICENSE), [notices](NOTICE), [use policy](.github/LEGAL.md).
 
 ---
 

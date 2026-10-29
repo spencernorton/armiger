@@ -1,3 +1,10 @@
+## 2026-10-29 — Release Armiger 3.8.1 with Armiger-Connectors v1.2.7 and runtime acceptance gates
+
+- **Task:** Pin `spencernorton/Armiger-Connectors` `v1.2.7` (`283f4461c18f2b873460c4cde8f43d03ac4e3c03`), harden single-file extension and variant alias handling, and add release contract + container acceptance checks for Bitmagnet `contentType` writeback and Torznab category promotion/rescue.
+- **What changed:** Update `examples/Dockerfile` and `docs/bitmagnet-configuration.md` to `Armiger-Connectors` `v1.2.7` (`283f4461c18f2b873460c4cde8f43d03ac4e3c03`). Add `VARIANT_ALIASES` in `src/armiger/artifacts.py` and CLI variant aliases in `src/armiger/__main__.py`. Preserve single-file `extension`/`ext` hints in `src/armiger/armiger_inference.py` and `src/armiger/armiger_ultra_pipeline.py`. Enforce connector pin consistency in `ci/release_contract.py` and `ci/pin_connectors.py`, and verify Bitmagnet `/import` `contentType` writeback and Torznab `tvsearch`/`movie` rescue against live `bitmagnet:v0.10.0` in `ci/runtime_acceptance.py`. Bump software version to `3.8.1`.
+- **Validation:** `python3 -m unittest discover -s ci/tests -v` and `pytest -q` pass.
+- **Release:** Ready for `3.8.1` publication via CI.
+
 ## 2026-10-29 — Promote Armiger 3.8.0 and v3.0-gold-r13.8 model bundle
 
 - **Task:** Release Armiger software and model bundle `3.8.0` (`v3.0-gold-r13.8`, DHT `seq=12` / `seq=3012`).

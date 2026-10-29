@@ -258,7 +258,12 @@ _AUDIOBOOK_FILE_TREE_RE = re.compile(
 def _file_tree_structural_override(row: Mapping[str, Any]) -> Tuple[Optional[str], str]:
     """Check physical file-tree extensions (.m4b/.afpk audiobooks, .cbz/.cbr comics, game engine trees, multi-episode packs) before title lookup."""
     raw_name = str(row.get("name") or row.get("title") or "")
-    files = row.get("files") or []
+    files = list(row.get("files") or [])
+    if not files:
+        ext_hint = str(row.get("extension") or row.get("ext") or "").strip().lstrip(".").lower()
+        synth = f"{raw_name}.{ext_hint}" if ext_hint and not raw_name.lower().endswith(f".{ext_hint}") else raw_name
+        if synth:
+            files = [synth]
     ep_files = 0
     has_afpk = False
     for f in files:

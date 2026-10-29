@@ -34,7 +34,7 @@ services:
     command: [worker, run, --keys=http_server, --keys=queue_server, --keys=dht_crawler]
 
   armiger-ultra:
-    image: ghcr.io/spencernorton/armiger:3.8.0
+    image: ghcr.io/spencernorton/armiger:3.8.1
     restart: unless-stopped
     command: [python, /opt/connectors/bitmagnet/bitmagnet_connector.py]
     depends_on:

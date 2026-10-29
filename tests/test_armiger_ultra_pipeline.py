@@ -544,3 +544,38 @@ def test_swarm_residual_adapter_pytorch_forward_pass() -> None:
     assert res_warm["p_junk_adapter"] > 0.90
     assert res_warm["adapter_junk_logit_delta"] > 1.0
     assert res_warm["is_honeypot_blocked"] is True
+
+
+def test_single_file_extension_synthesis() -> None:
+    """Verify single-file torrents carrying `extension` without `files` synthesize a virtual file path."""
+    from armiger.armiger_inference import encode_torrent_features
+    from armiger.armiger_ultra_pipeline import _file_tree_structural_override
+
+    feats_no_ext = encode_torrent_features({
+        "name": "Brandon Sanderson - The Way of Kings",
+        "size": 950_000_000,
+        "files": [],
+    })
+    feats_with_ext = encode_torrent_features({
+        "name": "Brandon Sanderson - The Way of Kings",
+        "size": 950_000_000,
+        "files": [],
+        "extension": "m4b",
+    })
+    assert feats_no_ext["ext"] != feats_with_ext["ext"] and feats_no_ext["stats"] != feats_with_ext["stats"]
+
+    override_m4b = _file_tree_structural_override({
+        "name": "Unlabeled Upload 2025",
+        "files": [],
+        "size": 850_000_000,
+        "extension": ".m4b",
+    })
+    assert override_m4b == ("audiobook", "structural_m4b")
+
+    override_cbz = _file_tree_structural_override({
+        "name": "Mystery Issue 001",
+        "files": None,
+        "size": 45_000_000,
+        "extension": "cbz",
+    })
+    assert override_cbz == ("comic", "structural_comic_archive")
