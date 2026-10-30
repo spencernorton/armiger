@@ -73,7 +73,7 @@ class ReleaseContractTests(unittest.TestCase):
                 dst = root / rel
                 dst.parent.mkdir(parents=True, exist_ok=True)
                 dst.write_text((ROOT / rel).read_text())
-            version = "3.8.1"
+            version = "3.8.2"
             self.assertGreaterEqual(local_guides(root, version), 8)
             (root / "docs/bitmagnet-configuration.md").write_text(
                 (root / "docs/bitmagnet-configuration.md").read_text().replace(
