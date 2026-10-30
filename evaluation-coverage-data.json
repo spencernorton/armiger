@@ -1,0 +1,53 @@
+{
+  "model": "Armiger Ultra v3.0.0 FP32 fair hybrid with ZeroCueCatalog",
+  "metric": "11-class category accuracy",
+  "source_vectors": "https://github.com/spencernorton/armiger/blob/8b896319cb9eeb193e602ff5d7440b6b0956520d/benchmarks/canonical_eval_vectors.json",
+  "source_vectors_sha256": "62992cc441d321938446c54d52732a65b36da2d83c41d837d34b5c7674156aa9",
+  "source_documentation": "https://github.com/spencernorton/armiger/blob/8b896319cb9eeb193e602ff5d7440b6b0956520d/docs/evaluation.md",
+  "cohorts": [
+    {
+      "cohort": "multilang_3000",
+      "label": "Multilingual",
+      "n": 3000,
+      "correct": 2950,
+      "accuracy_pct": 98.33333333333333
+    },
+    {
+      "cohort": "oct15_confirmation",
+      "label": "Original confirmation",
+      "n": 2835,
+      "correct": 2689,
+      "accuracy_pct": 94.85008818342152
+    },
+    {
+      "cohort": "fresh_confirmation",
+      "label": "Fresh confirmation",
+      "n": 1402,
+      "correct": 1298,
+      "accuracy_pct": 92.58202567760343
+    },
+    {
+      "cohort": "beyond_confirmation",
+      "label": "Beyond confirmation",
+      "n": 1025,
+      "correct": 954,
+      "accuracy_pct": 93.07317073170732
+    },
+    {
+      "cohort": "zero_cue_2000",
+      "label": "Zero-cue",
+      "n": 2000,
+      "correct": 1820,
+      "accuracy_pct": 91.0
+    }
+  ],
+  "pooled": {
+    "n": 10262,
+    "correct": 9711,
+    "accuracy_pct": 94.63067628142662
+  },
+  "accuracy_change_pp": -3.702657051906712,
+  "additional_cases": 7262,
+  "interpretation": "A higher-scoring cohort is part of the larger five-cohort pool. Evaluation coverage and case mix change; this is not a causal test of sample size, a chronological expansion experiment, or a new benchmark.",
+  "label_provenance": "Historical reference labels; consult the source documentation and receipts for coverage, teacher involvement, and exposure limitations. No new independent labels or model inference were generated."
+}

@@ -8,3 +8,10 @@ These assets illustrate [the release cadence discussion](https://github.com/spen
 - `chart-data.json`: exact chart values, task denominators, and immutable source links.
 
 All values use the published `heldout_20261026` cohort. The smaller task slices are separate denominators, not disjoint datasets to add together. These charts report the Ultra pipeline, including enrichment components. Individual changes are point estimates and do not establish statistical significance or attribute gains solely to training-data growth.
+
+## Broader evaluation coverage example
+
+- `small-vs-broad-evaluation.png` compares the same published v3.0.0 Ultra FP32 fair-hybrid pipeline on `multilang_3000` (2,950/3,000 = 98.33%) and the combined five-cohort pool (9,711/10,262 = 94.63%). The second panel shows each component cohort.
+- `evaluation-coverage-data.json` records exact counts, immutable public source links, source hash, and interpretation limits.
+
+The larger pool includes the original 3,000 cases plus 7,262 from four other cohorts. This illustrates differences in evaluation coverage and case mix, not a causal effect of test-set size, a chronological experiment, or a new benchmark. Historical label provenance and teacher involvement remain as documented in the original public sources.
