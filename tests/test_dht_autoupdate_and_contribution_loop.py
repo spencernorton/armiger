@@ -148,7 +148,7 @@ class _LiveSeederHarness:
     ) -> Any:
         def _do() -> Any:
             bundle = build_torrent_bundle(
-                bundle_name="armiger-weights-ultra-v3.8.0",
+                bundle_name="armiger-weights-ultra-v3.10.0",
                 files_map=files_map,
                 pubkey_32=self.pubkey_32,
                 salt=salt,
@@ -162,7 +162,7 @@ class _LiveSeederHarness:
             mr_hex = override_merkle_hex or bundle.merkle_root_hex
             v_payload = bencode(
                 {
-                    b"bundle": b"armiger-weights-ultra-v3.8.0",
+                    b"bundle": b"armiger-weights-ultra-v3.10.0",
                     b"ih": bundle.infohash_20,
                     b"merkle_root": mr_hex.encode("ascii"),
                     b"seq": int(seq),
