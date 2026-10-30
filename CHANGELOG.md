@@ -1,5 +1,10 @@
 # Changelog
 
+## 3.10.0
+
+- Update the pinned model bundle to `3.10.0` (`v3.0-gold-r13.10` on `NorviTech/armiger-ultra` at `b9f70a0448fc98f4113126552f46bbd42eaecf0e`, DHT `seq=13` / `seq=3013`), eliminating curated validation stems (`CURATED_CANONICAL_STEMS = {}`), recovering `Suite 2 (W5A)` title span extraction (`71.89%` exact-row, `0.00pp` drift vs `R13.7`), and achieving `97.29%` Clean v3 9-category Macro-F1 (`N=1,355`, 9/9 categories `>= 95.45%` F1).
+- Sync `calibration.json` and `config.json` bundle manifests (`r13_6_lang_llr.json` + `r13_2_audio_language_guard.py` audio-guard bundle parity), and refresh the canonical evaluation and overview charts (`93.32%` 10-class category accuracy, `87.50%` video slice, `86.86%` title matching, `91.54%` byte-verified speech / `95.00%` file-tree).
+
 ## 3.8.2
 
 - Explain the local classifier, optional Ultra pipeline and integration outputs with a README architecture diagram. Model bundle 3.8.0 is unchanged.

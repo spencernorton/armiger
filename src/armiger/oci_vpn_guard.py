@@ -42,16 +42,16 @@ except ImportError:
 DEFAULT_RELEASE_PUBKEY_HEX = "3599362bd52dad8b89398b904d3081c2cb483d13376f7ffb49f3748208731e76"
 DEFAULT_RELEASE_SALT = "armiger:weights:ultra"
 
-HF_BASE_URL = "https://huggingface.co/NorviTech/armiger-ultra/resolve/7de69d7a94def2425e7d873aff7df1c041ab03da"
+HF_BASE_URL = "https://huggingface.co/NorviTech/armiger-ultra/resolve/b9f70a0448fc98f4113126552f46bbd42eaecf0e"
 ARTIFACT_MANIFEST: Dict[str, Dict[str, Any]] = {
     "armiger.int8.onnx": {
-        "sha256": "7ee3dfdaae4283faecabf06bc7d7644d1747d959264506b07065a3035fe6ffd0",
-        "size_bytes": 17606389,
+        "sha256": "c39bad25f5e31289d575243473589e023c63327b5d846e26aaeebf9aee7b054c",
+        "size_bytes": 17606362,
         "tiers": ("int8", "ultra"),
         "url": f"{HF_BASE_URL}/armiger.int8.onnx",
     },
     "armiger_ultra.fp32.onnx": {
-        "sha256": "3125e70b22303f1a548e7b890d2b1c078858eed1b987cc9d63c52188fbc630c0",
+        "sha256": "70286459da47287eb5d984cd67251e0f80f511ceee0ad6ad34c7c2334c9223ec",
         "size_bytes": 33260312,
         "tiers": ("ultra",),
         "url": f"{HF_BASE_URL}/armiger_ultra.fp32.onnx",
@@ -63,7 +63,7 @@ ARTIFACT_MANIFEST: Dict[str, Dict[str, Any]] = {
         "url": f"{HF_BASE_URL}/swarm_adapter.pt",
     },
     "calibration.json": {
-        "sha256": "ac2fe3b3de8cda9d3e7bca3b334157ac0d90e052e2ff03c3787900b991b13b34",
+        "sha256": "92aa6aac07a9868f7a54fc0089eec6b06aa86c759723dd0731e0afd13e617cdd",
         "size_bytes": 76612,
         "tiers": ("int8", "ultra"),
         "url": f"{HF_BASE_URL}/calibration.json",
@@ -75,8 +75,8 @@ ARTIFACT_MANIFEST: Dict[str, Dict[str, Any]] = {
         "url": f"{HF_BASE_URL}/vocab.json",
     },
     "config.json": {
-        "sha256": "6263a1f6bc82bbcafdfd2d98d327d53b07b8f2d6385cbb5a0cb8c1c9f42dff46",
-        "size_bytes": 5201,
+        "sha256": "074c80803dc5cbc426059553bd7a5577e4c66fb5685dc4ae33568b713e08fa4a",
+        "size_bytes": 5482,
         "tiers": ("int8", "ultra"),
         "url": f"{HF_BASE_URL}/config.json",
     },

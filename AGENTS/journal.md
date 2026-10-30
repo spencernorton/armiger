@@ -1,3 +1,10 @@
+## 2026-10-30 — Promote Armiger 3.10.0 and v3.0-gold-r13.10 model bundle
+
+- **Task:** Release Armiger software and model bundle `3.10.0` (`v3.0-gold-r13.10`, DHT `seq=13` / `seq=3013`).
+- **What changed:** Pin `NorviTech/armiger-ultra` revision `b9f70a0448fc98f4113126552f46bbd42eaecf0e` (`v3.10.0`) across `src/armiger/model_manifest.json`, `src/armiger/artifacts.py`, `src/armiger/oci_vpn_guard.py`, `src/armiger/calibration.json`, `src/armiger/oci_sqlite_catalog.py`, `src/armiger/armiger_ultra_pipeline.py`, and `examples/Dockerfile`. Refresh `benchmarks/CHARTS_MANIFEST.json`, `benchmarks/README_OVERVIEW.json`, and `docs/assets/*.png` (`93.32%` 10-class category accuracy, `87.50%` video slice, `86.86%` title matching, `91.54%` byte-verified speech), and bump package and Compose quickstarts to `3.10.0`.
+- **Validation:** Verify `ci` release contract and promotion unit tests, external guide verification, and chart/package/DHT `pytest` suites against the `3.10.0` model artifacts.
+- **Release:** Ready for `3.10.0` publication via CI.
+
 ## 2026-10-30 — Explain the classification pipeline with an architecture diagram
 
 The README explains the product with a real interaction recording or a source-grounded

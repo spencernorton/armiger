@@ -321,8 +321,8 @@ def build_torrent_bundle(
         f"{salt_param}"
     )
     metainfo: Dict[bytes, Any] = {
-        b"comment": f"Armiger v3.8.0 Verified Bundle ({bundle_name})".encode("utf-8"),
-        b"created by": b"armiger-oci-dht/3.8.0",
+        b"comment": f"Armiger v3.10.0 Verified Bundle ({bundle_name})".encode("utf-8"),
+        b"created by": b"armiger-oci-dht/3.10.0",
         b"info": info_dict,
     }
     if webseed_urls:
@@ -1122,7 +1122,7 @@ def _https_get_with_deadline(
                 conn.request(
                     "GET",
                     target_path,
-                    headers={"User-Agent": "armiger-bep19-verifier/3.8.0", "Connection": "close"},
+                    headers={"User-Agent": "armiger-bep19-verifier/3.10.0", "Connection": "close"},
                 )
                 if getattr(conn, "sock", None) is not None:
                     _register_obj(conn.sock)

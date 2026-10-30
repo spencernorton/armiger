@@ -32,6 +32,7 @@ def model_directory(directory: str | Path | None = None) -> Path:
 # Allow both the baked HF revision digests and DHT-promoted v3.0-gold-r13.3 digests
 KNOWN_RELEASE_DIGESTS = {
     "armiger_ultra.fp32.onnx": {
+        ("70286459da47287eb5d984cd67251e0f80f511ceee0ad6ad34c7c2334c9223ec", 33260312),
         ("3125e70b22303f1a548e7b890d2b1c078858eed1b987cc9d63c52188fbc630c0", 33260312),
         ("ebed96dfef6f78842768ecdad646f6e5d838681feed9a4919d4b95aa0f912ea4", 33258907),
         ("6f94aef676e5bec4968378437769cfdc768fefcc6a21854b8319b33456ebd2ec", 33254585),
@@ -41,6 +42,7 @@ KNOWN_RELEASE_DIGESTS = {
         ("d092b49428dbca550d4099b168e231c35b0cc60c7632a60e55d0be63646317dc", 25387489),
     },
     "armiger.int8.onnx": {
+        ("c39bad25f5e31289d575243473589e023c63327b5d846e26aaeebf9aee7b054c", 17606362),
         ("7ee3dfdaae4283faecabf06bc7d7644d1747d959264506b07065a3035fe6ffd0", 17606389),
         ("02d185e673e8552a6b09d921b1bf8bc6e64cdb4ba984ffacdbe804b487132271", 17604743),
         ("c0e96936038988c7465b7fe041c4dc3c92df5a8cb4f56c2666271cd4d3e79420", 17599636),
@@ -55,6 +57,7 @@ KNOWN_RELEASE_DIGESTS = {
         ("74aa36c7701092d198a8238462c0b7a44a55f238ba26f6c506b984a83b1c0ca1", 316931),
     },
     "calibration.json": {
+        ("92aa6aac07a9868f7a54fc0089eec6b06aa86c759723dd0731e0afd13e617cdd", 76612),
         ("ac2fe3b3de8cda9d3e7bca3b334157ac0d90e052e2ff03c3787900b991b13b34", 76612),
         ("ea7a4df70747160b41ae0cbca0292562f097bbbea7b5d549c5348f743e30b33c", 76612),
         ("300387779dc16292dd9e6be038ce9dd60e5bdb0ee929b383dcd4e51715f8b5f8", 76612),
@@ -62,6 +65,7 @@ KNOWN_RELEASE_DIGESTS = {
         ("3eb5d460bf8408fd0bc104f1cf84ddcd1e71cb8f3d2cbbfab69f38be3eb6776c", 74060),
     },
     "config.json": {
+        ("074c80803dc5cbc426059553bd7a5577e4c66fb5685dc4ae33568b713e08fa4a", 5482),
         ("6263a1f6bc82bbcafdfd2d98d327d53b07b8f2d6385cbb5a0cb8c1c9f42dff46", 5201),
         ("caf3c30c7f6380b84af4f61ebc0afa80707b9137ec3be4e2d03e09c3e05a0ad4", 5201),
         ("da965d165bc45b5dafb2ae2fcb45781b1c37cebd9fc3026604c12d060d6e523f", 5201),
