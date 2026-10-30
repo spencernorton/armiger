@@ -1,5 +1,9 @@
 # Changelog
 
+## 3.8.2
+
+- Explain the local classifier, optional Ultra pipeline and integration outputs with a README architecture diagram. Model bundle 3.8.0 is unchanged.
+
 ## 3.8.1
 
 - Pin `spencernorton/Armiger-Connectors` `v1.2.7` (`283f4461c18f2b873460c4cde8f43d03ac4e3c03`) in `examples/Dockerfile` so published `ghcr.io/spencernorton/armiger:3.8.1` and `:latest` images include Bitmagnet `POST /import` `contentType` hint writeback, Torznab `Unknown` (`8000`) category promotion and `tvsearch`/`movie` category rescue, hardened `repair_unknown_content_types` pagination, and bounded JSON request validation.

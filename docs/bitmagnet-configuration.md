@@ -1,6 +1,6 @@
 # Armiger Ultra settings for Bitmagnet
 
-These settings apply to the [Bitmagnet + Armiger Ultra setup](../examples/bitmagnet/README.md), using `ghcr.io/spencernorton/armiger:3.8.1`. The image bundles the verified Ultra model and the [pinned Bitmagnet connector](https://github.com/spencernorton/Armiger-Connectors/blob/283f4461c18f2b873460c4cde8f43d03ac4e3c03/bitmagnet/bitmagnet_connector.py). Defaults below are the effective defaults of that packaged setup.
+These settings apply to the [Bitmagnet + Armiger Ultra setup](../examples/bitmagnet/README.md), using `ghcr.io/spencernorton/armiger:3.8.2`. The image bundles the verified Ultra model and the [pinned Bitmagnet connector](https://github.com/spencernorton/Armiger-Connectors/blob/283f4461c18f2b873460c4cde8f43d03ac4e3c03/bitmagnet/bitmagnet_connector.py). Defaults below are the effective defaults of that packaged setup.
 
 ## Required vs. optional variables
 

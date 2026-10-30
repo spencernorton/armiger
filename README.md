@@ -13,6 +13,20 @@ Armiger helps Bitmagnet and Rats Search label torrents by type and language, usi
 
 ![Armiger Ultra compared with MIMMO and Bitmagnet by content category, with title matching, audio language, junk checks and seed availability](docs/assets/armiger_overview.png)
 
+```mermaid
+flowchart LR
+    Input[Names and file lists] --> Model[Local ONNX classifier]
+    Model --> Labels[Type and language predictions]
+    Labels --> Ultra[Optional Ultra pipeline]
+    Catalog[(Local reference catalogue)] --> Ultra
+    Ultra --> Output[Labels and matched metadata]
+    Labels --> Output
+    Output --> Use[Python API, HTTP or connectors]
+```
+
+Names and metadata go in; labels and optional catalogue matches come out. The
+classifier runs locally and does not download or inspect media payloads.
+
 ## Choose your setup
 
 1. **[Bitmagnet + Armiger Ultra](examples/bitmagnet/README.md)** — set up Bitmagnet + Armiger Ultra, filter via the Torznab proxy (`:8097`), browse `armiger-*` tags, and configure all environment variables.
@@ -36,7 +50,7 @@ It does not inspect media payloads. Metadata predictions can be wrong and do not
 - [Other integrations](https://github.com/spencernorton/Armiger-Connectors) — DH-Waypoint, Torznab and Arr.
 - [Help and bug reports](https://github.com/spencernorton/armiger/issues) · [Contributing](.github/CONTRIBUTING.md) · [Security reporting](.github/SECURITY.md)
 
-Library **3.8.1** uses model bundle **3.8.0**. The Docker image includes verified model files. Python installs download them from a fixed [Hugging Face](https://huggingface.co/NorviTech/armiger-ultra) revision and verify them before use. Apache-2.0: [license](LICENSE), [notices](NOTICE), [use policy](.github/LEGAL.md).
+Library **3.8.2** uses model bundle **3.8.0**. The Docker image includes verified model files. Python installs download them from a fixed [Hugging Face](https://huggingface.co/NorviTech/armiger-ultra) revision and verify them before use. Apache-2.0: [license](LICENSE), [notices](NOTICE), [use policy](.github/LEGAL.md).
 
 ---
 

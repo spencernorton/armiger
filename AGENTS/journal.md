@@ -1,3 +1,9 @@
+## 2026-10-30 — Explain the classification pipeline with an architecture diagram
+
+The README explains the product with a real interaction recording or a source-grounded
+architecture diagram. Recordings retain their source attribution and offer still
+images for reduced-motion viewing. No runtime behaviour is changed.
+
 ## 2026-10-30 — Explain the five published packages
 
 - **Task:** Say what each GitHub Container Registry package is, so `armiger-rats-search` and `armiger-rats-search-stack` no longer look like duplicates.
