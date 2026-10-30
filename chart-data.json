@@ -1,0 +1,223 @@
+{
+  "cohort": "heldout_20261026",
+  "sources": {
+    "3.3.0": "https://github.com/spencernorton/armiger/blob/b72f56eca7a9f29c7c8facfee51c1aebac2ff7d2/benchmarks/updated_std_charts_data.json",
+    "3.4.0": "https://github.com/spencernorton/armiger/blob/c800b2c8ebd9bf256515fe97b4f02bceeb5dead4/benchmarks/updated_std_charts_data.json",
+    "3.7.0": "https://github.com/spencernorton/armiger/blob/7331bb9abe5c3297b52e9badf8fccfc62025cff9/benchmarks/updated_std_charts_data.json",
+    "3.8.0": "https://github.com/spencernorton/armiger/blob/7331bb9abe5c3297b52e9badf8fccfc62025cff9/benchmarks/updated_std_charts_data.json"
+  },
+  "versions": [
+    "3.3.0",
+    "3.4.0",
+    "3.7.0",
+    "3.8.0"
+  ],
+  "velocity_intervals": [
+    "3.3.0→3.4.0",
+    "3.4.0→3.7.0",
+    "3.7.0→3.8.0"
+  ],
+  "minor_version_steps": [
+    1,
+    3,
+    1
+  ],
+  "velocity_unit": "accuracy percentage points per minor-version step; interval averages, not per day",
+  "tasks": [
+    {
+      "key": "p1_cat10",
+      "label": "Content category",
+      "detail": "10 classes",
+      "n": 2484,
+      "scores": {
+        "3.3.0": {
+          "n": 2484,
+          "point_pct": 91.14,
+          "ci95_lo": 90.02,
+          "ci95_hi": 92.23
+        },
+        "3.4.0": {
+          "n": 2484,
+          "point_pct": 91.87,
+          "ci95_lo": 90.78,
+          "ci95_hi": 92.91
+        },
+        "3.7.0": {
+          "n": 2484,
+          "point_pct": 92.03,
+          "ci95_lo": 90.94,
+          "ci95_hi": 93.08
+        },
+        "3.8.0": {
+          "n": 2484,
+          "point_pct": 93.08,
+          "ci95_lo": 92.07,
+          "ci95_hi": 94.08
+        }
+      },
+      "gain_pp": 1.9399999999999977,
+      "relative_error_reduction_pct": 21.89616252821668,
+      "gain_pp_per_minor_version_step": [
+        0.730000000000004,
+        0.0533333333333322,
+        1.0499999999999972
+      ]
+    },
+    {
+      "key": "p1_vid",
+      "label": "Movie / TV category",
+      "detail": "",
+      "n": 784,
+      "scores": {
+        "3.3.0": {
+          "n": 784,
+          "point_pct": 84.18,
+          "ci95_lo": 81.51,
+          "ci95_hi": 86.61
+        },
+        "3.4.0": {
+          "n": 784,
+          "point_pct": 85.08,
+          "ci95_lo": 82.53,
+          "ci95_hi": 87.37
+        },
+        "3.7.0": {
+          "n": 784,
+          "point_pct": 85.46,
+          "ci95_lo": 82.91,
+          "ci95_hi": 87.76
+        },
+        "3.8.0": {
+          "n": 784,
+          "point_pct": 88.39,
+          "ci95_lo": 86.1,
+          "ci95_hi": 90.56
+        }
+      },
+      "gain_pp": 4.209999999999994,
+      "relative_error_reduction_pct": 26.61188369152968,
+      "gain_pp_per_minor_version_step": [
+        0.8999999999999915,
+        0.12666666666666515,
+        2.930000000000007
+      ]
+    },
+    {
+      "key": "p2_match",
+      "label": "Title matching",
+      "detail": "",
+      "n": 784,
+      "scores": {
+        "3.3.0": {
+          "n": 784,
+          "point_pct": 83.55,
+          "ci95_lo": 80.87,
+          "ci95_hi": 86.1
+        },
+        "3.4.0": {
+          "n": 784,
+          "point_pct": 84.44,
+          "ci95_lo": 81.88,
+          "ci95_hi": 86.86
+        },
+        "3.7.0": {
+          "n": 784,
+          "point_pct": 84.82,
+          "ci95_lo": 82.27,
+          "ci95_hi": 87.24
+        },
+        "3.8.0": {
+          "n": 784,
+          "point_pct": 87.76,
+          "ci95_lo": 85.46,
+          "ci95_hi": 89.92
+        }
+      },
+      "gain_pp": 4.210000000000008,
+      "relative_error_reduction_pct": 25.592705167173296,
+      "gain_pp_per_minor_version_step": [
+        0.8900000000000006,
+        0.12666666666666515,
+        2.940000000000012
+      ]
+    },
+    {
+      "key": "p3_audio",
+      "label": "Audio language",
+      "detail": "",
+      "n": 449,
+      "scores": {
+        "3.3.0": {
+          "n": 449,
+          "point_pct": 88.42,
+          "ci95_lo": 85.52,
+          "ci95_hi": 91.31
+        },
+        "3.4.0": {
+          "n": 449,
+          "point_pct": 90.2,
+          "ci95_lo": 87.31,
+          "ci95_hi": 92.87
+        },
+        "3.7.0": {
+          "n": 449,
+          "point_pct": 91.54,
+          "ci95_lo": 88.86,
+          "ci95_hi": 93.99
+        },
+        "3.8.0": {
+          "n": 449,
+          "point_pct": 92.2,
+          "ci95_lo": 89.53,
+          "ci95_hi": 94.65
+        }
+      },
+      "gain_pp": 3.780000000000001,
+      "relative_error_reduction_pct": 32.64248704663214,
+      "gain_pp_per_minor_version_step": [
+        1.7800000000000011,
+        0.4466666666666678,
+        0.6599999999999966
+      ]
+    },
+    {
+      "key": "p4_anime",
+      "label": "Anime detection",
+      "detail": "",
+      "n": 797,
+      "scores": {
+        "3.3.0": {
+          "n": 797,
+          "point_pct": 87.33,
+          "ci95_lo": 84.94,
+          "ci95_hi": 89.59
+        },
+        "3.4.0": {
+          "n": 797,
+          "point_pct": 87.33,
+          "ci95_lo": 84.94,
+          "ci95_hi": 89.59
+        },
+        "3.7.0": {
+          "n": 797,
+          "point_pct": 89.59,
+          "ci95_lo": 87.45,
+          "ci95_hi": 91.72
+        },
+        "3.8.0": {
+          "n": 797,
+          "point_pct": 93.1,
+          "ci95_lo": 91.22,
+          "ci95_hi": 94.73
+        }
+      },
+      "gain_pp": 5.769999999999996,
+      "relative_error_reduction_pct": 45.540647198105724,
+      "gain_pp_per_minor_version_step": [
+        0.0,
+        0.7533333333333351,
+        3.509999999999991
+      ]
+    }
+  ]
+}
