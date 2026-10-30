@@ -1,3 +1,10 @@
+## 2026-10-30 — Explain the five published packages
+
+- **Task:** Say what each GitHub Container Registry package is, so `armiger-rats-search` and `armiger-rats-search-stack` no longer look like duplicates.
+- **What changed:** Add "Published packages" under Docker settings in `docs/reference.md`: `armiger` and its `armiger-ultra` alias, the Rats Search backend image, the two Compose `-stack` artifacts, and which tags move. `README.md` is unchanged because it is an image input in `ci/release_contract.py` and would force a new release.
+- **Validation:** `python3 -m unittest discover -s ci/tests -v` and `python3 -m ci.release_contract` pass; no image input changed.
+- **Release:** None. 3.8.1 stays current.
+
 ## 2026-10-29 — Release Armiger 3.8.1 with Armiger-Connectors v1.2.7 and runtime acceptance gates
 
 - **Task:** Pin `spencernorton/Armiger-Connectors` `v1.2.7` (`283f4461c18f2b873460c4cde8f43d03ac4e3c03`), harden single-file extension and variant alias handling, and add release contract + container acceptance checks for Bitmagnet `contentType` writeback and Torznab category promotion/rescue.

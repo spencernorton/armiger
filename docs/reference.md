@@ -116,6 +116,17 @@ Keep the same folder name so Compose reuses your existing volumes. Armiger suppo
 
 The companion Rats Search image builds upstream [v2.3.5](https://github.com/librats/rats-search/tree/8415a208025d3827f2f380f3bfe530557a10eaba), including its pinned submodules. Rats Search's MIT license and Manticore's GPL license, component licenses and corresponding source archive are included under `/usr/share/doc/`. Manticore's source is also [available directly](https://github.com/manticoresoftware/manticoresearch/tree/2c59803fefb5512dd868fbf42aa759d78e617e74).
 
+### Published packages
+
+Each release publishes five packages to GitHub Container Registry, all with the same version number:
+
+- [`armiger`](https://github.com/users/spencernorton/packages/container/package/armiger): Armiger Ultra with its verified model files and the Bitmagnet and Rats Search connectors, for Linux x86-64 and ARM64.
+- [`armiger-ultra`](https://github.com/users/spencernorton/packages/container/package/armiger-ultra): the same image under the Armiger Ultra name.
+- [`armiger-rats-search`](https://github.com/users/spencernorton/packages/container/package/armiger-rats-search): the Rats Search backend described above. Rats Search publishes desktop apps only, so Armiger builds this server image.
+- [`armiger-bitmagnet-stack`](https://github.com/users/spencernorton/packages/container/package/armiger-bitmagnet-stack) and [`armiger-rats-search-stack`](https://github.com/users/spencernorton/packages/container/package/armiger-rats-search-stack): the Compose files that the two-line `include` setups load. They are not images. The Bitmagnet setup uses the upstream Bitmagnet image, so there is no Armiger-built Bitmagnet image.
+
+`latest` and `armiger-ultra:3.3.0` always point to the newest release; every other version tag stays on its release. Tags that start with `sha-` or `ci-` are the single-platform builds behind each version tag; use a version tag instead.
+
 ## Remote Docker server
 
 The Docker examples keep their web and status ports local to the server. To open them from your own computer, open a terminal **on your own computer** and use one of these commands. Replace `user@server` with your server's SSH login.
