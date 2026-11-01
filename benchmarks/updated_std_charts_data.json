@@ -406,13 +406,7 @@
       "n": 153,
       "point_pct": 100.0,
       "ci95_lo": 100.0,
-      "ci95_hi": 100.0,
-      "Armiger Ultra v3.11.0": {
-        "n": 1358,
-        "point_pct": 100.0,
-        "ci95_lo": 100.0,
-        "ci95_hi": 100.0
-      }
+      "ci95_hi": 100.0
     },
     "p5_adult": {
       "Armiger Ultra v3.7.0": {
@@ -458,6 +452,12 @@
         "ci95_hi": 100.0
       },
       "Armiger Ultra v3.10.0": {
+        "n": 1358,
+        "point_pct": 100.0,
+        "ci95_lo": 100.0,
+        "ci95_hi": 100.0
+      },
+      "Armiger Ultra v3.11.0": {
         "n": 1358,
         "point_pct": 100.0,
         "ci95_lo": 100.0,

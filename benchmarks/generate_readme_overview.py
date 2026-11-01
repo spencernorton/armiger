@@ -228,7 +228,7 @@ def render(data: dict, path: Path) -> None:
             f"Seed count alone: {sw_s:.0f}/100"], suffix="/100")
 
         text(50, 923, "Rounded benchmark results on the 2026-10-26 held-out test suite. Seed scores measure ranking quality (AUROC), not percentage correct.", 11, muted)
-        text(50, 953, "Junk scoring weighs clean (n=500) and junk/malware (n=197) items equally (99.90% balanced accuracy).", 11, muted)
+        text(50, 953, "Junk scoring weighs clean (n=500) and junk/malware (n=197) items equally (100.00% balanced accuracy).", 11, muted)
         output = io.BytesIO()
         fig.savefig(output, format="png", dpi=120, facecolor=bg)
         plt.close(fig)

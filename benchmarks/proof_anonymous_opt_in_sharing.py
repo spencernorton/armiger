@@ -34,6 +34,8 @@ from pathlib import Path
 import random
 import sys
 import time
+
+_FRESH_EPOCH_HOUR = (int(time.time()) // 3600) * 3600 - 24 * 3600
 from typing import Any, Dict, List, Tuple
 
 ROOT_DIR = Path(__file__).resolve().parents[1]
@@ -171,7 +173,7 @@ async def run_proof_1_default_zero_egress() -> Dict[str, Any]:
             delta_w=[0.12, -0.08, 0.04, 0.01],
             delta_b=[0.02, -0.01],
             n_samples=40,
-            epoch=1792350000,
+            epoch=_FRESH_EPOCH_HOUR,
             seq=1,
         )
         assert valid_community_bundle is not None
@@ -219,7 +221,7 @@ async def run_proof_1_default_zero_egress() -> Dict[str, Any]:
 def generate_500_adversarial_canaries() -> List[Tuple[str, str, Dict[str, Any]]]:
     """Generate 500 distinct adversarial canary payloads across 10 PII/de-anonymization categories."""
     canaries: List[Tuple[str, str, Dict[str, Any]]] = []
-    base_epoch = 1792350000
+    base_epoch = _FRESH_EPOCH_HOUR
 
     # Category 1: Simulated Home / Public / LAN IPv4 addresses & CIDR blocks (50)
     for i in range(50):
@@ -402,7 +404,7 @@ async def run_proof_2_canary_pii_firewall() -> Dict[str, Any]:
                 delta_w=[0.05 * ((node_i % 3) - 1)] * 8,
                 delta_b=[0.01, -0.01],
                 n_samples=35 + node_i * 5,
-                epoch=1792350000,
+                epoch=_FRESH_EPOCH_HOUR,
                 seq=node_i + 1,
             )
             assert legit_bundle is not None
@@ -485,7 +487,7 @@ async def run_proof_3_unlinkability_and_dp_convergence() -> Dict[str, Any]:
         observed_timestamps: List[int] = []
         epoch_history: List[Dict[str, Any]] = []
 
-        base_ts = 1792350000  # Exact UTC hour multiple
+        base_ts = _FRESH_EPOCH_HOUR  # Exact UTC hour multiple
 
         for ep in range(num_epochs):
             raw_epoch_wall_clock = base_ts + ep * 3600 + rng.randint(1, 3599)
