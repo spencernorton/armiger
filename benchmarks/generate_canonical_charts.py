@@ -1485,7 +1485,7 @@ def build_all_charts_and_manifest(
         v6a = [jk_u["point_pct"], jk_r["point_pct"], jk_b["point_pct"], None]
         c6a = [C_ULTRA, "#F59E0B", "#94A3B8", "#21262D"]
         l6a = [
-            f"{jk_u['point_pct']:.2f}% Bal (100.0% Recall, 99.8% Spec)",
+            f"{jk_u['point_pct']:.2f}% Bal ({jk_u['sens_pct']:.1f}% Recall, {jk_u['spec_pct']:.1f}% Spec)",
             f"{jk_r['point_pct']:.2f}% Bal ({jk_r['sens_pct']:.1f}% Recall, {jk_r['spec_pct']:.1f}% Spec)",
             f"{jk_b['point_pct']:.2f}% Bal (0.0% Recall on Malware Traps)",
             "N/A (No Junk / Malware Head)",
