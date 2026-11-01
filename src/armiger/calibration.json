@@ -1,5 +1,5 @@
 {
-  "calibrated_onnx_fp32_sha256": "70286459da47287eb5d984cd67251e0f80f511ceee0ad6ad34c7c2334c9223ec",
+  "calibrated_onnx_fp32_sha256": "e12880d60aea7abc50f39d39576f0d36d4069e66fc54599e0f388eaa6fe657f0",
   "calibration_version": "v3.0-gold-r13_6-val-only",
   "feature_stats_dim": 41,
   "fitted_snapshot_id": "snap_r13_20261024T140340Z_064c8e6ccb1f",
