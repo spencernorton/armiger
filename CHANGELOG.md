@@ -1,5 +1,10 @@
 # Changelog
 
+## 3.11.0
+
+- Update the pinned model bundle to `3.11.0` (`v3.0-gold-r13.11` on `NorviTech/armiger-ultra` at `1ac1b682f36a6d371aef2a9183aef032a19be98f`, DHT `seq=14` / `seq=3014`), enforcing zero train-split regex-only tokens (`0` zero-train tokens across `3,810` regex tokens), eliminating post-hoc evaluation overrides by integrating runtime post-catalog resolution into `r13_8_combiner_runtime.py`, and retraining the GPU 255-dim `ResidualCombinerNet` (`r13_8_combiner.pkl` `sha256=7d055151ee403fa766cc0e4b72812870ca11dde6e357cc98636989c484e6e848`) on the conserved Gold neural backbone (`97.29%` Clean v3 9-category Macro-F1, `92.70%` strictly disjoint Fresh Balanced 1,000 Macro-F1, `88.78%` Gold Val Macro-F1, and `81.86%` Gold Test Macro-F1).
+- Sync `calibration.json` (`sha256=27d04c6e0832b7f8bce3d9564497d85f6cca7bf4c90895c07bc8417c243f64ef`) and `config.json` (`sha256=87d3255383f800023bde1d596dbd85dd4d23098c30945213623ee24d4d71911d`) bundle manifests, and refresh the canonical evaluation and overview charts.
+
 ## 3.10.0
 
 - Update the pinned model bundle to `3.10.0` (`v3.0-gold-r13.10` on `NorviTech/armiger-ultra` at `b9f70a0448fc98f4113126552f46bbd42eaecf0e`, DHT `seq=13` / `seq=3013`), eliminating curated validation stems (`CURATED_CANONICAL_STEMS = {}`), recovering `Suite 2 (W5A)` title span extraction (`71.89%` exact-row, `0.00pp` drift vs `R13.7`), and achieving `97.29%` Clean v3 9-category Macro-F1 (`N=1,355`, 9/9 categories `>= 95.45%` F1).

@@ -42,16 +42,16 @@ except ImportError:
 DEFAULT_RELEASE_PUBKEY_HEX = "3599362bd52dad8b89398b904d3081c2cb483d13376f7ffb49f3748208731e76"
 DEFAULT_RELEASE_SALT = "armiger:weights:ultra"
 
-HF_BASE_URL = "https://huggingface.co/NorviTech/armiger-ultra/resolve/b9f70a0448fc98f4113126552f46bbd42eaecf0e"
+HF_BASE_URL = "https://huggingface.co/NorviTech/armiger-ultra/resolve/1ac1b682f36a6d371aef2a9183aef032a19be98f"
 ARTIFACT_MANIFEST: Dict[str, Dict[str, Any]] = {
     "armiger.int8.onnx": {
-        "sha256": "c39bad25f5e31289d575243473589e023c63327b5d846e26aaeebf9aee7b054c",
+        "sha256": "53cb6f4f11b6147fc8cc7a7e5815aa7dce8e3926eda5dc349bf37c930d131c2a",
         "size_bytes": 17606362,
         "tiers": ("int8", "ultra"),
         "url": f"{HF_BASE_URL}/armiger.int8.onnx",
     },
     "armiger_ultra.fp32.onnx": {
-        "sha256": "70286459da47287eb5d984cd67251e0f80f511ceee0ad6ad34c7c2334c9223ec",
+        "sha256": "e12880d60aea7abc50f39d39576f0d36d4069e66fc54599e0f388eaa6fe657f0",
         "size_bytes": 33260312,
         "tiers": ("ultra",),
         "url": f"{HF_BASE_URL}/armiger_ultra.fp32.onnx",
@@ -63,7 +63,7 @@ ARTIFACT_MANIFEST: Dict[str, Dict[str, Any]] = {
         "url": f"{HF_BASE_URL}/swarm_adapter.pt",
     },
     "calibration.json": {
-        "sha256": "92aa6aac07a9868f7a54fc0089eec6b06aa86c759723dd0731e0afd13e617cdd",
+        "sha256": "27d04c6e0832b7f8bce3d9564497d85f6cca7bf4c90895c07bc8417c243f64ef",
         "size_bytes": 76612,
         "tiers": ("int8", "ultra"),
         "url": f"{HF_BASE_URL}/calibration.json",
@@ -75,7 +75,7 @@ ARTIFACT_MANIFEST: Dict[str, Dict[str, Any]] = {
         "url": f"{HF_BASE_URL}/vocab.json",
     },
     "config.json": {
-        "sha256": "074c80803dc5cbc426059553bd7a5577e4c66fb5685dc4ae33568b713e08fa4a",
+        "sha256": "87d3255383f800023bde1d596dbd85dd4d23098c30945213623ee24d4d71911d",
         "size_bytes": 5482,
         "tiers": ("int8", "ultra"),
         "url": f"{HF_BASE_URL}/config.json",

@@ -1,3 +1,10 @@
+## 2026-11-01 — Promote Armiger 3.11.0 and v3.0-gold-r13.11 model bundle
+
+- **Task:** Release Armiger software and model bundle `3.11.0` (`v3.0-gold-r13.11`, DHT `seq=14` / `seq=3014`).
+- **What changed:** Pin `NorviTech/armiger-ultra` revision `1ac1b682f36a6d371aef2a9183aef032a19be98f` (`v3.11.0`) across `src/armiger/model_manifest.json`, `src/armiger/artifacts.py`, `src/armiger/oci_vpn_guard.py`, `src/armiger/calibration.json`, `src/armiger/oci_sqlite_catalog.py`, `src/armiger/armiger_ultra_pipeline.py`, and `examples/Dockerfile`. Refresh `benchmarks/CHARTS_MANIFEST.json`, `benchmarks/README_OVERVIEW.json`, and `docs/assets/*.png`, and bump package and Compose quickstarts to `3.11.0`.
+- **Validation:** Verify `ci` release contract and promotion unit tests, external guide verification, and chart/package/DHT `pytest` suites against the `3.11.0` model artifacts.
+- **Release:** Ready for `3.11.0` publication via CI.
+
 ## 2026-10-30 — Promote Armiger 3.10.0 and v3.0-gold-r13.10 model bundle
 
 - **Task:** Release Armiger software and model bundle `3.10.0` (`v3.0-gold-r13.10`, DHT `seq=13` / `seq=3013`).
