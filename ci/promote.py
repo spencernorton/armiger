@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 from pathlib import Path
 import subprocess
 
@@ -58,6 +59,9 @@ def main():
     parser.add_argument("--source", required=True)
     parser.add_argument("--verify-only", action="store_true", help="Read-only completeness check for an unchanged existing release")
     args = parser.parse_args()
+    # Supported Compose setups require an explicit update channel; promotion
+    # compares local and published stacks under the same channel.
+    os.environ.setdefault("ARMIGER_UPDATE_CHANNEL", "dht")
     registry = Registry()
     if args.verify_only:
         releases = check_published(registry, args.version, args.source)
