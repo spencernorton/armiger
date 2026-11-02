@@ -6,7 +6,7 @@ The packaged stack runs three services:
 
 - **`postgres` (`postgres:16-alpine`)** — Bitmagnet's PostgreSQL database.
 - **`bitmagnet` (`ghcr.io/bitmagnet-io/bitmagnet:v0.10.0`)** — Bitmagnet Web UI, GraphQL API, and raw Torznab feed on `:3333`, plus DHT crawler on `:3334/tcp` and `:3334/udp`.
-- **`armiger-ultra` (`ghcr.io/spencernorton/armiger:3.11.0`)** — Background Bitmagnet GraphQL poller, HTTP status/classification API on `:8096`, and filtered Torznab proxy on `:8097` (with the verified Ultra model bundled inside the image).
+- **`armiger-ultra` (`ghcr.io/spencernorton/armiger:3.12.0`)** — Background Bitmagnet GraphQL poller, HTTP status/classification API on `:8096`, and filtered Torznab proxy on `:8097` (with the verified Ultra model bundled inside the image).
 
 ---
 
@@ -57,7 +57,7 @@ services:
     command: [worker, run, --keys=http_server, --keys=queue_server, --keys=dht_crawler]
 
   armiger-ultra:
-    image: ghcr.io/spencernorton/armiger:3.11.0
+    image: ghcr.io/spencernorton/armiger:3.12.0
     restart: unless-stopped
     command: [python, /opt/connectors/bitmagnet/bitmagnet_connector.py]
     depends_on:
@@ -83,7 +83,7 @@ services:
       ARMIGER_REJECT_DEAD_SWARMS: 'false'
       ARMIGER_PRUNE_MALWARE: 'false'
       ARMIGER_PRUNE_DEAD_SWARMS: 'false'
-      ARMIGER_DHT_AUTO_UPDATE: 'true'
+      ARMIGER_UPDATE_CHANNEL: 'dht'
       ARMIGER_DHT_POLL_INTERVAL_SEC: '14400'
       ARMIGER_DHT_SHARE_OPT_IN: 'false'
       ARMIGER_DHT_RSI_MODE: pull_only
@@ -104,7 +104,7 @@ If you use Docker Compose 2.34 or newer, you can also include the published stac
 
 ```yaml
 include:
-  - oci://ghcr.io/spencernorton/armiger-bitmagnet-stack:3.11.0
+  - oci://ghcr.io/spencernorton/armiger-bitmagnet-stack:3.12.0
 ```
 
 ```bash
@@ -120,7 +120,7 @@ If you already run Bitmagnet and want to keep your existing PostgreSQL database 
 ```yaml
 services:
   armiger-ultra:
-    image: ghcr.io/spencernorton/armiger:3.11.0
+    image: ghcr.io/spencernorton/armiger:3.12.0
     restart: unless-stopped
     command: [python, /opt/connectors/bitmagnet/bitmagnet_connector.py]
     ports:
@@ -270,7 +270,7 @@ Armiger Ultra automatically checks for newer signed model and catalog releases i
 
 | Variable | Required / Optional | Default | Valid options / range | What it does |
 | --- | --- | --- | --- | --- |
-| `ARMIGER_DHT_AUTO_UPDATE` | Optional | `'true'` | `'true'`, `'false'` *(also accepts `'1'`, `'0'`, `'off'`)* | Enables automatic background checks for newer signed model/catalog releases (`seq > active_seq`), verified download, 500-item canary check, and atomic hot-swap. Set to `'false'` to disable background update checks and stay pinned to the image's baked-in model. |
+| `ARMIGER_UPDATE_CHANNEL` | Required | *(none)* | `'dht'`, `'hf'`, `'off'` | Selects the background update transport: `dht` checks for newer signed model releases (`seq > active_seq`) over the DHT with Hugging Face webseed fallback, verified download, 500-item canary check, and atomic hot-swap; `hf` uses the Hugging Face webseed; `off` stays pinned to the image's baked-in model. |
 | `ARMIGER_DHT_POLL_INTERVAL_SEC` | Optional | `'14400'` *(4 hours)* | Number `>= 60` *(recommended `'3600'` – `'86400'` seconds)* | How often (in seconds) Armiger checks for a newer signed model release (`'3600'` = 1 hour, `'14400'` = 4 hours, `'86400'` = 24 hours). |
 | `ARMIGER_DHT_SHARE_OPT_IN` | Optional | `'false'` | `'true'`, `'false'` *(also accepts `'1'`, `'0'`, `'yes'`, `'no'`)* | Opt-in anonymous contribution switch. **Off (`'false'`) by default.** When `'false'`, all outbound contribution packets are blocked at the socket guard. Even when enabled, Armiger never sends torrent names, infohashes, or unverified predictions. |
 | `ARMIGER_DHT_RSI_MODE` | Optional | `pull_only` | `'pull_only'`, `'off'`, `'anonymous_contribute'` | Distributed update policy:<br>• `'pull_only'` *(default)* — downloads verified model updates only.<br>• `'off'` — disables the distributed update engine.<br>• `'anonymous_contribute'` — enables anonymized differential-privacy telemetry when `ARMIGER_DHT_SHARE_OPT_IN='true'`. |
@@ -298,7 +298,7 @@ See [distributed updates](../../docs/distributed-updates.md) for protocol and cr
 
 From your stack folder, run `docker compose down` to stop or `docker compose up -d` to start again. Your PostgreSQL index stays saved in `postgres_data` (do not pass `-v` unless you want to erase the database).
 
-If startup reports `Permission denied` opening `/opt/connectors/bitmagnet/bitmagnet_connector.py`, set the `armiger-ultra` image to `ghcr.io/spencernorton/armiger:3.11.0` or later, then pull and recreate that service:
+If startup reports `Permission denied` opening `/opt/connectors/bitmagnet/bitmagnet_connector.py`, set the `armiger-ultra` image to `ghcr.io/spencernorton/armiger:3.12.0` or later, then pull and recreate that service:
 
 ```bash
 docker compose pull armiger-ultra

@@ -105,6 +105,8 @@ jobs:
           cd "$RUNNER_TEMP"
           python -I "$GITHUB_WORKSPACE/tests/smoke_installed.py"
       - name: Validate supported Compose manifests
+        env:
+          ARMIGER_UPDATE_CHANNEL: 'dht'
         run: |
           docker compose -f examples/bitmagnet/docker-compose.yml config --quiet
           docker compose -f examples/rats-search/docker-compose.yml config --quiet

@@ -21,7 +21,7 @@ RUN chmod 0755 /opt/connectors /opt/connectors/bitmagnet /opt/connectors/rats-se
     && python -m armiger download --directory /models --variant ultra --offline \
     && chown -R armiger:armiger /app
 USER 10001:10001
-ENV ARMIGER_MODEL_DIR=/models ARMIGER_VARIANT=ultra ARMIGER_AUTO_DOWNLOAD=true ARMIGER_DHT_AUTO_UPDATE=true PYTHONUNBUFFERED=1
+ENV ARMIGER_MODEL_DIR=/models ARMIGER_VARIANT=ultra ARMIGER_AUTO_DOWNLOAD=true PYTHONUNBUFFERED=1
 # Fail the image build if its runtime user cannot read either connector or model.
 RUN python -c "from pathlib import Path; from armiger.artifacts import download_model; \
     [compile(Path(p).read_bytes(), p, 'exec') for p in \
