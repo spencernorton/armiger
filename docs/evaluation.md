@@ -2,9 +2,8 @@
 
 ## Current-release comparison status
 
-Software 3.12.2 uses model bundle 3.11.0. Current comparison graphics have been
-withdrawn from the README and model cards pending reconciliation of their data
-and provenance. No replacement score, new sample count or new model evaluation
+Software 3.12.2 uses model bundle 3.11.0. This documentation withdraws comparison graphics from current promotion
+pending reconciliation of their data and provenance. No replacement score, new sample count or new model evaluation
 is introduced by this documentation correction.
 
 The [archived overview](assets/armiger_overview.png) displays model 3.11.0 and
@@ -18,8 +17,8 @@ displayed statistics match the receipt or were measured for the current model.
 
 The public M4 Pro [timing receipt](../benchmarks/receipts/hardware_and_api_cost_receipt.json)
 identifies older ONNX hashes, not the pinned 3.11.0 hashes. Those measurements
-must not be advertised as current-version end-to-end timing. The former
-unqualified GPU timing headline is also withdrawn; see [resources](resources.md).
+must not be advertised as current-version end-to-end timing. The unqualified GPU timing headline is not supported by that receipt; see
+[resources](resources.md).
 
 Restoring a comparison requires an explicit model/pipeline identity, named
 cohorts and label/exposure scope, matching item-level evidence and denominators,

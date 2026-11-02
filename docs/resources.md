@@ -46,9 +46,8 @@ for Bitmagnet, Rats Search, their databases and the host OS.
 ## Timing and cost
 
 No current-release end-to-end CPU/GPU latency or throughput guarantee is made.
-The former unqualified `0.21 ms/item` GPU headline has been withdrawn because
-the public card did not identify enough hardware, batch, model and timing scope
-to reproduce it. Neural-kernel timing, full policy processing, connector work
+The `0.21 ms/item` GPU headline lacks enough published hardware, batch, model
+and timing scope to reproduce it and is not endorsed here. Neural-kernel timing, full policy processing, connector work
 and HTTP round trips are different measurements.
 
 The committed M4 Pro timing receipt is a historical measurement on the model
