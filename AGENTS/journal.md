@@ -1,3 +1,8 @@
+## 2026-11-02 — Publish the approved public-claim corrections
+
+- Publication of the prepared documentation correction package is authorized. Resource figures distinguish model-file size from observed service memory and explicitly separate runtime paths; metadata screening does not imply payload inspection or formal privacy/safety guarantees.
+- The Armiger documentation release prepares software3.12.2 with model3.11.0. Existing model/benchmark/image bytes and historical journal entries are preserved. Twelve release-contract/promotion checks and the real registry preflight pass; required exact-head/native CI and release/public-page verification remain the publication gates.
+
 ## 2026-11-02 — Prepare public claim corrections for review
 
 - Distinguish ONNX file sizes from measured whole-service RAM and the standalone, GitHub Ultra and full SDK paths. Replace verification/safety wording with metadata prediction scope and withdraw the unscoped GPU timing headline from proposed model cards.
