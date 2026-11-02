@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 from pathlib import Path
 import re
 import subprocess
@@ -62,7 +63,8 @@ class Stack:
         self.evidence = evidence
         self.path = evidence / f"{setup}-compose.json"
         model = json.loads(run("docker", "compose", "-f", ROOT / f"examples/{setup}/docker-compose.yml",
-                               "config", "--format", "json"))
+                               "config", "--format", "json",
+                               env={**os.environ, "ARMIGER_UPDATE_CHANNEL": "dht"}))
         model.pop("name", None)
         for kind in ("volumes", "networks"):
             for resource in model.get(kind, {}).values():

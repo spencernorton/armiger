@@ -1557,6 +1557,8 @@ class ArmigerUltraPipeline:
         self._auto_update_thread: Optional[threading.Thread] = None
 
         self.update_channel: Optional[str] = _resolve_update_channel(update_channel)
+        _chan_env = os.environ.get("ARMIGER_UPDATE_CHANNEL")
+        self.update_channel_explicit: bool = update_channel is not None or bool(_chan_env and _chan_env.strip())
         env_poll = os.environ.get("ARMIGER_DHT_POLL_INTERVAL_SEC")
         if auto_update is not None:
             eff_au = bool(auto_update) and not self._offline
@@ -2629,7 +2631,7 @@ class ArmigerUltraPipeline:
         from_poller: bool = False,
     ) -> Dict[str, Any]:
         channel = getattr(self, "update_channel", None)
-        if channel == "off":
+        if channel == "off" and (from_poller or getattr(self, "update_channel_explicit", False)):
             return {
                 "updated": False,
                 "rolled_back": False,
