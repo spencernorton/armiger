@@ -28,7 +28,7 @@ services:
       ARMIGER_PRUNE_MALWARE: "false"
       ARMIGER_PRUNE_DEAD_SWARMS: "false"
       # Distributed model updates (BEP 44/46) and opt-in contribution sharing.
-      ARMIGER_DHT_AUTO_UPDATE: "true"
+      ARMIGER_UPDATE_CHANNEL: "dht"
       ARMIGER_DHT_POLL_INTERVAL_SEC: "14400"
       ARMIGER_DHT_SHARE_OPT_IN: "false"
       ARMIGER_DHT_RSI_MODE: "pull_only"

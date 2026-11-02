@@ -1,3 +1,8 @@
+## 2026-11-02 — Require explicit ARMIGER_UPDATE_CHANNEL for model updates
+
+- **What changed:** Add `ARMIGER_UPDATE_CHANNEL` (`dht`, `hf`, `off`) to `ArmigerUltraPipeline` with DHT-first/Hugging-Face-fallback semantics, `update_channel` in health output, and legacy `ARMIGER_DHT_AUTO_UPDATE` mapping. Docker Compose examples now require the variable; the image no longer defaults updating on. Docs (`distributed-updates.md`, `bitmagnet-configuration.md`, Bitmagnet README, reference) describe the required channel. New `tests/test_update_channel.py` covers resolution and gating.
+- **Validation:** `tests/test_update_channel.py` plus `tests/test_dht_autoupdate_and_contribution_loop.py` pass (12 tests).
+
 ## 2026-11-01 — Promote Armiger 3.11.0 and v3.0-gold-r13.11 model bundle
 
 - **Task:** Release Armiger software and model bundle `3.11.0` (`v3.0-gold-r13.11`, DHT `seq=14` / `seq=3014`).

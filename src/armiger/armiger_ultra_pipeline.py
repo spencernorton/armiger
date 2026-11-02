@@ -255,6 +255,35 @@ _AUDIOBOOK_FILE_TREE_RE = re.compile(
 )
 
 
+UPDATE_CHANNELS = ("dht", "hf", "off")
+
+
+def _resolve_update_channel(explicit: Optional[str]) -> Optional[str]:
+    """Resolve the model update channel: explicit argument, then
+    ARMIGER_UPDATE_CHANNEL, then the legacy ARMIGER_DHT_AUTO_UPDATE switch.
+
+    Returns "dht" (DHT peer-wire first, Hugging Face webseed fallback), "hf"
+    (Hugging Face webseed transport), "off", or None when no channel has been
+    configured. Updates require a configured channel: None disables updating
+    and is reported as ``not_configured`` in health output.
+    """
+    raw: Optional[str] = explicit
+    if raw is None:
+        raw = os.environ.get("ARMIGER_UPDATE_CHANNEL")
+    if raw is None or not str(raw).strip():
+        legacy = os.environ.get("ARMIGER_DHT_AUTO_UPDATE")
+        if legacy is not None:
+            return "dht" if legacy.strip().lower() in ("1", "true", "yes", "on") else "off"
+        return None
+    value = str(raw).strip().lower()
+    if value not in UPDATE_CHANNELS:
+        raise ValueError(
+            f"update channel must be one of {', '.join(UPDATE_CHANNELS)} (got {raw!r}); "
+            "set ARMIGER_UPDATE_CHANNEL=dht, hf, or off"
+        )
+    return value
+
+
 def _file_tree_structural_override(row: Mapping[str, Any]) -> Tuple[Optional[str], str]:
     """Check physical file-tree extensions (.m4b/.afpk audiobooks, .cbz/.cbr comics, game engine trees, multi-episode packs) before title lookup."""
     raw_name = str(row.get("name") or row.get("title") or "")
@@ -522,6 +551,7 @@ class ArmigerUltraPipeline:
         allow_synthetic_fallback: bool = False,
         runtime_cache_dir: Optional[Union[str, Path]] = None,
         auto_update: Optional[bool] = None,
+        update_channel: Optional[str] = None,
         poll_interval_sec: Optional[float] = None,
         initial_seq: Optional[int] = None,
         canary_validator: Optional[Callable[["ArmigerUltraPipeline"], bool]] = None,
@@ -609,6 +639,7 @@ class ArmigerUltraPipeline:
         self._init_dht_update_bridge(
             runtime_cache_dir=runtime_cache_dir,
             auto_update=auto_update,
+            update_channel=update_channel,
             poll_interval_sec=poll_interval_sec,
             initial_seq=initial_seq,
             canary_validator=canary_validator,
@@ -1473,6 +1504,7 @@ class ArmigerUltraPipeline:
         *,
         runtime_cache_dir: Optional[Union[str, Path]] = None,
         auto_update: Optional[bool] = None,
+        update_channel: Optional[str] = None,
         poll_interval_sec: Optional[float] = None,
         initial_seq: Optional[int] = None,
         canary_validator: Optional[Callable[["ArmigerUltraPipeline"], bool]] = None,
@@ -1524,12 +1556,12 @@ class ArmigerUltraPipeline:
         self._auto_update_stop_event = threading.Event()
         self._auto_update_thread: Optional[threading.Thread] = None
 
-        env_au = os.environ.get("ARMIGER_DHT_AUTO_UPDATE")
+        self.update_channel: Optional[str] = _resolve_update_channel(update_channel)
         env_poll = os.environ.get("ARMIGER_DHT_POLL_INTERVAL_SEC")
         if auto_update is not None:
             eff_au = bool(auto_update) and not self._offline
-        elif env_au is not None:
-            eff_au = env_au.strip().lower() in ("1", "true", "yes", "on") and not self._offline
+        elif self.update_channel is not None:
+            eff_au = self.update_channel in ("dht", "hf") and not self._offline
         elif env_poll is not None:
             eff_au = not self._offline
         else:
@@ -2552,6 +2584,7 @@ class ArmigerUltraPipeline:
             "active_seq": int(self.active_seq),
             "active_bundle_merkle_root": str(self.active_bundle_merkle_root),
             "model_source": str(self.model_source),
+            "update_channel": self.update_channel if self.update_channel is not None else "not_configured",
             "last_dht_check_ts": self.last_dht_check_ts,
             "last_dht_result": self.last_dht_result,
             "last_dht_error": self.last_dht_error,
@@ -2593,7 +2626,25 @@ class ArmigerUltraPipeline:
         allow_webseed_fallback: bool = True,
         timeout: float = 4.0,
         p2p_budget_sec: Optional[float] = None,
+        from_poller: bool = False,
     ) -> Dict[str, Any]:
+        channel = getattr(self, "update_channel", None)
+        if channel == "off":
+            return {
+                "updated": False,
+                "rolled_back": False,
+                "reason": "update_channel_off",
+                "active_seq": int(self.active_seq),
+                "remote_seq": None,
+            }
+        if channel is None and from_poller:
+            return {
+                "updated": False,
+                "rolled_back": False,
+                "reason": "update_channel_not_configured",
+                "active_seq": int(self.active_seq),
+                "remote_seq": None,
+            }
         with self._dht_poll_mutex:
             return self._check_and_apply_dht_release_update_locked(
                 release_pubkey_hex=release_pubkey_hex,
@@ -2674,6 +2725,7 @@ class ArmigerUltraPipeline:
             eff_webseeds = env_ws if env_ws else [HF_BASE_URL]
 
         min_target_seq = int(self.active_seq) + 1
+        primary_mode = "webseed-fallback" if getattr(self, "update_channel", None) == "hf" else "strict-p2p"
         receipt = verify_dht_release(
             pubkey_hex=eff_pubkey,
             salt=eff_salt,
@@ -2681,7 +2733,7 @@ class ArmigerUltraPipeline:
             explicit_peers=eff_peers,
             webseed_urls=eff_webseeds,
             expected_info_bytes=expected_info_bytes,
-            mode="strict-p2p",
+            mode=primary_mode,
             min_seq=min_target_seq,
             timeout=timeout,
             p2p_budget_sec=p2p_budget_sec,
@@ -3025,7 +3077,7 @@ class ArmigerUltraPipeline:
                 return
             while not self._auto_update_stop_event.is_set():
                 try:
-                    res_up = self.check_and_apply_dht_release_update()
+                    res_up = self.check_and_apply_dht_release_update(from_poller=True)
                     self.last_dht_result = "updated" if res_up.get("updated") else str(res_up.get("reason", "checked"))
                     if res_up.get("rolled_back"):
                         self.dht_update_failures += 1

@@ -83,7 +83,7 @@ services:
       ARMIGER_REJECT_DEAD_SWARMS: 'false'
       ARMIGER_PRUNE_MALWARE: 'false'
       ARMIGER_PRUNE_DEAD_SWARMS: 'false'
-      ARMIGER_DHT_AUTO_UPDATE: 'true'
+      ARMIGER_UPDATE_CHANNEL: 'dht'
       ARMIGER_DHT_POLL_INTERVAL_SEC: '14400'
       ARMIGER_DHT_SHARE_OPT_IN: 'false'
       ARMIGER_DHT_RSI_MODE: pull_only
@@ -270,7 +270,7 @@ Armiger Ultra automatically checks for newer signed model and catalog releases i
 
 | Variable | Required / Optional | Default | Valid options / range | What it does |
 | --- | --- | --- | --- | --- |
-| `ARMIGER_DHT_AUTO_UPDATE` | Optional | `'true'` | `'true'`, `'false'` *(also accepts `'1'`, `'0'`, `'off'`)* | Enables automatic background checks for newer signed model/catalog releases (`seq > active_seq`), verified download, 500-item canary check, and atomic hot-swap. Set to `'false'` to disable background update checks and stay pinned to the image's baked-in model. |
+| `ARMIGER_UPDATE_CHANNEL` | Required | *(none)* | `'dht'`, `'hf'`, `'off'` | Selects the background update transport: `dht` checks for newer signed model releases (`seq > active_seq`) over the DHT with Hugging Face webseed fallback, verified download, 500-item canary check, and atomic hot-swap; `hf` uses the Hugging Face webseed; `off` stays pinned to the image's baked-in model. |
 | `ARMIGER_DHT_POLL_INTERVAL_SEC` | Optional | `'14400'` *(4 hours)* | Number `>= 60` *(recommended `'3600'` – `'86400'` seconds)* | How often (in seconds) Armiger checks for a newer signed model release (`'3600'` = 1 hour, `'14400'` = 4 hours, `'86400'` = 24 hours). |
 | `ARMIGER_DHT_SHARE_OPT_IN` | Optional | `'false'` | `'true'`, `'false'` *(also accepts `'1'`, `'0'`, `'yes'`, `'no'`)* | Opt-in anonymous contribution switch. **Off (`'false'`) by default.** When `'false'`, all outbound contribution packets are blocked at the socket guard. Even when enabled, Armiger never sends torrent names, infohashes, or unverified predictions. |
 | `ARMIGER_DHT_RSI_MODE` | Optional | `pull_only` | `'pull_only'`, `'off'`, `'anonymous_contribute'` | Distributed update policy:<br>• `'pull_only'` *(default)* — downloads verified model updates only.<br>• `'off'` — disables the distributed update engine.<br>• `'anonymous_contribute'` — enables anonymized differential-privacy telemetry when `ARMIGER_DHT_SHARE_OPT_IN='true'`. |

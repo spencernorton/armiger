@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Require an explicit model update channel: set `ARMIGER_UPDATE_CHANNEL` to `dht` (DHT peer-wire first, Hugging Face webseed fallback), `hf` (Hugging Face webseed), or `off`. Background updating no longer starts without a channel; health output reports `update_channel` (`not_configured` when unset). The legacy `ARMIGER_DHT_AUTO_UPDATE` switch still maps to `dht`/`off`, and Docker Compose examples now require the variable to be set.
+
 ## 3.11.0
 
 - Update the pinned model bundle to `3.11.0` (`v3.0-gold-r13.11` on `NorviTech/armiger-ultra` at `1ac1b682f36a6d371aef2a9183aef032a19be98f`, DHT `seq=14` / `seq=3014`), enforcing zero train-split regex-only tokens (`0` zero-train tokens across `3,810` regex tokens), eliminating post-hoc evaluation overrides by integrating runtime post-catalog resolution into `r13_8_combiner_runtime.py`, and retraining the GPU 255-dim `ResidualCombinerNet` (`r13_8_combiner.pkl` `sha256=7d055151ee403fa766cc0e4b72812870ca11dde6e357cc98636989c484e6e848`) on the conserved Gold neural backbone (`97.29%` Clean v3 9-category Macro-F1, `92.70%` strictly disjoint Fresh Balanced 1,000 Macro-F1, `88.78%` Gold Val Macro-F1, and `81.86%` Gold Test Macro-F1).
