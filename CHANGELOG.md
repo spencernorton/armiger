@@ -1,8 +1,8 @@
 # Changelog
 
-## Unreleased
+## 3.12.0
 
-- Require an explicit model update channel: set `ARMIGER_UPDATE_CHANNEL` to `dht` (DHT peer-wire first, Hugging Face webseed fallback), `hf` (Hugging Face webseed), or `off`. Background updating no longer starts without a channel; health output reports `update_channel` (`not_configured` when unset). The legacy `ARMIGER_DHT_AUTO_UPDATE` switch still maps to `dht`/`off`, and Docker Compose examples now require the variable to be set.
+- Model bundle remains `3.11.0` (`v3.0-gold-r13.11`, DHT `seq=14` / `seq=3014`) unchanged. Require an explicit model update channel: set `ARMIGER_UPDATE_CHANNEL` to `dht` (DHT peer-wire first, Hugging Face webseed fallback), `hf` (Hugging Face webseed), or `off`. Background updating no longer starts without a channel; health output reports `update_channel` (`not_configured` when unset). The legacy `ARMIGER_DHT_AUTO_UPDATE` switch still maps to `dht`/`off`, and Docker Compose examples now require the variable to be set.
 
 ## 3.11.0
 
