@@ -10,7 +10,7 @@ Create a folder called `armiger-rats`. Save this as **`compose.yaml`** inside it
 
 ```yaml
 include:
-  - oci://ghcr.io/spencernorton/armiger-rats-search-stack:3.12.1
+  - oci://ghcr.io/spencernorton/armiger-rats-search-stack:3.12.2
 ```
 
 This loads the complete setup from our versioned package. All connections are already configured.
@@ -20,6 +20,8 @@ This loads the complete setup from our versioned package. All connections are al
 Open a terminal in that folder and run:
 
 ```bash
+# Choose dht, hf or off explicitly; off keeps the bundled model pinned.
+export ARMIGER_UPDATE_CHANNEL=off
 docker compose up -d
 ```
 

@@ -42,6 +42,8 @@ pipeline = ArmigerUltraPipeline.from_directory(
 
 Use `variant="int8"` to run the pipeline with the INT8 model (download `--variant all` first). `from_directory` loads local data; it does not fetch missing models. `ARMIGER_MODEL_DIR` sets the default directory for the constructor. Download and check data with `python -m armiger download`; the model manifest records its immutable upstream revision and file hashes.
 
+See [resources and measurement scope](resources.md) for model-file sizes, working RAM, runtime differences and timing limits.
+
 ## Model storage
 
 `python -m armiger download` and the default Python constructor share a versioned cache under `~/.cache/armiger/`. Set `ARMIGER_MODEL_DIR` to choose a different folder. Alternatively, download with `--directory ./models` and load with `ArmigerUltraPipeline.from_directory("./models")`. The CLI uses `--model-dir ./models` for classification. Keep the same location for downloading and loading.
@@ -88,7 +90,7 @@ The complete pipeline composes these components. Most callers need only `Armiger
 
 ## Compatibility and versions
 
-Library version 3.11.0 uses model version 3.11.0. Existing flat imports such as `armiger_inference` and `armiger_ultra_pipeline` remain compatibility aliases for this release; new code should import from `armiger`. `ArmigerPipeline` aliases `ArmigerUltraPipeline`.
+Library version 3.12.2 uses model version 3.11.0. Existing flat imports such as `armiger_inference` and `armiger_ultra_pipeline` remain compatibility aliases for this release; new code should import from `armiger`. `ArmigerPipeline` aliases `ArmigerUltraPipeline`.
 
 Model weights, vocabulary, calibration, adapter and catalog must be from a compatible bundle. Do not mix assets from different releases. The complete `all` download also includes the PyTorch checkpoint for tooling that needs it.
 
@@ -96,11 +98,11 @@ Model weights, vocabulary, calibration, adapter and catalog must be from a compa
 
 The two-line integration setups use packaged defaults and require Docker Compose 2.34 or newer. For Bitmagnet, keep the two-line file and use a local `compose.override.yaml` to configure Armiger. See the [complete Armiger Ultra environment-variable reference](bitmagnet-configuration.md) for defaults, examples and the effects of each setting.
 
-For Portainer Stacks, older Compose versions, or direct single-file customization, save the full [Bitmagnet file](https://raw.githubusercontent.com/spencernorton/armiger/main/examples/bitmagnet/docker-compose.yml) or [Rats Search file](https://raw.githubusercontent.com/spencernorton/armiger/main/examples/rats-search/docker-compose.yml) as `docker-compose.yml` **in place of** the two-line file. The Bitmagnet file has all default environment values and port mappings written directly in the file (no `.env` file or `${VAR}` placeholders required) so you can copy-paste it into a folder or Portainer Stack, edit any setting in place, and run `docker compose up -d`.
+For Portainer Stacks, older Compose versions, or direct single-file customization, save the full [Bitmagnet file](https://raw.githubusercontent.com/spencernorton/armiger/main/examples/bitmagnet/docker-compose.yml) or [Rats Search file](https://raw.githubusercontent.com/spencernorton/armiger/main/examples/rats-search/docker-compose.yml) as `docker-compose.yml` **in place of** the two-line file. The Bitmagnet file has all default environment values and port mappings written directly in the file (with an explicit `ARMIGER_UPDATE_CHANNEL` choice required) so you can copy-paste it into a folder or Portainer Stack, edit any setting in place, and run `docker compose up -d`.
 
 | Setup | Pre-populated settings in `docker-compose.yml` (defaults) |
 | --- | --- |
-| Bitmagnet | Ports `127.0.0.1:3333:3333`, `3334:3334`, `127.0.0.1:8096:8096`, `127.0.0.1:8097:8097`; `POSTGRES_PASSWORD=armiger-local`, `TMDB_API_KEY=''`, `DHT_CRAWLER_SCALING_FACTOR='10'`, `BITMAGNET_POLL_SECONDS='5'`, `BITMAGNET_BATCH_SIZE='100'`, `ARMIGER_REQUIRE_ENGLISH_AUDIO='false'`, `ARMIGER_ALLOW_ENGLISH_SUBS='true'`, `ARMIGER_REJECT_DEAD_SWARMS='false'`, `ARMIGER_PRUNE_MALWARE='false'`, `ARMIGER_PRUNE_DEAD_SWARMS='false'`, `ARMIGER_UPDATE_CHANNEL='dht'`, `ARMIGER_DHT_POLL_INTERVAL_SEC='14400'`, `ARMIGER_DHT_SHARE_OPT_IN='false'`, `ARMIGER_DHT_RSI_MODE=pull_only` (see [all Bitmagnet variables, required vs. optional status, and valid ranges](bitmagnet-configuration.md)) |
+| Bitmagnet | Ports `127.0.0.1:3333:3333`, `3334:3334`, `127.0.0.1:8096:8096`, `127.0.0.1:8097:8097`; `POSTGRES_PASSWORD=armiger-local`, `TMDB_API_KEY=''`, `DHT_CRAWLER_SCALING_FACTOR='10'`, `BITMAGNET_POLL_SECONDS='5'`, `BITMAGNET_BATCH_SIZE='100'`, `ARMIGER_REQUIRE_ENGLISH_AUDIO='false'`, `ARMIGER_ALLOW_ENGLISH_SUBS='true'`, `ARMIGER_REJECT_DEAD_SWARMS='false'`, `ARMIGER_PRUNE_MALWARE='false'`, `ARMIGER_PRUNE_DEAD_SWARMS='false'`, `ARMIGER_UPDATE_CHANNEL` (choose `dht`, `hf` or `off`; no default), `ARMIGER_DHT_POLL_INTERVAL_SEC='14400'`, `ARMIGER_DHT_SHARE_OPT_IN='false'`, `ARMIGER_DHT_RSI_MODE=pull_only` (see [all Bitmagnet variables, required vs. optional status, and valid ranges](bitmagnet-configuration.md)) |
 | Rats Search | `RATS_HTTP_PORT=8095`, `ARMIGER_HTTP_PORT=8098` |
 
 Bitmagnet's database has no published port and uses an internal password. To choose your own, set `POSTGRES_PASSWORD` **before the first start**; keep it unchanged while reusing that database. TMDB enrichment is optional. Automatic deletion of flagged items is disabled.

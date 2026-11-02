@@ -9,9 +9,9 @@
   <a href="https://buy.stripe.com/8x26oH2U44f65TRe574wM04"><img alt="Donate via Stripe" src="https://img.shields.io/badge/donate-Stripe-635bff.svg?logo=stripe&amp;logoColor=white"></a>
 </p>
 
-Armiger helps Bitmagnet and Rats Search label torrents by type and language, using names and file lists. **Armiger Ultra** also adds title matching, audio-language checks and estimates of download availability. It runs on a CPU; no GPU or paid API is required.
+Armiger helps Bitmagnet and Rats Search label torrents by type and language, using names and file lists. **Armiger Ultra** also adds title matching, metadata-based audio-language estimates and download-availability scores. It runs on a CPU; no GPU or paid API is required.
 
-![Armiger Ultra compared with MIMMO and Bitmagnet by content category, with title matching, audio language, junk checks and seed availability](docs/assets/armiger_overview.png)
+Published comparison graphics are under provenance review and are not presented here as verified current-release benchmarks. See [evaluation status and archived results](docs/evaluation.md).
 
 ```mermaid
 flowchart LR
@@ -33,13 +33,15 @@ classifier runs locally and does not download or inspect media payloads.
 2. **[Rats Search + Armiger Ultra](examples/rats-search/README.md)** — classify items in Rats Search.
 3. **[Standalone Armiger Ultra](docs/quickstart.md)** — run the ready-made Armiger container on its own.
 
-Choose one guide. The Docker setups include Armiger Ultra, so you do **not** need to install the standalone version first. Both integration guides start with a fresh, all-in-one installation. Save the small Compose file from your guide and run `docker compose up -d`; no source build or Python installation is needed.
+Choose one guide. The Docker setups include Armiger Ultra, so you do **not** need to install the standalone version first. Both integration guides start with a fresh, all-in-one installation. Save the Compose file from your guide, choose `ARMIGER_UPDATE_CHANNEL=dht`, `hf` or `off`, and run `docker compose up -d`; no source build or Python installation is needed.
 
 ## What Armiger does
 
 Armiger reads names, file paths, sizes and optional swarm counters. It predicts content type, language, subtitle availability and other metadata. Ultra combines those predictions with its catalog and additional checks.
 
 It does not inspect media payloads. Metadata predictions can be wrong and do not prove that a download is safe. See [evaluation and limitations](docs/evaluation.md) for measured results and label coverage. Sharing is off by default.
+
+The model files are **17.6 MB INT8** or **33.3 MB FP32** on disk. These sizes do not describe working RAM: the selected runtime, reference data, batch size and loaded sessions also matter. See [resources and measurement scope](docs/resources.md).
 
 ## More information
 
@@ -50,7 +52,7 @@ It does not inspect media payloads. Metadata predictions can be wrong and do not
 - [Other integrations](https://github.com/spencernorton/Armiger-Connectors) — DH-Waypoint, Torznab and Arr.
 - [Help and bug reports](https://github.com/spencernorton/armiger/issues) · [Contributing](.github/CONTRIBUTING.md) · [Security reporting](.github/SECURITY.md)
 
-Library **3.12.1** uses model bundle **3.11.0**. The Docker image includes verified model files. Python installs download them from a fixed [Hugging Face](https://huggingface.co/NorviTech/armiger-ultra) revision and verify them before use. Apache-2.0: [license](LICENSE), [notices](NOTICE), [use policy](.github/LEGAL.md).
+Library **3.12.2** uses model bundle **3.11.0**. The Docker image includes verified model files. Python installs download them from a fixed [Hugging Face](https://huggingface.co/NorviTech/armiger-ultra) revision and verify them before use. Apache-2.0: [license](LICENSE), [notices](NOTICE), [use policy](.github/LEGAL.md).
 
 ---
 

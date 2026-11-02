@@ -2,6 +2,8 @@
 
 Run Armiger Ultra as a local classification service. The [Bitmagnet](../examples/bitmagnet/README.md) and [Rats Search](../examples/rats-search/README.md) setups already include it; use this guide when you want Armiger on its own.
 
+Model files are smaller than the full running service. Read [resources and measurement scope](resources.md) before sizing a host.
+
 ## 1. Save the setup
 
 With [Docker](https://docs.docker.com/get-started/get-docker/) running and Docker Compose available, create a folder called `armiger`. Save this as **`compose.yaml`** inside it:
@@ -9,8 +11,10 @@ With [Docker](https://docs.docker.com/get-started/get-docker/) running and Docke
 ```yaml
 services:
   armiger-ultra:
-    image: ghcr.io/spencernorton/armiger:3.12.1
+    image: ghcr.io/spencernorton/armiger:3.12.2
     restart: unless-stopped
+    environment:
+      ARMIGER_UPDATE_CHANNEL: "off"  # Keep the bundled model pinned.
     ports:
       - '127.0.0.1:8096:8096'
 ```
