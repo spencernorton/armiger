@@ -1,3 +1,14 @@
+## 2026-11-02 — Publish the approved public-claim corrections
+
+- Publication of the prepared documentation correction package is authorized. Resource figures distinguish model-file size from observed service memory and explicitly separate runtime paths; metadata screening does not imply payload inspection or formal privacy/safety guarantees.
+- The Armiger documentation release prepares software3.12.2 with model3.11.0. Existing model/benchmark/image bytes and historical journal entries are preserved. Twelve release-contract/promotion checks and the real registry preflight pass; required exact-head/native CI and release/public-page verification remain the publication gates.
+
+## 2026-11-02 — Prepare public claim corrections for review
+
+- Distinguish ONNX file sizes from measured whole-service RAM and the standalone, GitHub Ultra and full SDK paths. Replace verification/safety wording with metadata prediction scope and withdraw the unscoped GPU timing headline from proposed model cards.
+- Withdraw current chart promotion pending reconciliation: the overview image says 3.11.0/N=2484 while its data receipt says 3.0.0/N=2835; the renderer uses newer aggregate values separately. Preserve all benchmark data, images, historical entries and immutable model assets.
+- Correct stale file sizes, version text and explicit-update-channel setup instructions. Qualify the policy/NOTICE technical claims about metadata safety, unkeyed hashes, anonymity and revocation propagation without changing the licence or acceptable-use obligations. Twelve release-contract/promotion unit checks and the real registry release preflight pass (11 local image references;3.12.2 unpublished). Prepare software patch3.12.2 because README is an image input; model bundle3.11.0 and inference code are unchanged. No public push/PR/release or model-card write has happened; publication remains subject to the recorded human restriction and normal CI gates.
+
 ## 2026-11-02 — Require explicit ARMIGER_UPDATE_CHANNEL for model updates
 
 - **What changed:** Add `ARMIGER_UPDATE_CHANNEL` (`dht`, `hf`, `off`) to `ArmigerUltraPipeline` with DHT-first/Hugging-Face-fallback semantics, `update_channel` in health output, and legacy `ARMIGER_DHT_AUTO_UPDATE` mapping. Docker Compose examples now require the variable; the image no longer defaults updating on. Docs (`distributed-updates.md`, `bitmagnet-configuration.md`, Bitmagnet README, reference) describe the required channel. New `tests/test_update_channel.py` covers resolution and gating.

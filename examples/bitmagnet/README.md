@@ -6,7 +6,7 @@ The packaged stack runs three services:
 
 - **`postgres` (`postgres:16-alpine`)** — Bitmagnet's PostgreSQL database.
 - **`bitmagnet` (`ghcr.io/bitmagnet-io/bitmagnet:v0.10.0`)** — Bitmagnet Web UI, GraphQL API, and raw Torznab feed on `:3333`, plus DHT crawler on `:3334/tcp` and `:3334/udp`.
-- **`armiger-ultra` (`ghcr.io/spencernorton/armiger:3.12.1`)** — Background Bitmagnet GraphQL poller, HTTP status/classification API on `:8096`, and filtered Torznab proxy on `:8097` (with the verified Ultra model bundled inside the image).
+- **`armiger-ultra` (`ghcr.io/spencernorton/armiger:3.12.2`)** — Background Bitmagnet GraphQL poller, HTTP status/classification API on `:8096`, and filtered Torznab proxy on `:8097` (with the verified Ultra model bundled inside the image).
 
 ---
 
@@ -16,7 +16,7 @@ Choose **Option A** (copy-paste `docker-compose.yml` with literal defaults), **O
 
 ### Option A: Copy-paste `docker-compose.yml` (Standalone folder or Portainer Stacks)
 
-All environment variables in [`docker-compose.yml`](docker-compose.yml) are **pre-filled with working literal defaults** (no `.env` file or `${VAR}` placeholders required).
+The Compose file provides packaged defaults and requires one explicit choice: set `ARMIGER_UPDATE_CHANNEL` to `dht`, `hf` or `off` in your shell, `.env` or Portainer environment before starting.
 
 1. Create a directory for your stack (or open **Portainer → Stacks → Add stack**), save the following as **`docker-compose.yml`**, edit any setting directly in the file if desired, and run `docker compose up -d`:
 
@@ -57,7 +57,7 @@ services:
     command: [worker, run, --keys=http_server, --keys=queue_server, --keys=dht_crawler]
 
   armiger-ultra:
-    image: ghcr.io/spencernorton/armiger:3.12.1
+    image: ghcr.io/spencernorton/armiger:3.12.2
     restart: unless-stopped
     command: [python, /opt/connectors/bitmagnet/bitmagnet_connector.py]
     depends_on:
@@ -93,6 +93,8 @@ volumes:
 ```
 
 ```bash
+# Choose dht, hf or off explicitly; off keeps the bundled model pinned.
+export ARMIGER_UPDATE_CHANNEL=off
 docker compose up -d
 ```
 
@@ -104,7 +106,7 @@ If you use Docker Compose 2.34 or newer, you can also include the published stac
 
 ```yaml
 include:
-  - oci://ghcr.io/spencernorton/armiger-bitmagnet-stack:3.12.1
+  - oci://ghcr.io/spencernorton/armiger-bitmagnet-stack:3.12.2
 ```
 
 ```bash
@@ -120,7 +122,7 @@ If you already run Bitmagnet and want to keep your existing PostgreSQL database 
 ```yaml
 services:
   armiger-ultra:
-    image: ghcr.io/spencernorton/armiger:3.12.1
+    image: ghcr.io/spencernorton/armiger:3.12.2
     restart: unless-stopped
     command: [python, /opt/connectors/bitmagnet/bitmagnet_connector.py]
     ports:
@@ -254,7 +256,7 @@ Both deletion flags default to **`'false'` in the packaged Compose setup** so no
 
 | Variable | Required / Optional | Default | Valid options / range | What it does |
 | --- | --- | --- | --- | --- |
-| `ARMIGER_VARIANT` | Optional | `ultra` | `'ultra'`, `'int8'` *(aliases for `'int8'`: `'cpu'`, `'armiger'`)* | Selects `'ultra'` (31.9 MB FP32 ONNX model + Ultra plugins, pre-bundled in the image) or `'int8'` (8.2 MB INT8 ONNX model + Ultra plugins; downloads the pinned `all` bundle when `ARMIGER_AUTO_DOWNLOAD='true'`). |
+| `ARMIGER_VARIANT` | Optional | `ultra` | `'ultra'`, `'int8'` *(aliases for `'int8'`: `'cpu'`, `'armiger'`)* | Selects `'ultra'` (33.3 MB FP32 ONNX model + Ultra plugins, pre-bundled in the image) or `'int8'` (17.6 MB INT8 ONNX model + Ultra plugins; downloads the pinned `all` bundle when `ARMIGER_AUTO_DOWNLOAD='true'`). |
 | `ARMIGER_USE_ZERO_CUE_CATALOG` | Optional | `'true'` | `'true'`, `'false'` | When `'true'`, preloads the hashed offline title catalog (`validated_zero_cue_catalog.json`) at startup. When `'false'`, defers loading until first lookup. |
 | `ARMIGER_MODEL_DIR` | Optional | `/models` *(image)* / `.` *(CLI script)* | Valid container/host directory path | Directory containing the verified model bundle. The container image pre-bundles the Ultra files in `/models`. |
 | `ARMIGER_AUTO_DOWNLOAD` | Optional | `'true'` | `'true'`, `'false'` | When `'true'`, downloads and SHA-256-verifies any missing model files against the pinned manifest. When `'false'`, runs strictly offline and requires all files to exist locally. |
@@ -266,7 +268,7 @@ Both deletion flags default to **`'false'` in the packaged Compose setup** so no
 
 Armiger Ultra automatically checks for newer signed model and catalog releases in the background, verifies their cryptographic signatures and 500-item canary regression suite, and hot-swaps them without restarting the container.
 
-**Zero extra configuration is required:** the official Ed25519 release verification key, release channel salt, Mainline DHT bootstrap routers, and Hugging Face HTTPS fallback mirror are **already built in**, and seeder/collector endpoints are discovered automatically from the signed release pointer. You only ever need the 5 settings below:
+**Set `ARMIGER_UPDATE_CHANNEL` to `dht`, `hf` or `off` explicitly.** the official Ed25519 release verification key, release channel salt, Mainline DHT bootstrap routers, and Hugging Face HTTPS fallback mirror are **already built in**, and seeder/collector endpoints are discovered automatically from the signed release pointer. You only ever need the 5 settings below:
 
 | Variable | Required / Optional | Default | Valid options / range | What it does |
 | --- | --- | --- | --- | --- |
@@ -279,7 +281,7 @@ Armiger Ultra automatically checks for newer signed model and catalog releases i
 <details>
 <summary><strong>Advanced: Pre-populated release channel &amp; mirror overrides (only for custom forks or private mirrors — no changes needed)</strong></summary>
 
-These variables are **already pre-populated inside Armiger** so automatic updates work out of the box. Override them only if you run a custom-signed model channel or private mirror:
+These variables are **already pre-populated inside Armiger** so no custom release-key or mirror configuration is needed after choosing an update channel. Override them only if you run a custom-signed model channel or private mirror:
 
 | Variable | Required / Optional | Built-in Default | Valid options / range | What it does |
 | --- | --- | --- | --- | --- |
@@ -298,7 +300,7 @@ See [distributed updates](../../docs/distributed-updates.md) for protocol and cr
 
 From your stack folder, run `docker compose down` to stop or `docker compose up -d` to start again. Your PostgreSQL index stays saved in `postgres_data` (do not pass `-v` unless you want to erase the database).
 
-If startup reports `Permission denied` opening `/opt/connectors/bitmagnet/bitmagnet_connector.py`, set the `armiger-ultra` image to `ghcr.io/spencernorton/armiger:3.12.1` or later, then pull and recreate that service:
+If startup reports `Permission denied` opening `/opt/connectors/bitmagnet/bitmagnet_connector.py`, set the `armiger-ultra` image to `ghcr.io/spencernorton/armiger:3.12.2` or later, then pull and recreate that service:
 
 ```bash
 docker compose pull armiger-ultra

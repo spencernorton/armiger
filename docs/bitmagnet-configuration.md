@@ -1,17 +1,17 @@
 # Armiger Ultra settings for Bitmagnet
 
-These settings apply to the [Bitmagnet + Armiger Ultra setup](../examples/bitmagnet/README.md), using `ghcr.io/spencernorton/armiger:3.12.1`. The image bundles the verified Ultra model and the [pinned Bitmagnet connector](https://github.com/spencernorton/Armiger-Connectors/blob/283f4461c18f2b873460c4cde8f43d03ac4e3c03/bitmagnet/bitmagnet_connector.py). Defaults below are the effective defaults of that packaged setup.
+These settings apply to the [Bitmagnet + Armiger Ultra setup](../examples/bitmagnet/README.md), using `ghcr.io/spencernorton/armiger:3.12.2`. The image bundles the verified Ultra model and the [pinned Bitmagnet connector](https://github.com/spencernorton/Armiger-Connectors/blob/283f4461c18f2b873460c4cde8f43d03ac4e3c03/bitmagnet/bitmagnet_connector.py). Defaults below are the effective defaults of that packaged setup.
 
 ## Required vs. optional variables
 
-- **With the packaged [`examples/bitmagnet/docker-compose.yml`](../examples/bitmagnet/docker-compose.yml) or two-line OCI stack:** **all settings are pre-filled with working defaults** — no additional environment variables are required before running `docker compose up -d`.
+- **With the packaged [`examples/bitmagnet/docker-compose.yml`](../examples/bitmagnet/docker-compose.yml) or two-line OCI stack:** **choose `ARMIGER_UPDATE_CHANNEL=dht`, `hf` or `off` before starting.** The other listed settings have packaged defaults. For example, `export ARMIGER_UPDATE_CHANNEL=off` keeps the model pinned.
 - **With an external/existing Bitmagnet deployment:** only **`BITMAGNET_GRAPHQL_URL`** (for polling/tagging) and **`UPSTREAM_TORZNAB_URL`** (for the filtered Torznab proxy) are **required** if Bitmagnet is not at `http://bitmagnet:3333`. Every other variable is optional.
 
 ## Change a setting
 
 ### With the full `docker-compose.yml` or Portainer Stacks
 
-[`examples/bitmagnet/docker-compose.yml`](../examples/bitmagnet/docker-compose.yml) has all default values written directly in the file (no `${VAR}` placeholders or `.env` file needed). Copy-paste the file into your stack directory or Portainer Stack editor, edit any value under `environment:` or `ports:` directly in place, and run:
+[`examples/bitmagnet/docker-compose.yml`](../examples/bitmagnet/docker-compose.yml) contains the packaged defaults and a required `ARMIGER_UPDATE_CHANNEL` placeholder. Set that variable in your shell, `.env` or Portainer environment, or replace the placeholder with your explicit choice. Copy-paste the file into your stack directory or Portainer Stack editor, edit any value under `environment:` or `ports:` directly in place, and run:
 
 ```bash
 docker compose up -d
@@ -72,11 +72,13 @@ Stock Bitmagnet buffers newly crawled DHT torrents in a batching channel (`persi
 
 The poller labels recent, untagged entries. Changing model or filtering settings does not automatically reclassify entries that already have an `armiger-` or `armiger:` tag, except for legacy hash-truncated viability tags (`armiger-viability-dea-c24281f7`, `armiger-viability-deg-7c170f8b`, and `armiger-viability-sus-cdc9d2c6`), which are automatically migrated to `armiger-viability-dead`, `armiger-viability-degraded`, and `armiger-viability-stalled` and removed on startup (or on demand via `POST /v1/bitmagnet/repair-tags`).
 
+Filtering uses metadata predictions and filename rules; it does not scan payloads or certify audio language, lawful content or download safety. See [prediction boundaries and resources](resources.md).
+
 ## Models and catalog
 
 | Variable | Required / Optional | Packaged default | Valid options / range | Effect |
 | --- | --- | --- | --- | --- |
-| `ARMIGER_VARIANT` | Optional | `ultra` | `'ultra'`, `'int8'` *(aliases for `'int8'`: `'cpu'`, `'armiger'`)* | `'ultra'` uses the FP32 Ultra model (`31.9 MB`). `'int8'` selects the INT8 model (`8.2 MB`) while retaining the Ultra plugins. INT8 requests the additional pinned `all` bundle if not already present. |
+| `ARMIGER_VARIANT` | Optional | `ultra` | `'ultra'`, `'int8'` *(aliases for `'int8'`: `'cpu'`, `'armiger'`)* | `'ultra'` uses the FP32 Ultra model (`33.3 MB`). `'int8'` selects the INT8 model (`17.6 MB`) while retaining the Ultra plugins. INT8 requests the additional pinned `all` bundle if not already present. |
 | `ARMIGER_USE_ZERO_CUE_CATALOG` | Optional | `'true'` | `'true'`, `'false'` | Preloads the hashed offline title catalog (`validated_zero_cue_catalog.json`) during startup. `'false'` defers loading until first lookup; it does not disable catalog lookups. |
 | `ARMIGER_MODEL_DIR` | Optional | `/models` | Valid container/host directory path | Folder containing the compatible, verified model bundle. The image already includes its Ultra files here. A different folder must contain the needed files or allow verified downloads. |
 | `ARMIGER_AUTO_DOWNLOAD` | Optional | `'true'` | `'true'`, `'false'` | Allows missing model files to be downloaded and verified against the package's pinned manifest. `'false'` requires the selected files to be present and valid already, and disables background network updates. |
@@ -88,7 +90,7 @@ All variants in this connector use the Ultra pipeline. For the separate lightwei
 
 Armiger Ultra includes a background BEP 44/46 update poller that checks for newer signed model/catalog bundles (`seq > active_seq`), verifies piece hashes and Merkle roots, runs the 500-item canary regression gate, and atomically hot-swaps the active session into a private writable overlay directory (`ARMIGER_RUNTIME_CACHE_DIR`).
 
-**Automatic updates work out of the box with zero extra configuration:** the official Ed25519 release signing key, release channel salt, Mainline DHT bootstrap routers, and Hugging Face HTTPS fallback mirror are **already built into the image**, and seeder/collector nodes are discovered automatically from the signed DHT pointer. Outbound telemetry/contribution sharing is **off by default** (`ARMIGER_DHT_SHARE_OPT_IN='false'`), and ordinary classification never sends torrent names or unverified predictions. See [distributed updates](distributed-updates.md) for full details.
+**Choose an update channel explicitly.** After selecting `dht` or `hf`, the official Ed25519 release signing key, release channel salt, Mainline DHT bootstrap routers, and Hugging Face HTTPS fallback mirror are **already built into the image**, and seeder/collector nodes are discovered automatically from the signed DHT pointer. Outbound telemetry/contribution sharing is **off by default** (`ARMIGER_DHT_SHARE_OPT_IN='false'`), and ordinary classification never sends torrent names or unverified predictions. See [distributed updates](distributed-updates.md) for full details.
 
 | Variable | Required / Optional | Packaged default | Valid options / range | Effect |
 | --- | --- | --- | --- | --- |
