@@ -220,6 +220,7 @@ jobs:
     if: always()
     needs: [contract, guides, verify, runtime]
     runs-on: ubuntu-24.04
+    timeout-minutes: 5
     steps:
       - name: Require release contract, both Python checks and both native runtime checks
         env:
