@@ -2,9 +2,10 @@
 
 ## Current-release comparison status
 
-Software 3.12.2 uses model bundle 3.11.0. This documentation withdraws comparison graphics from current promotion
-pending reconciliation of their data and provenance. No replacement score, new sample count or new model evaluation
-is introduced by this documentation correction.
+Software 3.12.3 uses model bundle 3.11.0. The latest published comparison graphics
+are displayed as archived figures while their data and provenance remain under
+review. They do not establish verified current-release performance. No replacement
+score, new sample count or new model evaluation accompanies their restoration.
 
 The [archived overview](assets/armiger_overview.png) displays model 3.11.0 and
 2,484 items. Its [data receipt](../benchmarks/README_OVERVIEW.json) instead
@@ -20,13 +21,30 @@ identifies older ONNX hashes, not the pinned 3.11.0 hashes. Those measurements
 must not be advertised as current-version end-to-end timing. The unqualified GPU timing headline is not supported by that receipt; see
 [resources](resources.md).
 
-Restoring a comparison requires an explicit model/pipeline identity, named
+Promoting a figure as a verified current-release comparison requires an explicit model/pipeline identity, named
 cohorts and label/exposure scope, matching item-level evidence and denominators,
 and a renderer/receipt that describes the same displayed values. A reproducible
 plot alone does not establish independent or unseen evaluation data. The separate
 fresh balanced benchmark remains unfinished; this page does not claim its
 completion or enlarge its sample count. Archived scores are not current release
 qualification, universal safety rates or general superiority claims.
+
+## Latest published comparison figures
+
+The README and model cards display the following original PNGs unchanged.
+They retain the unresolved renderer/receipt differences described above.
+
+![Archived Armiger Ultra versus cloud teacher models; provenance under review](assets/armiger_vs_llms_overall_and_6dims.png)
+
+Cloud teacher results use panel-specific common-support and swarm cohorts.
+Their displayed confidence intervals and model labels still require reconciliation
+with the vector-based statistical manifest.
+
+![Archived Armiger Ultra versus open-source torrent classifiers and parsers; provenance under review](assets/armiger_vs_torrent_classifiers_6dims.png)
+
+These are hybrid metadata-processing comparisons, not a standalone INT8 accuracy
+measurement or a payload inspection. Keep the individual category, catalogue,
+language, screening and swarm denominators separate.
 
 ## Historical model 3.0.0 results
 

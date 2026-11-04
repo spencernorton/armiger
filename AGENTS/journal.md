@@ -1,3 +1,9 @@
+## 2026-11-03 — Restore the latest published comparison figures
+
+- Restored the cloud-teacher and open-source classifier/parser comparison PNGs to the README and evaluation guide, with adjacent provenance-under-review labels. Original PNGs, scores, receipts, model assets and the unfinished fresh balanced benchmark are unchanged; restored archival visibility does not establish current-release qualification.
+- Prepared the same two figures for both Hugging Face model cards and the Armiger organization-profile section. Preserve the distinction between Ultra hybrid comparisons and the standalone INT8 model.
+- Bump software to 3.12.3 and align runnable image references because README.md is an image input under the existing release contract. Model bundle remains 3.11.0. Required native checks and main publication/readback are the release gates.
+
 ## 2026-11-03 — Bound CI status checks and superseded PR work
 
 Bound the final CI status job to five minutes while retaining every required upstream result. Validation: actionlint, workflow structure checks and the required native pull-request checks.
