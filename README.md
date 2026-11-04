@@ -11,7 +11,7 @@
 
 Armiger helps Bitmagnet and Rats Search label torrents by type and language, using names and file lists. **Armiger Ultra** also adds title matching, metadata-based audio-language estimates and download-availability scores. It runs on a CPU; no GPU or paid API is required.
 
-Published comparison graphics are under provenance review and are not presented here as verified current-release benchmarks. See [evaluation status and archived results](docs/evaluation.md).
+The latest published [comparison charts](#comparison-charts) are available below with their [evaluation scope and provenance notes](docs/evaluation.md).
 
 ```mermaid
 flowchart LR
@@ -43,6 +43,25 @@ It does not inspect media payloads. Metadata predictions can be wrong and do not
 
 The model files are **17.6 MB INT8** or **33.3 MB FP32** on disk. These sizes do not describe working RAM: the selected runtime, reference data, batch size and loaded sessions also matter. See [resources and measurement scope](docs/resources.md).
 
+## Comparison charts
+
+**Latest published figures — provenance under review.** These archived charts
+retain their original model labels and scores. Their displayed values and
+vector-based source records still need reconciliation; they do not establish
+verified current-release performance. [Evaluation notes](docs/evaluation.md)
+explain the model, cohort and receipt differences.
+
+![Latest published Armiger Ultra comparison with cloud teacher models across six dimensions; provenance under review](docs/assets/armiger_vs_llms_overall_and_6dims.png)
+
+Cloud teacher comparisons use separate common-support and swarm cohorts;
+panel-specific sample counts and metrics must remain separate.
+
+![Latest published Armiger Ultra comparison with open-source torrent classifiers and parsers; provenance under review](docs/assets/armiger_vs_torrent_classifiers_6dims.png)
+
+Classifier and parser comparisons include catalogue, language and metadata
+screening tasks. These hybrid results do not measure standalone INT8 accuracy
+or payload safety. [Source records and archived figures](docs/evaluation.md).
+
 ## More information
 
 - [Armiger on NorviTech](https://norvitech.com/ai-models/#armiger)
@@ -52,7 +71,7 @@ The model files are **17.6 MB INT8** or **33.3 MB FP32** on disk. These sizes do
 - [Other integrations](https://github.com/spencernorton/Armiger-Connectors) — DH-Waypoint, Torznab and Arr.
 - [Help and bug reports](https://github.com/spencernorton/armiger/issues) · [Contributing](.github/CONTRIBUTING.md) · [Security reporting](.github/SECURITY.md)
 
-Library **3.12.2** uses model bundle **3.11.0**. The Docker image includes verified model files. Python installs download them from a fixed [Hugging Face](https://huggingface.co/NorviTech/armiger-ultra) revision and verify them before use. Apache-2.0: [license](LICENSE), [notices](NOTICE), [use policy](.github/LEGAL.md).
+Library **3.12.3** uses model bundle **3.11.0**. The Docker image includes verified model files. Python installs download them from a fixed [Hugging Face](https://huggingface.co/NorviTech/armiger-ultra) revision and verify them before use. Apache-2.0: [license](LICENSE), [notices](NOTICE), [use policy](.github/LEGAL.md).
 
 ---
 
