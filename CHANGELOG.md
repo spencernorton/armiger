@@ -1,5 +1,9 @@
 # Changelog
 
+## 3.13.0
+
+- Update the pinned model bundle to `3.12.0` (`v3.0-gold-r13.13` on `NorviTech/armiger-ultra` at `41cb0db4c3dfce2e3866fb67d414f0ca7026af2a`, DHT `seq=15` / `seq=3015`), refreshing `config.json` (`sha256=e3133bf37b9bafb34bbf8ff240c8562c2a1063aabadf6df6460c80d8046aae06`) and regenerating the benchmark and README overview figures.
+
 Historical entries below preserve earlier announcements. Their numerical, timing, privacy and safety wording is qualified by the current [evaluation status](docs/evaluation.md) and [resource/prediction limits](docs/resources.md); it is not current-release validation.
 
 ## 3.12.2

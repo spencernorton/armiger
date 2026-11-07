@@ -159,7 +159,7 @@ def test_manifest_sha256_and_png_chunks(tmp_path: pathlib.Path):
         target = (BENCH_DIR / rel_path) if (BENCH_DIR / rel_path).is_file() else (REPO_ROOT / rel_path)
         assert target.is_file(), f"Provenance file missing: {rel_path}"
         actual_sha = hashlib.sha256(target.read_bytes()).hexdigest()
-        assert actual_sha == expected_sha, f"SHA-256 mismatch for {rel_path}: {actual_sha} != {expected_sha}"
+        assert actual_sha == (expected_sha["sha256"] if isinstance(expected_sha, dict) else expected_sha), f"SHA-256 mismatch for {rel_path}: {actual_sha} != {expected_sha}"
 
     # Verify all 4 PNGs have only IHDR, IDAT, IEND chunks and RGB mode
     for chart_name, chart_meta in manifest["charts"].items():

@@ -2,12 +2,12 @@
 
 ## Current-release comparison status
 
-Software 3.12.3 uses model bundle 3.11.0. The latest published comparison graphics
+Software 3.13.0 uses model bundle 3.12.0. The latest published comparison graphics
 are displayed as archived figures while their data and provenance remain under
 review. They do not establish verified current-release performance. No replacement
 score, new sample count or new model evaluation accompanies their restoration.
 
-The [archived overview](assets/armiger_overview.png) displays model 3.11.0 and
+The [archived overview](assets/armiger_overview.png) displays model 3.12.0 and
 2,484 items. Its [data receipt](../benchmarks/README_OVERVIEW.json) instead
 records model 3.0.0, 2,835 items and different scores. The overview renderer builds
 that older receipt data but reads newer aggregate values directly inside its
@@ -17,7 +17,7 @@ File hashes and successful image regeneration do not establish that the
 displayed statistics match the receipt or were measured for the current model.
 
 The public M4 Pro [timing receipt](../benchmarks/receipts/hardware_and_api_cost_receipt.json)
-identifies older ONNX hashes, not the pinned 3.11.0 hashes. Those measurements
+identifies older ONNX hashes, not the pinned 3.12.0 hashes. Those measurements
 must not be advertised as current-version end-to-end timing. The unqualified GPU timing headline is not supported by that receipt; see
 [resources](resources.md).
 
@@ -50,7 +50,7 @@ language, screening and swarm denominators separate.
 
 The account below describes the named historical cohorts and components. It is
 retained for traceability, rather than as validation of the newer chart images
-or model 3.11.0. Standalone neural and hybrid results must remain separate.
+or model 3.12.0. Standalone neural and hybrid results must remain separate.
 
 - **Cloud teacher comparison (identical cohorts, non-circular LOTO):** **`95.66%`** 6-dimension mean on the `N=757` Public-Tracker swarm cohort (**`96.39%`** with `N=10,278` Multi-Source Corpus Swarm AUROC). On common-support leave-one-teacher-out category panels, `OpenAI GPT (Fast Tier)` reaches `97.84%` vs. Armiger Ultra `94.56%` (`N=974`) and `Google Gemini Flash` reaches `97.05%` vs. Armiger Ultra `94.70%` (`N=982`); Armiger Ultra leads the 4-dimension LOTO composite against GPT (`95.74%` vs. `95.17%`) and trails Gemini (`95.83%` vs. `97.32%`).
 - **Fresh non-teacher baselines (identical inputs, no label-curation role):** on the `beyond_confirmation` labelled subset (category `N=967`), the v3.0.0 hybrid reaches **`92.76%`** vs. **`92.45%`** for `Claude Haiku 4.5` and **`47.67%`** for the locally served 8B-class `Qwen3-8B` (see [`benchmarks/receipts/llm_beyond_fresh_receipt.json`](../benchmarks/receipts/llm_beyond_fresh_receipt.json)).

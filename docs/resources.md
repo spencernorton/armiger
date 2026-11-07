@@ -2,7 +2,7 @@
 
 ## Model files and working memory
 
-Model bundle 3.11.0 contains the following ONNX files. MB means decimal bytes;
+Model bundle 3.12.0 contains the following ONNX files. MB means decimal bytes;
 GiB means 1,073,741,824 bytes. File sizes are not RAM requirements.
 
 | File | Bytes | Rounded file size |
@@ -51,7 +51,7 @@ and timing scope to reproduce it and is not endorsed here. Neural-kernel timing,
 and HTTP round trips are different measurements.
 
 The committed M4 Pro timing receipt is a historical measurement on the model
-hashes it names. Those hashes differ from model bundle 3.11.0; relabelling that
+hashes it names. Those hashes differ from model bundle 3.12.0; relabelling that
 timing as a new release does not remeasure it. Historical API prices and local
 cost estimates are not current price quotes or measured total ownership costs.
 See [evaluation status](evaluation.md).
