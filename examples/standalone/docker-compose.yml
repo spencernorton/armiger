@@ -1,6 +1,6 @@
 services:
   armiger-ultra:
-    image: ghcr.io/spencernorton/armiger:3.12.3
+    image: ghcr.io/spencernorton/armiger:3.13.0
     restart: unless-stopped
     environment:
       # Required: choose the model update channel (dht, hf, or off).
