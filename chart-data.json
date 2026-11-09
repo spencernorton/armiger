@@ -6,7 +6,8 @@
     "3.7.0": "https://github.com/spencernorton/armiger/blob/7331bb9abe5c3297b52e9badf8fccfc62025cff9/benchmarks/updated_std_charts_data.json",
     "3.8.0": "https://github.com/spencernorton/armiger/blob/7331bb9abe5c3297b52e9badf8fccfc62025cff9/benchmarks/updated_std_charts_data.json",
     "3.10.0": "https://github.com/spencernorton/armiger/blob/331cc56c8d6b4bda385105f97bd35f546e079c9b/benchmarks/updated_std_charts_data.json",
-    "3.11.0": "https://github.com/spencernorton/armiger/blob/4d8834cbd3217aa0aa7df313fa73399a3a5f5f58/benchmarks/updated_std_charts_data.json"
+    "3.11.0": "https://github.com/spencernorton/armiger/blob/4d8834cbd3217aa0aa7df313fa73399a3a5f5f58/benchmarks/updated_std_charts_data.json",
+    "3.12.0": "https://github.com/spencernorton/armiger/blob/ad5a1e3dec56842d5b0aa6ef881151a4b87dd2a8/benchmarks/updated_std_charts_data.json"
   },
   "versions": [
     "3.3.0",
@@ -14,20 +15,23 @@
     "3.7.0",
     "3.8.0",
     "3.10.0",
-    "3.11.0"
+    "3.11.0",
+    "3.12.0"
   ],
   "velocity_intervals": [
     "3.3.0→3.4.0",
     "3.4.0→3.7.0",
     "3.7.0→3.8.0",
     "3.8.0→3.10.0",
-    "3.10.0→3.11.0"
+    "3.10.0→3.11.0",
+    "3.11.0→3.12.0"
   ],
   "minor_version_steps": [
     1,
     3,
     1,
     2,
+    1,
     1
   ],
   "velocity_unit": "accuracy percentage points per minor-version step; interval averages, not per day",
@@ -73,18 +77,26 @@
           "point_pct": 95.05,
           "ci95_lo": 94.16,
           "ci95_hi": 95.89
+        },
+        "3.12.0": {
+          "n": 2484,
+          "point_pct": 97.3,
+          "ci95_lo": 96.66,
+          "ci95_hi": 97.91
         }
       },
-      "gain_pp": 3.91,
-      "gain_pp_vs_3_8_0": 1.97,
-      "gain_pp_vs_3_10_0": 1.73,
-      "relative_error_reduction_pct": 44.13092550790064,
+      "gain_pp": 6.16,
+      "gain_pp_vs_3_8_0": 4.22,
+      "gain_pp_vs_3_10_0": 3.98,
+      "gain_pp_vs_3_11_0": 2.25,
+      "relative_error_reduction_pct": 69.52595936794579,
       "gain_pp_per_minor_version_step": [
         0.730000000000004,
         0.0533333333333322,
         1.0499999999999972,
         0.11999999999999744,
-        1.730000000000004
+        1.730000000000004,
+        2.25
       ]
     },
     {
@@ -128,18 +140,26 @@
           "point_pct": 90.18,
           "ci95_lo": 88.01,
           "ci95_hi": 92.22
+        },
+        "3.12.0": {
+          "n": 784,
+          "point_pct": 95.54,
+          "ci95_lo": 94.13,
+          "ci95_hi": 96.94
         }
       },
-      "gain_pp": 6.0,
-      "gain_pp_vs_3_8_0": 1.79,
-      "gain_pp_vs_3_10_0": 2.68,
-      "relative_error_reduction_pct": 37.9266750948167,
+      "gain_pp": 11.36,
+      "gain_pp_vs_3_8_0": 7.15,
+      "gain_pp_vs_3_10_0": 8.04,
+      "gain_pp_vs_3_11_0": 5.36,
+      "relative_error_reduction_pct": 71.80783817951962,
       "gain_pp_per_minor_version_step": [
         0.8999999999999915,
         0.12666666666666515,
         2.930000000000007,
         -0.4450000000000003,
-        2.680000000000007
+        2.680000000000007,
+        5.359999999999999
       ]
     },
     {
@@ -183,18 +203,26 @@
           "point_pct": 89.54,
           "ci95_lo": 87.37,
           "ci95_hi": 91.58
+        },
+        "3.12.0": {
+          "n": 784,
+          "point_pct": 95.54,
+          "ci95_lo": 94.13,
+          "ci95_hi": 96.94
         }
       },
-      "gain_pp": 5.99,
-      "gain_pp_vs_3_8_0": 1.78,
-      "gain_pp_vs_3_10_0": 2.68,
-      "relative_error_reduction_pct": 36.41337386018242,
+      "gain_pp": 11.99,
+      "gain_pp_vs_3_8_0": 7.78,
+      "gain_pp_vs_3_10_0": 8.68,
+      "gain_pp_vs_3_11_0": 6.0,
+      "relative_error_reduction_pct": 72.88753799392101,
       "gain_pp_per_minor_version_step": [
         0.8900000000000006,
         0.12666666666666515,
         2.940000000000012,
         -0.45000000000000284,
-        2.680000000000007
+        2.680000000000007,
+        6.0
       ]
     },
     {
@@ -238,18 +266,26 @@
           "point_pct": 94.65,
           "ci95_lo": 92.43,
           "ci95_hi": 96.66
+        },
+        "3.12.0": {
+          "n": 449,
+          "point_pct": 96.88,
+          "ci95_lo": 95.1,
+          "ci95_hi": 98.44
         }
       },
-      "gain_pp": 6.23,
-      "gain_pp_vs_3_8_0": 2.45,
-      "gain_pp_vs_3_10_0": 3.11,
-      "relative_error_reduction_pct": 53.799654576856696,
+      "gain_pp": 8.46,
+      "gain_pp_vs_3_8_0": 4.68,
+      "gain_pp_vs_3_10_0": 5.34,
+      "gain_pp_vs_3_11_0": 2.23,
+      "relative_error_reduction_pct": 73.05699481865281,
       "gain_pp_per_minor_version_step": [
         1.7800000000000011,
         0.4466666666666678,
         0.6599999999999966,
         -0.3299999999999983,
-        3.1099999999999994
+        3.1099999999999994,
+        2.2299999999999898
       ]
     },
     {
@@ -293,18 +329,26 @@
           "point_pct": 94.48,
           "ci95_lo": 92.85,
           "ci95_hi": 95.98
+        },
+        "3.12.0": {
+          "n": 797,
+          "point_pct": 95.73,
+          "ci95_lo": 94.35,
+          "ci95_hi": 97.11
         }
       },
-      "gain_pp": 7.15,
-      "gain_pp_vs_3_8_0": 1.38,
-      "gain_pp_vs_3_10_0": 1.38,
-      "relative_error_reduction_pct": 56.43251775848464,
+      "gain_pp": 8.4,
+      "gain_pp_vs_3_8_0": 2.63,
+      "gain_pp_vs_3_10_0": 2.63,
+      "gain_pp_vs_3_11_0": 1.25,
+      "relative_error_reduction_pct": 66.2983425414365,
       "gain_pp_per_minor_version_step": [
         0.0,
         0.7533333333333351,
         3.509999999999991,
         0.0,
-        1.3800000000000097
+        1.3800000000000097,
+        1.25
       ]
     }
   ]
