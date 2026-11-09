@@ -1,6 +1,6 @@
 # Armiger Ultra settings for Bitmagnet
 
-These settings apply to the [Bitmagnet + Armiger Ultra setup](../examples/bitmagnet/README.md), using `ghcr.io/spencernorton/armiger:3.13.0`. The image bundles the verified Ultra model and the [pinned Bitmagnet connector](https://github.com/spencernorton/Armiger-Connectors/blob/283f4461c18f2b873460c4cde8f43d03ac4e3c03/bitmagnet/bitmagnet_connector.py). Defaults below are the effective defaults of that packaged setup.
+These settings apply to the [Bitmagnet + Armiger Ultra setup](../examples/bitmagnet/README.md), using `ghcr.io/spencernorton/armiger:3.13.1`. The image bundles the verified Ultra model and the [pinned Bitmagnet connector](https://github.com/spencernorton/Armiger-Connectors/blob/eadc6c40b62473e2ee7ce0def542ee539b0a5f60/bitmagnet/bitmagnet_connector.py). Defaults below are the effective defaults of that packaged setup.
 
 ## Required vs. optional variables
 
@@ -67,6 +67,7 @@ These settings configure PostgreSQL credentials, Bitmagnet's DHT crawler, and ho
 | `ARMIGER_CONNECTOR_MODE` | Optional | `both` | `'both'`, `'http'`, `'poll'` | `'both'` runs the poller and HTTP services. `'http'` serves requests without background polling. `'poll'` runs only the poller. Keep `'both'` with the supplied health check; `'poll'` has no HTTP health endpoint. |
 | `BITMAGNET_POLL_SECONDS` | Optional | `'5'` (`5.0`) | Number `>= 1` *(recommended `'2'` – `'60'` seconds)* | Seconds between polling cycles. Higher values reduce how often new items are checked. |
 | `BITMAGNET_BATCH_SIZE` | Optional | `'100'` | Integer `'10'` – `'1000'` *(recommended `'50'` – `'500'` items)* | Maximum untagged Bitmagnet records classified in each cycle. When a Bitmagnet crawl flush exceeds one batch, the poller pages past items already tagged earlier in the active flush on subsequent cycles. |
+| `BITMAGNET_GRAPHQL_TIMEOUT_SECONDS` | Optional | `'10'` (`10.0`) | Number `> 0` *(recommended `'10'` – `'120'` seconds)* | Seconds to wait for each Bitmagnet GraphQL request. Raise it when Postgres is CPU-bound on a large catalog and queries take longer than 10 seconds. |
 
 Stock Bitmagnet buffers newly crawled DHT torrents in a batching channel (`persistTorrents`) that flushes at 1,000 items or every 60 seconds. With the default `5.0`-second poll interval and `100`-item batch size, the poller paginates through each 60-second flush across consecutive cycles (up to 1,200 torrents per minute) while keeping individual ONNX inference and `torrent.files` requests small. If you increase Bitmagnet's `DHT_CRAWLER_SCALING_FACTOR` above 30, or prefer less frequent polling (such as `BITMAGNET_POLL_SECONDS=15` or `30`), increase `BITMAGNET_BATCH_SIZE` proportionally so `(60 / BITMAGNET_POLL_SECONDS) * BITMAGNET_BATCH_SIZE` exceeds your crawler's per-minute intake.
 

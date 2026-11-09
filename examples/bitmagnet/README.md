@@ -6,7 +6,7 @@ The packaged stack runs three services:
 
 - **`postgres` (`postgres:16-alpine`)** — Bitmagnet's PostgreSQL database.
 - **`bitmagnet` (`ghcr.io/bitmagnet-io/bitmagnet:v0.10.0`)** — Bitmagnet Web UI, GraphQL API, and raw Torznab feed on `:3333`, plus DHT crawler on `:3334/tcp` and `:3334/udp`.
-- **`armiger-ultra` (`ghcr.io/spencernorton/armiger:3.13.0`)** — Background Bitmagnet GraphQL poller, HTTP status/classification API on `:8096`, and filtered Torznab proxy on `:8097` (with the verified Ultra model bundled inside the image).
+- **`armiger-ultra` (`ghcr.io/spencernorton/armiger:3.13.1`)** — Background Bitmagnet GraphQL poller, HTTP status/classification API on `:8096`, and filtered Torznab proxy on `:8097` (with the verified Ultra model bundled inside the image).
 
 ---
 
@@ -57,7 +57,7 @@ services:
     command: [worker, run, --keys=http_server, --keys=queue_server, --keys=dht_crawler]
 
   armiger-ultra:
-    image: ghcr.io/spencernorton/armiger:3.13.0
+    image: ghcr.io/spencernorton/armiger:3.13.1
     restart: unless-stopped
     command: [python, /opt/connectors/bitmagnet/bitmagnet_connector.py]
     depends_on:
@@ -106,7 +106,7 @@ If you use Docker Compose 2.34 or newer, you can also include the published stac
 
 ```yaml
 include:
-  - oci://ghcr.io/spencernorton/armiger-bitmagnet-stack:3.13.0
+  - oci://ghcr.io/spencernorton/armiger-bitmagnet-stack:3.13.1
 ```
 
 ```bash
@@ -122,7 +122,7 @@ If you already run Bitmagnet and want to keep your existing PostgreSQL database 
 ```yaml
 services:
   armiger-ultra:
-    image: ghcr.io/spencernorton/armiger:3.13.0
+    image: ghcr.io/spencernorton/armiger:3.13.1
     restart: unless-stopped
     command: [python, /opt/connectors/bitmagnet/bitmagnet_connector.py]
     ports:
@@ -229,6 +229,7 @@ These settings configure PostgreSQL credentials, Bitmagnet's DHT crawler, and ho
 | `ARMIGER_CONNECTOR_MODE` | Optional | `both` | `'both'`, `'http'`, `'poll'` | `'both'` runs the background Bitmagnet GraphQL poller and HTTP/Torznab servers. `'http'` runs only the HTTP/Torznab servers without polling. `'poll'` runs only the background poller *(note: container healthcheck expects `'both'` or `'http'`)*. |
 | `BITMAGNET_POLL_SECONDS` | Optional | `'5'` | Number `>= 1` *(recommended `'2'` – `'60'` seconds)* | Seconds between background GraphQL polling cycles. |
 | `BITMAGNET_BATCH_SIZE` | Optional | `'100'` | Integer `'10'` – `'1000'` *(recommended `'50'` – `'500'` items)* | Maximum untagged Bitmagnet torrents classified per polling cycle. When a 60-second Bitmagnet crawl flush exceeds one batch, consecutive cycles paginate via `offset`/`hasNextPage` past items already tagged earlier in the active flush. |
+| `BITMAGNET_GRAPHQL_TIMEOUT_SECONDS` | Optional | `'10'` | Number `> 0` *(recommended `'10'` – `'120'` seconds)* | Seconds to wait for each Bitmagnet GraphQL request. Raise it when Postgres is CPU-bound on a large catalog and queries take longer than 10 seconds. |
 
 > **How polling, batch size, and `DHT_CRAWLER_SCALING_FACTOR` interact:** Stock Bitmagnet buffers newly crawled DHT torrents in a batching channel (`persistTorrents`) that flushes to PostgreSQL at **1,000 items or every 60 seconds**, whichever comes first. With `BITMAGNET_POLL_SECONDS: '5'` and `BITMAGNET_BATCH_SIZE: '100'`, Armiger paginates across each 60-second flush in 100-item slices—processing up to **1,200 torrents/minute** while keeping individual ONNX inference and `torrent.files` queries small. If you raise `DHT_CRAWLER_SCALING_FACTOR` above `'30'` or use a longer poll interval (such as `BITMAGNET_POLL_SECONDS: '15'` or `'30'`), increase `BITMAGNET_BATCH_SIZE` so `(60 / BITMAGNET_POLL_SECONDS) * BITMAGNET_BATCH_SIZE` exceeds your crawler's per-minute intake.
 
@@ -300,7 +301,7 @@ See [distributed updates](../../docs/distributed-updates.md) for protocol and cr
 
 From your stack folder, run `docker compose down` to stop or `docker compose up -d` to start again. Your PostgreSQL index stays saved in `postgres_data` (do not pass `-v` unless you want to erase the database).
 
-If startup reports `Permission denied` opening `/opt/connectors/bitmagnet/bitmagnet_connector.py`, set the `armiger-ultra` image to `ghcr.io/spencernorton/armiger:3.13.0` or later, then pull and recreate that service:
+If startup reports `Permission denied` opening `/opt/connectors/bitmagnet/bitmagnet_connector.py`, set the `armiger-ultra` image to `ghcr.io/spencernorton/armiger:3.13.1` or later, then pull and recreate that service:
 
 ```bash
 docker compose pull armiger-ultra
