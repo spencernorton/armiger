@@ -2,6 +2,7 @@
 import io
 import tempfile
 from pathlib import Path
+import re
 import unittest
 from unittest.mock import patch
 from urllib.error import HTTPError
@@ -73,14 +74,12 @@ class ReleaseContractTests(unittest.TestCase):
                 dst = root / rel
                 dst.parent.mkdir(parents=True, exist_ok=True)
                 dst.write_text((ROOT / rel).read_text())
-            version = "3.13.0"
+            version = "3.13.1"
             self.assertGreaterEqual(local_guides(root, version), 8)
-            (root / "docs/bitmagnet-configuration.md").write_text(
-                (root / "docs/bitmagnet-configuration.md").read_text().replace(
-                    "blob/283f4461c18f2b873460c4cde8f43d03ac4e3c03/",
-                    "blob/0000000000000000000000000000000000000000/",
-                )
-            )
+            doc = root / "docs/bitmagnet-configuration.md"
+            drifted, count = re.subn(r"blob/[0-9a-f]{40}/", "blob/" + "0" * 40 + "/", doc.read_text())
+            self.assertEqual(count, 1)
+            doc.write_text(drifted)
             with self.assertRaisesRegex(AssertionError, "connector revision disagrees"):
                 local_guides(root, version)
 

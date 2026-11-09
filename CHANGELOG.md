@@ -1,5 +1,10 @@
 # Changelog
 
+## 3.13.1
+
+- Pin `spencernorton/Armiger-Connectors` `v1.2.9` (`eadc6c40b62473e2ee7ce0def542ee539b0a5f60`) in `examples/Dockerfile`. The Bitmagnet poller's `contentType` repair now queries one `armiger-*` tag per request instead of one OR across all ten, which never returned on very large catalogs ([Armiger-Connectors#20](https://github.com/spencernorton/Armiger-Connectors/issues/20)). A failed repair no longer skips classification in the same cycle.
+- Add `BITMAGNET_GRAPHQL_TIMEOUT_SECONDS` (default `10`) for catalogs where Postgres needs longer than 10 seconds per GraphQL query. Model bundle 3.12.0 is unchanged.
+
 ## 3.13.0
 
 - Update the pinned model bundle to `3.12.0` (`v3.0-gold-r13.13` on `NorviTech/armiger-ultra` at `41cb0db4c3dfce2e3866fb67d414f0ca7026af2a`, DHT `seq=15` / `seq=3015`), refreshing `config.json` (`sha256=e3133bf37b9bafb34bbf8ff240c8562c2a1063aabadf6df6460c80d8046aae06`) and regenerating the benchmark and README overview figures.
