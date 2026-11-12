@@ -6,8 +6,8 @@ RUN python -m pip install --no-cache-dir torch --index-url https://download.pyto
     && python -m pip install --no-cache-dir ".[ultra]" \
     && useradd --create-home --uid 10001 armiger
 # Immutable connector source. Model downloads contain data only.
-ADD --chmod=0444 --checksum=sha256:5aa24666e5947b02e73ab8793a51994161a064ce78f8556dc8c54f04274dbdc7 https://raw.githubusercontent.com/spencernorton/Armiger-Connectors/eadc6c40b62473e2ee7ce0def542ee539b0a5f60/bitmagnet/bitmagnet_connector.py /opt/connectors/bitmagnet/bitmagnet_connector.py
-ADD --chmod=0444 --checksum=sha256:1193569b699fa6b211189bd0797e4831c19c269347dc2e944f0c21455a0c80d9 https://raw.githubusercontent.com/spencernorton/Armiger-Connectors/eadc6c40b62473e2ee7ce0def542ee539b0a5f60/rats-search/rats_search_connector.py /opt/connectors/rats-search/rats_search_connector.py
+ADD --chmod=0444 --checksum=sha256:5798537d28c1644bcaa5d3f77dbc4ebdd7e9191d2dc4ad6c585bb7bb7e2d04fb https://raw.githubusercontent.com/spencernorton/Armiger-Connectors/99dcc59b8e733b4063bf09f61bcb80b73e802bd1/bitmagnet/bitmagnet_connector.py /opt/connectors/bitmagnet/bitmagnet_connector.py
+ADD --chmod=0444 --checksum=sha256:1193569b699fa6b211189bd0797e4831c19c269347dc2e944f0c21455a0c80d9 https://raw.githubusercontent.com/spencernorton/Armiger-Connectors/99dcc59b8e733b4063bf09f61bcb80b73e802bd1/rats-search/rats_search_connector.py /opt/connectors/rats-search/rats_search_connector.py
 # Bundle model data at build time; checksum verification never executes downloaded code.
 ADD --chmod=0444 --checksum=sha256:e3133bf37b9bafb34bbf8ff240c8562c2a1063aabadf6df6460c80d8046aae06 https://huggingface.co/NorviTech/armiger-ultra/resolve/41cb0db4c3dfce2e3866fb67d414f0ca7026af2a/config.json /models/config.json
 ADD --chmod=0444 --checksum=sha256:c10afea430188e0207752e93bf0b340fbb585858684037c5134a477cbc0dd7bb https://huggingface.co/NorviTech/armiger-ultra/resolve/41cb0db4c3dfce2e3866fb67d414f0ca7026af2a/vocab.json /models/vocab.json

@@ -1,5 +1,9 @@
 # Changelog
 
+## 3.13.2
+
+- Pin `spencernorton/Armiger-Connectors` `v1.2.10` (`99dcc59b8e733b4063bf09f61bcb80b73e802bd1`) in `examples/Dockerfile`. The Bitmagnet `/torznab` proxy now runs unclassified release rescue on ID-based searches (`imdbid`, `tmdbid`, `tvdbid`) by resolving canonical titles through Bitmagnet's GraphQL `content.search` with a bounded 24-hour cache, keeping linked items first and enforcing requested `season`/`ep` filters ([Armiger-Connectors#26](https://github.com/spencernorton/Armiger-Connectors/pull/26), [Armiger-Connectors#20](https://github.com/spencernorton/Armiger-Connectors/issues/20)). Model bundle 3.12.0 is unchanged.
+
 ## 3.13.1
 
 - Pin `spencernorton/Armiger-Connectors` `v1.2.9` (`eadc6c40b62473e2ee7ce0def542ee539b0a5f60`) in `examples/Dockerfile`. The Bitmagnet poller's `contentType` repair now queries one `armiger-*` tag per request instead of one OR across all ten, which never returned on very large catalogs ([Armiger-Connectors#20](https://github.com/spencernorton/Armiger-Connectors/issues/20)). A failed repair no longer skips classification in the same cycle.

@@ -2,7 +2,7 @@
 
 ## Current-release comparison status
 
-Software 3.13.1 uses model bundle 3.12.0. The latest published comparison graphics
+Software 3.13.2 uses model bundle 3.12.0. The latest published comparison graphics
 are displayed as archived figures while their data and provenance remain under
 review. They do not establish verified current-release performance. No replacement
 score, new sample count or new model evaluation accompanies their restoration.
