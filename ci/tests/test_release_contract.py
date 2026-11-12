@@ -74,7 +74,7 @@ class ReleaseContractTests(unittest.TestCase):
                 dst = root / rel
                 dst.parent.mkdir(parents=True, exist_ok=True)
                 dst.write_text((ROOT / rel).read_text())
-            version = "3.13.1"
+            version = "3.13.2"
             self.assertGreaterEqual(local_guides(root, version), 8)
             doc = root / "docs/bitmagnet-configuration.md"
             drifted, count = re.subn(r"blob/[0-9a-f]{40}/", "blob/" + "0" * 40 + "/", doc.read_text())
