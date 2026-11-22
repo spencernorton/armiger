@@ -1,5 +1,10 @@
 # Changelog
 
+## 3.15.4
+
+- Promote model bundle `3.15.4` (`v5.4-pareto` on `NorviTech/armiger-ultra` at `e47d3ee7d2f05a41c993814968b8d9a9a4042f63` and `NorviTech/armiger` at `0fd371b31c43bb1284c85e52efcee8f34bf10bc0`, DHT `seq=39` / `seq=3016`), pinning updated `armiger_ultra.fp32.onnx` (`33,861,027` B), `armiger.int8.onnx` (`8,877,572` B), `calibration.json`, and `config.json`.
+- Keep pinned `spencernorton/Armiger-Connectors` `v1.2.10` (`99dcc59b8e733b4063bf09f61bcb80b73e802bd1`) in `examples/Dockerfile`.
+
 ## 3.13.2
 
 - Pin `spencernorton/Armiger-Connectors` `v1.2.10` (`99dcc59b8e733b4063bf09f61bcb80b73e802bd1`) in `examples/Dockerfile`. The Bitmagnet `/torznab` proxy now runs unclassified release rescue on ID-based searches (`imdbid`, `tmdbid`, `tvdbid`) by resolving canonical titles through Bitmagnet's GraphQL `content.search` with a bounded 24-hour cache, keeping linked items first and enforcing requested `season`/`ep` filters ([Armiger-Connectors#26](https://github.com/spencernorton/Armiger-Connectors/pull/26), [Armiger-Connectors#20](https://github.com/spencernorton/Armiger-Connectors/issues/20)). Model bundle 3.12.0 is unchanged.

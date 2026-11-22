@@ -1,7 +1,7 @@
 """Local metadata classification. Model files are downloaded separately."""
 from importlib import import_module
 
-__version__ = "3.13.2"
+__version__ = "3.15.4"
 _EXPORTS = {
     "ArmigerStandaloneONNX": "armiger_inference",
     "ArmigerONNXClassifier": "armiger_inference",
