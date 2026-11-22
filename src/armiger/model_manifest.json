@@ -1,19 +1,19 @@
 {
   "repository": "NorviTech/armiger-ultra",
-  "revision": "41cb0db4c3dfce2e3866fb67d414f0ca7026af2a",
-  "model_version": "3.12.0",
+  "revision": "e47d3ee7d2f05a41c993814968b8d9a9a4042f63",
+  "model_version": "3.15.4",
   "files": {
     "armiger.int8.onnx": {
-      "sha256": "53cb6f4f11b6147fc8cc7a7e5815aa7dce8e3926eda5dc349bf37c930d131c2a",
-      "size": 17606362
+      "sha256": "c5e88d3431b1a6ef2e61ad1baf500b28cec28f890e8e67e450ae6a82d2468fc8",
+      "size": 8877572
     },
     "armiger_ultra.fp32.onnx": {
-      "sha256": "e12880d60aea7abc50f39d39576f0d36d4069e66fc54599e0f388eaa6fe657f0",
-      "size": 33260312
+      "sha256": "812ebfe59919085aeca004c60c821127db8bd20c0b8184892529e53704e325b8",
+      "size": 33861027
     },
     "armiger_ultra.pt": {
-      "sha256": "77e9e955e58055d2b33460d774c8d828dcd246b28ff6f139c124ed4c31c9711e",
-      "size": 33534627
+      "sha256": "4b0ed5921d8a167e5e6b7ecfb8b102a96dea6b5831d1ee3b44867e46c4770077",
+      "size": 34318411
     },
     "swarm_adapter.pt": {
       "sha256": "4e4c7a2dd59fb91a234e6627e7ade35062f99268d3f05370432bb9f2a2f9b1c9",
@@ -24,16 +24,16 @@
       "size": 26039500
     },
     "config.json": {
-      "sha256": "e3133bf37b9bafb34bbf8ff240c8562c2a1063aabadf6df6460c80d8046aae06",
-      "size": 5061
+      "sha256": "45f2b113c261052df0eedb2bc88ee03ae2e24d5b01759537c720e5e50bbd11ad",
+      "size": 5611
     },
     "vocab.json": {
       "sha256": "c10afea430188e0207752e93bf0b340fbb585858684037c5134a477cbc0dd7bb",
       "size": 39996
     },
     "calibration.json": {
-      "sha256": "27d04c6e0832b7f8bce3d9564497d85f6cca7bf4c90895c07bc8417c243f64ef",
-      "size": 76612
+      "sha256": "68c905b29baacf08eeee7512f27fbc05e886361e5f81de5e03045b685e83f81b",
+      "size": 76845
     }
   }
 }
