@@ -91,8 +91,12 @@ def main():
             continue
         tags = [f"ghcr.io/{repo}:{args.version}"]
         sources = [f"ghcr.io/{repo}@{r['manifest_digest']}" for r in receipts if r["repository"] == repo]
-        command("docker", "buildx", "imagetools", "create", "--annotation",
-                f"index:org.opencontainers.image.revision={args.source}",
+        source_media = {registry.manifest(repo, r["manifest_digest"])[0].get("mediaType")
+                        for r in receipts if r["repository"] == repo}
+        ann = ["--annotation", f"index:org.opencontainers.image.revision={args.source}"] if all(
+            mt and "oci." in mt for mt in source_media
+        ) else []
+        command("docker", "buildx", "imagetools", "create", *ann,
                 *[part for tag in tags for part in ("--tag", tag)], *sources)
         actual_source, digest = registry.release_identity(repo, args.version, [arch for name, arch in EXPECTED if name == repo])
         assert actual_source == args.source, "Published source differs from acceptance"
