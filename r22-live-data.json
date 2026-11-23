@@ -1,0 +1,158 @@
+{
+  "cohort": "R22-live",
+  "description": "Sealed post-freeze prospective real-world holdout (zero training overlap, dual-provider consensus labels, paired exact McNemar evaluation).",
+  "bundle_tree_sha256": "85dc957052de504dec16e1c45b83d65e0ee790b36a1a82688d9e7ed160f85d46",
+  "fp32_vs_int8_agreement_pct": 99.8927,
+  "fp32_vs_int8_agreement_rows": 2792,
+  "total_rows": 2795,
+  "release_tag": "v3.15.4",
+  "sources": {
+    "github_release": "https://github.com/spencernorton/armiger/releases/tag/v3.15.4",
+    "hf_ultra": "https://huggingface.co/NorviTech/armiger-ultra/tree/v3.15.4",
+    "hf_int8": "https://huggingface.co/NorviTech/armiger/tree/v3.15.4"
+  },
+  "metrics": [
+    {
+      "key": "r22_prod",
+      "label": "Live production sample",
+      "n": 1500,
+      "v3_12_0": {
+        "correct": 1289,
+        "pct": 85.93,
+        "ci95_lo": 84.08,
+        "ci95_hi": 87.6
+      },
+      "v3_15_4": {
+        "correct": 1412,
+        "pct": 94.13,
+        "ci95_lo": 92.83,
+        "ci95_hi": 95.21
+      },
+      "delta_pp": 8.2,
+      "relative_error_reduction_pct": 58.28,
+      "mcnemar_two_sided_p": 3.045784186188178e-25
+    },
+    {
+      "key": "r22_stress",
+      "label": "Hard stress cohort",
+      "n": 1295,
+      "v3_12_0": {
+        "correct": 725,
+        "pct": 55.98,
+        "ci95_lo": 53.27,
+        "ci95_hi": 58.67
+      },
+      "v3_15_4": {
+        "correct": 1177,
+        "pct": 90.89,
+        "ci95_lo": 89.2,
+        "ci95_hi": 92.34
+      },
+      "delta_pp": 34.9,
+      "relative_error_reduction_pct": 79.3,
+      "mcnemar_two_sided_p": 7.289066281355211e-115
+    },
+    {
+      "key": "r22_combined",
+      "label": "Combined sealed holdout",
+      "n": 2795,
+      "v3_12_0": {
+        "correct": 2014,
+        "pct": 72.06,
+        "ci95_lo": 70.36,
+        "ci95_hi": 73.69
+      },
+      "v3_15_4": {
+        "correct": 2589,
+        "pct": 92.63,
+        "ci95_lo": 91.6,
+        "ci95_hi": 93.54
+      },
+      "delta_pp": 20.57,
+      "relative_error_reduction_pct": 73.62,
+      "mcnemar_two_sided_p": 1.1875233183684923e-136
+    },
+    {
+      "key": "struct_junk",
+      "label": "Structural junk recall",
+      "n": 398,
+      "v3_12_0": {
+        "correct": 61,
+        "pct": 15.33,
+        "ci95_lo": 12.12,
+        "ci95_hi": 19.2
+      },
+      "v3_15_4": {
+        "correct": 394,
+        "pct": 98.99,
+        "ci95_lo": 97.44,
+        "ci95_hi": 99.61
+      },
+      "delta_pp": 83.67,
+      "relative_error_reduction_pct": 98.81,
+      "mcnemar_two_sided_p": null
+    },
+    {
+      "key": "sem_junk",
+      "label": "Semantic junk recall",
+      "n": 71,
+      "v3_12_0": {
+        "correct": 2,
+        "pct": 2.82,
+        "ci95_lo": 0.78,
+        "ci95_hi": 9.7
+      },
+      "v3_15_4": {
+        "correct": 65,
+        "pct": 91.55,
+        "ci95_lo": 82.76,
+        "ci95_hi": 96.07
+      },
+      "delta_pp": 88.73,
+      "relative_error_reduction_pct": 91.3,
+      "mcnemar_two_sided_p": null
+    },
+    {
+      "key": "clean_tnr",
+      "label": "Clean content TNR",
+      "n": 2326,
+      "v3_12_0": {
+        "correct": 2317,
+        "pct": 99.61,
+        "ci95_lo": 99.27,
+        "ci95_hi": 99.8
+      },
+      "v3_15_4": {
+        "correct": 2316,
+        "pct": 99.57,
+        "ci95_lo": 99.21,
+        "ci95_hi": 99.77
+      },
+      "delta_pp": -0.04,
+      "relative_error_reduction_pct": -10.26,
+      "mcnemar_two_sided_p": null
+    }
+  ],
+  "runtime": {
+    "batch_size": 32,
+    "n_rows": 2795,
+    "v3_12_0_fp32": {
+      "mean_ms_per_row": 23.96,
+      "peak_rss_mib": 2762.0,
+      "peak_rss_gib": 2.7
+    },
+    "v3_15_4_fp32": {
+      "mean_ms_per_row": 8.71,
+      "speedup_vs_v3_12_0": 2.75,
+      "peak_rss_mib": 1564.3,
+      "peak_rss_gib": 1.53
+    },
+    "v3_15_4_int8": {
+      "mean_ms_per_row": 5.26,
+      "speedup_vs_v3_12_0": 4.56,
+      "peak_rss_mib": 1531.3,
+      "peak_rss_gib": 1.5
+    },
+    "live_production_rss_gib": 1.13
+  }
+}
