@@ -8,7 +8,8 @@
     "3.10.0": "https://github.com/spencernorton/armiger/blob/331cc56c8d6b4bda385105f97bd35f546e079c9b/benchmarks/updated_std_charts_data.json",
     "3.11.0": "https://github.com/spencernorton/armiger/blob/4d8834cbd3217aa0aa7df313fa73399a3a5f5f58/benchmarks/updated_std_charts_data.json",
     "3.12.0": "https://github.com/spencernorton/armiger/blob/ad5a1e3dec56842d5b0aa6ef881151a4b87dd2a8/benchmarks/updated_std_charts_data.json",
-    "3.15.4": "https://huggingface.co/NorviTech/armiger-ultra/blob/e47d3ee7d2f05a41c993814968b8d9a9a4042f63/V5_4_BUNDLE_MANIFEST.json"
+    "3.15.4": "https://huggingface.co/NorviTech/armiger-ultra/blob/e47d3ee7d2f05a41c993814968b8d9a9a4042f63/V5_4_BUNDLE_MANIFEST.json",
+    "3.17.0": "https://huggingface.co/NorviTech/armiger-ultra/blob/1a1e224914913092451b77ff1d19b1ed472b0276/V3_17_0_BUNDLE_MANIFEST.json"
   },
   "versions": [
     "3.3.0",
@@ -18,7 +19,8 @@
     "3.10.0",
     "3.11.0",
     "3.12.0",
-    "3.15.4"
+    "3.15.4",
+    "3.17.0"
   ],
   "velocity_intervals": [
     "3.3.0\u21923.4.0",
@@ -27,7 +29,8 @@
     "3.8.0\u21923.10.0",
     "3.10.0\u21923.11.0",
     "3.11.0\u21923.12.0",
-    "3.12.0\u21923.15.4"
+    "3.12.0\u21923.15.4",
+    "3.15.4\u21923.17.0"
   ],
   "minor_version_steps": [
     1,
@@ -36,7 +39,8 @@
     2,
     1,
     1,
-    3
+    3,
+    2
   ],
   "velocity_unit": "accuracy percentage points per minor-version step; interval averages, not per day",
   "tasks": [
@@ -94,13 +98,20 @@
           "ci95_lo": 94.17,
           "ci95_hi": 95.87,
           "interval_method": "wilson_95"
+        },
+        "3.17.0": {
+          "n": 2484,
+          "point_pct": 93.32,
+          "ci95_lo": 92.27,
+          "ci95_hi": 94.23,
+          "interval_method": "wilson_95"
         }
       },
-      "gain_pp": 3.95,
+      "gain_pp": 2.18,
       "gain_pp_vs_3_8_0": 2.01,
       "gain_pp_vs_3_10_0": 1.77,
       "gain_pp_vs_3_11_0": 0.04,
-      "relative_error_reduction_pct": 44.58239277652374,
+      "relative_error_reduction_pct": 24.60496613995477,
       "gain_pp_per_minor_version_step": [
         0.730000000000004,
         0.0533333333333322,
@@ -108,10 +119,13 @@
         0.11999999999999744,
         1.730000000000004,
         2.25,
-        -0.7366666666666646
+        -0.7366666666666646,
+        -0.8850000000000051
       ],
       "gain_pp_vs_3_12_0": -2.21,
-      "relative_error_reduction_3_12_0_pct": 69.52595936794579
+      "relative_error_reduction_3_12_0_pct": 69.52595936794579,
+      "gain_pp_vs_3_15_4": -1.77,
+      "relative_error_reduction_3_15_4_pct": 44.58239277652374
     },
     {
       "key": "p1_vid",
@@ -167,13 +181,20 @@
           "ci95_lo": 88.31,
           "ci95_hi": 92.41,
           "interval_method": "wilson_95"
+        },
+        "3.17.0": {
+          "n": 784,
+          "point_pct": 88.01,
+          "ci95_lo": 85.55,
+          "ci95_hi": 90.1,
+          "interval_method": "wilson_95"
         }
       },
-      "gain_pp": 6.38,
+      "gain_pp": 3.83,
       "gain_pp_vs_3_8_0": 2.17,
       "gain_pp_vs_3_10_0": 3.06,
       "gain_pp_vs_3_11_0": 0.38,
-      "relative_error_reduction_pct": 40.32869785082173,
+      "relative_error_reduction_pct": 24.209860935524652,
       "gain_pp_per_minor_version_step": [
         0.8999999999999915,
         0.12666666666666515,
@@ -181,10 +202,13 @@
         -0.4450000000000003,
         2.680000000000007,
         5.359999999999999,
-        -1.6600000000000013
+        -1.6600000000000013,
+        -1.2749999999999986
       ],
       "gain_pp_vs_3_12_0": -4.98,
-      "relative_error_reduction_3_12_0_pct": 71.80783817951962
+      "relative_error_reduction_3_12_0_pct": 71.80783817951962,
+      "gain_pp_vs_3_15_4": -2.55,
+      "relative_error_reduction_3_15_4_pct": 40.32869785082173
     },
     {
       "key": "p2_match",
@@ -240,13 +264,20 @@
           "ci95_lo": 88.31,
           "ci95_hi": 92.41,
           "interval_method": "wilson_95"
+        },
+        "3.17.0": {
+          "n": 784,
+          "point_pct": 88.01,
+          "ci95_lo": 85.55,
+          "ci95_hi": 90.1,
+          "interval_method": "wilson_95"
         }
       },
-      "gain_pp": 7.01,
+      "gain_pp": 4.46,
       "gain_pp_vs_3_8_0": 2.8,
       "gain_pp_vs_3_10_0": 3.7,
       "gain_pp_vs_3_11_0": 1.02,
-      "relative_error_reduction_pct": 42.61398176291796,
+      "relative_error_reduction_pct": 27.11246200607907,
       "gain_pp_per_minor_version_step": [
         0.8900000000000006,
         0.12666666666666515,
@@ -254,10 +285,13 @@
         -0.45000000000000284,
         2.680000000000007,
         6.0,
-        -1.6600000000000013
+        -1.6600000000000013,
+        -1.2749999999999986
       ],
       "gain_pp_vs_3_12_0": -4.98,
-      "relative_error_reduction_3_12_0_pct": 72.88753799392101
+      "relative_error_reduction_3_12_0_pct": 72.88753799392101,
+      "gain_pp_vs_3_15_4": -2.55,
+      "relative_error_reduction_3_15_4_pct": 42.61398176291796
     },
     {
       "key": "p3_audio",
@@ -313,13 +347,20 @@
           "ci95_lo": 88.35,
           "ci95_hi": 93.58,
           "interval_method": "wilson_95"
+        },
+        "3.17.0": {
+          "n": 449,
+          "point_pct": 92.65,
+          "ci95_lo": 89.86,
+          "ci95_hi": 94.72,
+          "interval_method": "wilson_95"
         }
       },
-      "gain_pp": 2.89,
+      "gain_pp": 4.23,
       "gain_pp_vs_3_8_0": -0.89,
       "gain_pp_vs_3_10_0": -0.23,
       "gain_pp_vs_3_11_0": -3.34,
-      "relative_error_reduction_pct": 24.956822107081184,
+      "relative_error_reduction_pct": 36.52849740932646,
       "gain_pp_per_minor_version_step": [
         1.7800000000000011,
         0.4466666666666678,
@@ -327,10 +368,13 @@
         -0.3299999999999983,
         3.1099999999999994,
         2.2299999999999898,
-        -1.8566666666666645
+        -1.8566666666666645,
+        0.6700000000000017
       ],
       "gain_pp_vs_3_12_0": -5.57,
-      "relative_error_reduction_3_12_0_pct": 73.05699481865281
+      "relative_error_reduction_3_12_0_pct": 73.05699481865281,
+      "gain_pp_vs_3_15_4": 1.34,
+      "relative_error_reduction_3_15_4_pct": 24.956822107081184
     },
     {
       "key": "p4_anime",
@@ -386,13 +430,20 @@
           "ci95_lo": 88.64,
           "ci95_hi": 92.65,
           "interval_method": "wilson_95"
+        },
+        "3.17.0": {
+          "n": 797,
+          "point_pct": 92.85,
+          "ci95_lo": 90.85,
+          "ci95_hi": 94.44,
+          "interval_method": "wilson_95"
         }
       },
-      "gain_pp": 3.51,
+      "gain_pp": 5.52,
       "gain_pp_vs_3_8_0": -2.26,
       "gain_pp_vs_3_10_0": -2.26,
       "gain_pp_vs_3_11_0": -3.64,
-      "relative_error_reduction_pct": 27.703235990528846,
+      "relative_error_reduction_pct": 43.56748224151536,
       "gain_pp_per_minor_version_step": [
         0.0,
         0.7533333333333351,
@@ -400,11 +451,15 @@
         0.0,
         1.3800000000000097,
         1.25,
-        -1.6300000000000001
+        -1.6300000000000001,
+        1.0049999999999955
       ],
       "gain_pp_vs_3_12_0": -4.89,
-      "relative_error_reduction_3_12_0_pct": 66.2983425414365
+      "relative_error_reduction_3_12_0_pct": 66.2983425414365,
+      "gain_pp_vs_3_15_4": 2.01,
+      "relative_error_reduction_3_15_4_pct": 27.703235990528846
     }
   ],
-  "release_notes_3_15_4": "Model v3.15.4 (v5.4-pareto, software 3.15.4) replaced the legacy 2,800-line Stage-2 heuristic cascade with clean regularized V4/V5 neural + sparse combiners. Legacy heldout_20261026 scores stepped back from v3.12.0 while fresh zero-overlap sealed R22-live accuracy jumped +8.20 pp (prod) and +20.57 pp (combined)."
+  "release_notes_3_15_4": "Model v3.15.4 (v5.4-pareto, software 3.15.4) replaced the legacy 2,800-line Stage-2 heuristic cascade with clean regularized V4/V5 neural + sparse combiners. Legacy heldout_20261026 scores stepped back from v3.12.0 while fresh zero-overlap sealed R22-live accuracy jumped +8.20 pp (prod) and +20.57 pp (combined).",
+  "release_notes_3_17_0": "Model v3.17.0 (clean-sheet 4-plane hybrid, software 3.17.0) replaced the remaining 98 MB V4/V5 .npz combiner/specialist tables with a 100% torch-free, 0-.pkl pure-ONNX tri-encoder + GBDT meta-stacker (283.1 MiB live production RSS, -76.6% vs v3.15.4, 4.80x faster live inference). On legacy heldout_20261026, Audio language (+1.34 pp to 92.65%) and Anime detection (+2.01 pp to 92.85%) improved over v3.15.4, while on fresh firewalled R26-live (N=3,104) v3.17.0 beat v3.15.4 across all core pillars (+2.38 pp prod, +2.87 pp combined, +1.96 pp clean-10, +2.45 pp strict P(x) audio, +4.05 pp adult/XXX, and 91.7% fewer clean false positives)."
 }

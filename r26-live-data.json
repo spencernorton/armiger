@@ -1,0 +1,233 @@
+{
+  "cohort": "R26-live",
+  "description": "Firewalled post-freeze prospective real-world holdout (N=3,104: 2,350 live production sample + 754 hard stress cohort, zero training overlap).",
+  "verified_root_manifest_sha256": "181b4712311ba49f59e0aa0f0d97a4ea574568adeb0b7fedc2f237b6090fb1fd",
+  "total_rows": 3104,
+  "release_tag": "v3.17.0",
+  "sources": {
+    "github_release": "https://github.com/spencernorton/armiger/releases/tag/v3.17.0",
+    "hf_ultra": "https://huggingface.co/NorviTech/armiger-ultra/tree/v3.17.0",
+    "hf_int8": "https://huggingface.co/NorviTech/armiger/tree/v3.17.0"
+  },
+  "metrics": [
+    {
+      "key": "unified_prod",
+      "label": "Live production sample",
+      "n": 2350,
+      "v3_12_0": {
+        "correct": 1733,
+        "pct": 73.74,
+        "ci95_lo": 71.93,
+        "ci95_hi": 75.48
+      },
+      "v3_15_4": {
+        "correct": 2095,
+        "pct": 89.15,
+        "ci95_lo": 87.83,
+        "ci95_hi": 90.34
+      },
+      "v3_17_0": {
+        "correct": 2151,
+        "pct": 91.53,
+        "ci95_lo": 90.34,
+        "ci95_hi": 92.59
+      },
+      "delta_vs_15_pp": 2.38,
+      "delta_vs_12_pp": 17.79,
+      "relative_error_reduction_vs_12_pct": 67.75,
+      "relative_error_reduction_vs_15_pct": 21.94
+    },
+    {
+      "key": "unified_comb",
+      "label": "Combined sealed holdout",
+      "n": 3104,
+      "v3_12_0": {
+        "correct": 2256,
+        "pct": 72.68,
+        "ci95_lo": 71.09,
+        "ci95_hi": 74.22
+      },
+      "v3_15_4": {
+        "correct": 2795,
+        "pct": 90.05,
+        "ci95_lo": 88.94,
+        "ci95_hi": 91.05
+      },
+      "v3_17_0": {
+        "correct": 2884,
+        "pct": 92.91,
+        "ci95_lo": 91.96,
+        "ci95_hi": 93.76
+      },
+      "delta_vs_15_pp": 2.86,
+      "delta_vs_12_pp": 20.23,
+      "relative_error_reduction_vs_12_pct": 74.05,
+      "relative_error_reduction_vs_15_pct": 28.74
+    },
+    {
+      "key": "clean10_comb",
+      "label": "Clean-10 category accuracy",
+      "n": 2346,
+      "v3_12_0": {
+        "correct": 2168,
+        "pct": 92.41,
+        "ci95_lo": 91.27,
+        "ci95_hi": 93.42
+      },
+      "v3_15_4": {
+        "correct": 2185,
+        "pct": 93.14,
+        "ci95_lo": 92.04,
+        "ci95_hi": 94.09
+      },
+      "v3_17_0": {
+        "correct": 2231,
+        "pct": 95.1,
+        "ci95_lo": 94.15,
+        "ci95_hi": 95.9
+      },
+      "delta_vs_15_pp": 1.96,
+      "delta_vs_12_pp": 2.69,
+      "relative_error_reduction_vs_12_pct": 35.44,
+      "relative_error_reduction_vs_15_pct": 28.57
+    },
+    {
+      "key": "audio_strict",
+      "label": "Strict P(x) audio language",
+      "n": 858,
+      "v3_12_0": {
+        "correct": 723,
+        "pct": 84.27,
+        "ci95_lo": 81.68,
+        "ci95_hi": 86.55
+      },
+      "v3_15_4": {
+        "correct": 745,
+        "pct": 86.83,
+        "ci95_lo": 84.4,
+        "ci95_hi": 88.93
+      },
+      "v3_17_0": {
+        "correct": 778,
+        "pct": 90.68,
+        "ci95_lo": 88.54,
+        "ci95_hi": 92.44
+      },
+      "delta_vs_15_pp": 3.85,
+      "delta_vs_12_pp": 6.41,
+      "relative_error_reduction_vs_12_pct": 40.75,
+      "relative_error_reduction_vs_15_pct": 29.23
+    },
+    {
+      "key": "xxx_comb",
+      "label": "Adult / XXX recall",
+      "n": 938,
+      "v3_12_0": {
+        "correct": 869,
+        "pct": 92.64,
+        "ci95_lo": 90.79,
+        "ci95_hi": 94.15
+      },
+      "v3_15_4": {
+        "correct": 866,
+        "pct": 92.32,
+        "ci95_lo": 90.44,
+        "ci95_hi": 93.86
+      },
+      "v3_17_0": {
+        "correct": 904,
+        "pct": 96.38,
+        "ci95_lo": 94.98,
+        "ci95_hi": 97.39
+      },
+      "delta_vs_15_pp": 4.06,
+      "delta_vs_12_pp": 3.74,
+      "relative_error_reduction_vs_12_pct": 50.82,
+      "relative_error_reduction_vs_15_pct": 52.86
+    },
+    {
+      "key": "policy2_comb",
+      "label": "Policy-2 structural junk",
+      "n": 505,
+      "v3_12_0": {
+        "correct": 57,
+        "pct": 11.29,
+        "ci95_lo": 8.81,
+        "ci95_hi": 14.34
+      },
+      "v3_15_4": {
+        "correct": 503,
+        "pct": 99.6,
+        "ci95_lo": 98.57,
+        "ci95_hi": 99.89
+      },
+      "v3_17_0": {
+        "correct": 504,
+        "pct": 99.8,
+        "ci95_lo": 98.89,
+        "ci95_hi": 99.97
+      },
+      "delta_vs_15_pp": 0.2,
+      "delta_vs_12_pp": 88.51,
+      "relative_error_reduction_vs_12_pct": 99.77,
+      "relative_error_reduction_vs_15_pct": 50.0
+    },
+    {
+      "key": "clean_tnr_comb",
+      "label": "Clean content TNR",
+      "n": 2571,
+      "v3_12_0": {
+        "correct": 2523,
+        "pct": 98.13,
+        "ci95_lo": 97.53,
+        "ci95_hi": 98.59
+      },
+      "v3_15_4": {
+        "correct": 2535,
+        "pct": 98.6,
+        "ci95_lo": 98.07,
+        "ci95_hi": 98.99
+      },
+      "v3_17_0": {
+        "correct": 2568,
+        "pct": 99.88,
+        "ci95_lo": 99.66,
+        "ci95_hi": 99.96
+      },
+      "delta_vs_15_pp": 1.28,
+      "delta_vs_12_pp": 1.75,
+      "relative_error_reduction_vs_12_pct": 93.58,
+      "relative_error_reduction_vs_15_pct": 91.43
+    }
+  ],
+  "runtime": {
+    "batch_size": 32,
+    "v3_12_0": {
+      "mean_ms_per_row": 23.96,
+      "peak_rss_gib": 2.7,
+      "live_container_rss_mib": 2240.0
+    },
+    "v3_15_4": {
+      "mean_ms_per_row": 5.26,
+      "peak_rss_gib": 1.5,
+      "live_container_rss_mib": 1212.0
+    },
+    "v3_17_0": {
+      "mean_ms_per_row": 3.57,
+      "peak_rss_gib": 0.58,
+      "live_container_rss_mib": 283.1
+    }
+  },
+  "r27_prospective_audit": {
+    "live_shadow_rows": 44672,
+    "category_agreement_pct": 94.08,
+    "admission_agreement_pct": 97.52,
+    "decisive_disagreements_n": 206,
+    "v3_17_0_wins": 194,
+    "v3_15_4_wins": 12,
+    "v3_17_0_win_rate_pct": 94.17,
+    "win_ratio": 16.17,
+    "red_team_canaries_passed": "180/180 (100.0%)",
+    "policy2_game_sw_audit": "144/144 (100.0%)"
+  }
+}
