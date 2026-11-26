@@ -1,10 +1,4 @@
-"""Consistency checks for the Discussion #55 progression, R22-live, and R26-live charts.
-
-Validates that chart-data.json covers every published model version,
-keeps one denominator per task, derives gains, error reductions, and
-velocities from the stored point estimates, and that r22-live-data.json,
-r26-live-data.json, and all published PNG charts match their exact numeric invariants.
-"""
+"""Consistency checks for the standardized Discussion #55 charts and primary JSON data."""
 from __future__ import annotations
 
 import json
@@ -20,14 +14,16 @@ NEWEST_POINTS = {
     "p3_audio": 92.65,
     "p4_anime": 92.85,
 }
+STANDARDIZED_CHARTS = (
+    "unseen-live-benchmark.png",
+    "relative-improvement-model-over-model.png",
+    "legacy-vs-live-generalization.png",
+    "small-vs-broad-evaluation.png",
+)
 
 
 def _data() -> dict:
     return json.loads((ROOT / "chart-data.json").read_text(encoding="utf-8"))
-
-
-def _r22_data() -> dict:
-    return json.loads((ROOT / "r22-live-data.json").read_text(encoding="utf-8"))
 
 
 def _r26_data() -> dict:
@@ -55,11 +51,6 @@ def test_task_math_is_derived_from_scores():
         assert abs(task["gain_pp"] - (points[-1] - points[0])) < 1e-6
         expected_rer = (points[-1] - points[0]) / (100 - points[0]) * 100
         assert abs(task["relative_error_reduction_pct"] - expected_rer) < 1e-6
-        expected_rates = [
-            (points[i + 1] - points[i]) / EXPECTED_STEPS[i]
-            for i in range(len(EXPECTED_STEPS))
-        ]
-        assert task["gain_pp_per_minor_version_step"] == expected_rates
         assert abs(scores["3.17.0"]["point_pct"] - NEWEST_POINTS[task["key"]]) < 1e-9
 
 
@@ -80,14 +71,15 @@ def test_r26_live_data_invariants():
         assert m["v3_17_0"]["pct"] > m["v3_15_4"]["pct"]
 
 
-def test_chart_images_exist():
-    for name in (
-        "accuracy-by-task.png",
-        "relative-error-reduction.png",
-        "improvement-velocity.png",
-        "sealed-r22-live-v312-vs-v3154.png",
-        "small-vs-broad-evaluation.png",
-    ):
+def test_standardized_chart_images_exist_and_legacy_charts_retired():
+    for name in STANDARDIZED_CHARTS:
         blob = (ROOT / name).read_bytes()
-        assert len(blob) > 10_000
+        assert len(blob) > 50_000
         assert blob[:8] == b"\x89PNG\r\n\x1a\n"
+    for retired in (
+        "accuracy-by-task.png",
+        "improvement-velocity.png",
+        "relative-error-reduction.png",
+        "sealed-r22-live-v312-vs-v3154.png",
+    ):
+        assert not (ROOT / retired).exists()
