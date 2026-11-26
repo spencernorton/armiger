@@ -1,8 +1,25 @@
 # Evaluation status and limitations
 
+## Armiger Ultra v3.17.0 qualification & live production verification
+
+Software 3.17.0 uses model bundle 3.17.0 (`v3.17.0-rc3` clean-sheet 4-plane architecture, `root_sha = 181b4712311ba49f59e0aa0f0d97a4ea574568adeb0b7fedc2f237b6090fb1fd`):
+
+- **Sealed `R26-live` (`N = 2,520`):** `11`-class category accuracy **`90.36%`** (`+14.13 pp` over `v3.16.1`'s `76.23%`), `10`-class non-unknown **`91.37%`**, `xxx` recall **`95.21%`** (`+12.77 pp`), `unknown` recall **`69.03%`** (`+67.26 pp`), audio `P(x)` non-English recall **`87.77%`**, junk recall **`97.31%`** (`99.04%` clean specificity), and **`0.00%`** admitted-media corruption (`0 / 822`).
+- **All `7` Regression Benchmark Suites (`N = 10,851`):** `heldout_20261026` (`N = 2,670`) **`98.05%`** (`+18.39 pp` vs `v3.16.1`), `R22-live` (`N = 2,795`) **`94.67%`** (`+20.54 pp`), Suite 1 Multilingual (`N = 1,000`) **`98.60%`**, Suite 2 Game (`N = 755`) **`99.60%`**, Suite 3 Structural (`N = 735`) **`98.64%`**, Suite 4 Adversarial (`N = 896`) **`98.21%`**, and Suite 5 Multilingual Stress (`N = 2,000`) **`99.00%`**.
+- **Prospective `R27-live` Audit & `180`-Canary Red-Team Suite:** Blind `253`-row `v3.17.0` vs `v3.16.1` disagreement audit passed **`86.17% -> 13.83%`** (`6.23x` win ratio, McNemar `p = 1.98e-28`); Policy-2 software/game exemption audit achieved **`100.00%` (`144 / 144`)** precision; and all **`180 / 180` (`100.00%`)** red-team canaries passed.
+- **Production CI Soak & Live Cutover:** `4,096`-row CI soak worker RSS **`359.04 MiB`** (`+0.88 MiB` growth, `460.37 MiB` cgroup peak); live BitAgent production container RSS dropped **`1,212.0 MiB -> 283.1 MiB` (`-76.6%`)** and inference latency dropped **`38.62 ms -> 8.05 ms` (`4.80x` faster)**.
+
+![Armiger Ultra v3.17.0 R26-live and 7-suite benchmark comparison](assets/chart1_v317_benchmark_and_suites_comparison.png)
+
+![Armiger Ultra v3.17.0 R27-live disagreement audit, Policy-2 exemption, and 180-canary verification](assets/chart2_v317_r27_disagreement_and_canaries.png)
+
+![Armiger Ultra v3.17.0 R27-live prospective BitAgent shadow replay](assets/chart3_v317_r27_live_shadow_replay.png)
+
+![Armiger Ultra v3.17.0 production CI soak and live BitAgent Stack 499 cutover](assets/chart4_v317_production_memory_and_live_cutover.png)
+
 ## Current-release comparison status
 
-Software 3.15.4 uses model bundle 3.15.4. The latest published comparison graphics
+Software 3.17.0 uses model bundle 3.17.0. The latest published comparison graphics
 are displayed as archived figures while their data and provenance remain under
 review. They do not establish verified current-release performance. No replacement
 score, new sample count or new model evaluation accompanies their restoration.
@@ -17,7 +34,7 @@ File hashes and successful image regeneration do not establish that the
 displayed statistics match the receipt or were measured for the current model.
 
 The public M4 Pro [timing receipt](../benchmarks/receipts/hardware_and_api_cost_receipt.json)
-identifies older ONNX hashes, not the pinned 3.15.4 hashes. Those measurements
+identifies older ONNX hashes, not the pinned 3.17.0 hashes. Those measurements
 must not be advertised as current-version end-to-end timing. The unqualified GPU timing headline is not supported by that receipt; see
 [resources](resources.md).
 
@@ -50,7 +67,7 @@ language, screening and swarm denominators separate.
 
 The account below describes the named historical cohorts and components. It is
 retained for traceability, rather than as validation of the newer chart images
-or model 3.15.4. Standalone neural and hybrid results must remain separate.
+or model 3.17.0. Standalone neural and hybrid results must remain separate.
 
 - **Cloud teacher comparison (identical cohorts, non-circular LOTO):** **`95.66%`** 6-dimension mean on the `N=757` Public-Tracker swarm cohort (**`96.39%`** with `N=10,278` Multi-Source Corpus Swarm AUROC). On common-support leave-one-teacher-out category panels, `OpenAI GPT (Fast Tier)` reaches `97.84%` vs. Armiger Ultra `94.56%` (`N=974`) and `Google Gemini Flash` reaches `97.05%` vs. Armiger Ultra `94.70%` (`N=982`); Armiger Ultra leads the 4-dimension LOTO composite against GPT (`95.74%` vs. `95.17%`) and trails Gemini (`95.83%` vs. `97.32%`).
 - **Fresh non-teacher baselines (identical inputs, no label-curation role):** on the `beyond_confirmation` labelled subset (category `N=967`), the v3.0.0 hybrid reaches **`92.76%`** vs. **`92.45%`** for `Claude Haiku 4.5` and **`47.67%`** for the locally served 8B-class `Qwen3-8B` (see [`benchmarks/receipts/llm_beyond_fresh_receipt.json`](../benchmarks/receipts/llm_beyond_fresh_receipt.json)).

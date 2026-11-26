@@ -524,9 +524,16 @@ class ArmigerStandaloneONNX:
         return _apply_v3_post_neural_guard(row, item_res)
 
     def predict_batch(self, rows: Sequence[Mapping[str, Any]]) -> List[Dict[str, Any]]:
-        feed = getattr(self, "_batch_fn", build_onnx_batch_inputs)(rows)
-        raw_outs = self.session.run(self.head_names, feed)
-        logits_by_head = dict(zip(self.head_names, raw_outs))
+        try:
+            from .v317_stage1_bridge import is_v317_session, run_v317_stage1_as_legacy_8heads
+        except ImportError:
+            from v317_stage1_bridge import is_v317_session, run_v317_stage1_as_legacy_8heads  # type: ignore
+        if is_v317_session(self.session):
+            logits_by_head = run_v317_stage1_as_legacy_8heads(self.session, rows, vocab_path=self.vocab_path)
+        else:
+            feed = getattr(self, "_batch_fn", build_onnx_batch_inputs)(rows)
+            raw_outs = self.session.run(self.head_names, feed)
+            logits_by_head = dict(zip(self.head_names, raw_outs))
         results: List[Dict[str, Any]] = []
         for i in range(len(rows)):
             item_res: Dict[str, Any] = {"heads": {}, "probabilities": {}}

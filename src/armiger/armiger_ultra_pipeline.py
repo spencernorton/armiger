@@ -12,7 +12,10 @@ official NorviTech Armiger plugins in a single, zero-boilerplate API:
   - Plugin #6: `ArmigerDHTDBSync` + `CSAMGuard` (`armiger_dht_db_sync.py` + `csam_guard.py`)
 
 Usage:
-    from .armiger_ultra_pipeline import ArmigerUltraPipeline
+    try:
+        from .armiger_ultra_pipeline import ArmigerUltraPipeline
+    except ImportError:
+        from armiger_ultra_pipeline import ArmigerUltraPipeline
 
     pipeline = ArmigerUltraPipeline.from_Directory("./armiger-ultra")
     result = pipeline.classify({
@@ -44,131 +47,262 @@ from typing import Any, Callable, Dict, List, Mapping, Optional, Sequence, Tuple
 import numpy as np
 
 # Plugin #1: SwarmSurvivalNet & Residual Adapter
-from .swarm_survival import (
-    SwarmResidualAdapter,
-    SwarmSurvivalNet,
-)
+try:
+    from .swarm_survival import (
+        SwarmResidualAdapter,
+        SwarmSurvivalNet,
+    )
+except ImportError:
+    from swarm_survival import (
+        SwarmResidualAdapter,
+        SwarmSurvivalNet,
+    )
 
 # Plugin #2: SwarmPriors (4-Pathway Empirical Bayes & Tracker Scrape Priors)
-from .swarm_priors import (
-    PUBLIC_TRACKER_DOMAINS,
-    TRACKER_DOMAIN_PRIORS,
-    WAY2_FEATURE_NAMES,
-    WAY3_FEATURE_NAMES,
-    SwarmViabilityReport,
-    apply_modality_dropout,
-    compute_sampling_priority_weight,
-    compute_swarm_viability,
-    extract_prior_features,
-    extract_swarm_side_vector,
-    extract_way2_source_features,
-    extract_way3_anomaly_features,
-    is_public_safe_source,
-    normalise_source,
-    normalise_tracker_domain,
-    sanitize_sources_for_export,
-)
+try:
+    from .swarm_priors import (
+        PUBLIC_TRACKER_DOMAINS,
+        TRACKER_DOMAIN_PRIORS,
+        WAY2_FEATURE_NAMES,
+        WAY3_FEATURE_NAMES,
+        SwarmViabilityReport,
+        apply_modality_dropout,
+        compute_sampling_priority_weight,
+        compute_swarm_viability,
+        extract_prior_features,
+        extract_swarm_side_vector,
+        extract_way2_source_features,
+        extract_way3_anomaly_features,
+        is_public_safe_source,
+        normalise_source,
+        normalise_tracker_domain,
+        sanitize_sources_for_export,
+    )
+except ImportError:
+    from swarm_priors import (
+        PUBLIC_TRACKER_DOMAINS,
+        TRACKER_DOMAIN_PRIORS,
+        WAY2_FEATURE_NAMES,
+        WAY3_FEATURE_NAMES,
+        SwarmViabilityReport,
+        apply_modality_dropout,
+        compute_sampling_priority_weight,
+        compute_swarm_viability,
+        extract_prior_features,
+        extract_swarm_side_vector,
+        extract_way2_source_features,
+        extract_way3_anomaly_features,
+        is_public_safe_source,
+        normalise_source,
+        normalise_tracker_domain,
+        sanitize_sources_for_export,
+    )
 
 # Plugin #3: ZeroCueCatalog (929.4K Offline Title Lookup + Structural Disambiguator)
-from .zero_cue_plugin import (
-    CATS as ZERO_CUE_CATS,
-    ZeroCueCatalogPlugin,
-    apply_structural_and_zero_cue_disambiguation,
-    hash_catalog_key,
-    lookup_zero_cue_catalog,
-    norm_title,
-    parse_clean_candidates,
-)
+try:
+    from .zero_cue_plugin import (
+        CATS as ZERO_CUE_CATS,
+        ZeroCueCatalogPlugin,
+        apply_structural_and_zero_cue_disambiguation,
+        hash_catalog_key,
+        lookup_zero_cue_catalog,
+        norm_title,
+        parse_clean_candidates,
+    )
+except ImportError:
+    from zero_cue_plugin import (
+        CATS as ZERO_CUE_CATS,
+        ZeroCueCatalogPlugin,
+        apply_structural_and_zero_cue_disambiguation,
+        hash_catalog_key,
+        lookup_zero_cue_catalog,
+        norm_title,
+        parse_clean_candidates,
+    )
 
 # Plugin #3b: ByteSpanExtractor (9th-Head Constrained 7x7 BIO Viterbi Decoder & Boundary Snapping)
-from .byte_span_extractor import (
-    SPAN_BIO_CLASSES,
-    decode_bio_logits_viterbi,
-    decode_bio_tags_to_spans,
-)
+try:
+    from .byte_span_extractor import (
+        SPAN_BIO_CLASSES,
+        decode_bio_logits_viterbi,
+        decode_bio_tags_to_spans,
+    )
+except ImportError:
+    from byte_span_extractor import (
+        SPAN_BIO_CLASSES,
+        decode_bio_logits_viterbi,
+        decode_bio_tags_to_spans,
+    )
 
 # Plugin #4: AudioLanguageGuard (Cross-Head Audio & Anime Dub Guard)
-from .audio_language_guard import (
-    SUB_SEGMENT_STRIP_RE,
-    apply_audio_language_guard,
-    apply_english_subs_guard,
-    apply_title_language_guard,
-    classify_audio_and_anime_dub,
-)
+try:
+    from .audio_language_guard import (
+        SUB_SEGMENT_STRIP_RE,
+        apply_audio_language_guard,
+        apply_english_subs_guard,
+        apply_title_language_guard,
+        classify_audio_and_anime_dub,
+    )
+except ImportError:
+    from audio_language_guard import (
+        SUB_SEGMENT_STRIP_RE,
+        apply_audio_language_guard,
+        apply_english_subs_guard,
+        apply_title_language_guard,
+        classify_audio_and_anime_dub,
+    )
 
 # Plugin #5: CalibrationAndDHT + ArmigerDHTRSIEngine
-from .calibration_and_dht import (
-    ArmigerCalibrator,
-    ArmigerDHTUpdater,
-    SignedDHTManifest,
-)
-from .armiger_dht_rsi import (
-    AnonymityGuard,
-    AnonymityViolationError,
-    AuthoritativeASNVerifier,
-    resolve_opt_in_sharing,
-    AnonymizedTelemetryRecord,
-    ArmigerDHTRSIEngine,
-    AudioWebhookAdapter,
-    BundleFormat,
-    CanaryItem,
-    CanaryRegressionReport,
-    CandidateObservation,
-    DHTRSIMode,
-    EncryptedTelemetryBundle,
-    GoldenCanaryRegressionGate,
-    HybridPQCAEADEngine,
-    MLKEM768,
-    MovieWebhookAdapter,
-    PeerAttestation,
-    PhysicalGroundTruthVerifier,
-    PublicationWebhookAdapter,
-    QBittorrentAdapter,
-    SafeFormatValidator,
-    SeriesWebhookAdapter,
-    SybilQuorumVerifier,
-    TelemetryAnonymizer,
-    ThresholdDHTManifest,
-    ThresholdSignatureVerifier,
-    WOTSPlusSHAKE256,
-    X25519ChaCha20Poly1305Engine,
-    generate_golden_canary_suite,
-)
+try:
+    from .calibration_and_dht import (
+        ArmigerCalibrator,
+        ArmigerDHTUpdater,
+        SignedDHTManifest,
+    )
+except ImportError:
+    from calibration_and_dht import (
+        ArmigerCalibrator,
+        ArmigerDHTUpdater,
+        SignedDHTManifest,
+    )
+try:
+    from .armiger_dht_rsi import (
+        AnonymityGuard,
+        AnonymityViolationError,
+        AuthoritativeASNVerifier,
+        resolve_opt_in_sharing,
+        AnonymizedTelemetryRecord,
+        ArmigerDHTRSIEngine,
+        AudioWebhookAdapter,
+        BundleFormat,
+        CanaryItem,
+        CanaryRegressionReport,
+        CandidateObservation,
+        DHTRSIMode,
+        EncryptedTelemetryBundle,
+        GoldenCanaryRegressionGate,
+        HybridPQCAEADEngine,
+        MLKEM768,
+        MovieWebhookAdapter,
+        PeerAttestation,
+        PhysicalGroundTruthVerifier,
+        PublicationWebhookAdapter,
+        QBittorrentAdapter,
+        SafeFormatValidator,
+        SeriesWebhookAdapter,
+        SybilQuorumVerifier,
+        TelemetryAnonymizer,
+        ThresholdDHTManifest,
+        ThresholdSignatureVerifier,
+        WOTSPlusSHAKE256,
+        X25519ChaCha20Poly1305Engine,
+        generate_golden_canary_suite,
+    )
+except ImportError:
+    from armiger_dht_rsi import (
+        AnonymityGuard,
+        AnonymityViolationError,
+        AuthoritativeASNVerifier,
+        resolve_opt_in_sharing,
+        AnonymizedTelemetryRecord,
+        ArmigerDHTRSIEngine,
+        AudioWebhookAdapter,
+        BundleFormat,
+        CanaryItem,
+        CanaryRegressionReport,
+        CandidateObservation,
+        DHTRSIMode,
+        EncryptedTelemetryBundle,
+        GoldenCanaryRegressionGate,
+        HybridPQCAEADEngine,
+        MLKEM768,
+        MovieWebhookAdapter,
+        PeerAttestation,
+        PhysicalGroundTruthVerifier,
+        PublicationWebhookAdapter,
+        QBittorrentAdapter,
+        SafeFormatValidator,
+        SeriesWebhookAdapter,
+        SybilQuorumVerifier,
+        TelemetryAnonymizer,
+        ThresholdDHTManifest,
+        ThresholdSignatureVerifier,
+        WOTSPlusSHAKE256,
+        X25519ChaCha20Poly1305Engine,
+        generate_golden_canary_suite,
+    )
 
 # Plugin #6: ArmigerDHTDBSync + CSAMGuard
-from .csam_guard import (
-    ArmigerSafetyGate,
-    ContentFilterResult,
-    CSAMGuard,
-    CSAMViolationError,
-    CSAMViolationType,
-    SignedTombstoneList,
-    TombstoneStore,
-    blind_infohash,
-    generate_ed25519_keypair,
-    normalize_text,
-    sanitize_title,
-    sign_tombstone_list,
-)
-from .armiger_dht_db_sync import (
-    ALL_CATEGORIES,
-    CATEGORIES_MAINSTREAM,
-    CATEGORY_ADULT,
-    DEFAULT_EPOCH,
-    LANGUAGES,
-    QUALITY_TIERS,
-    ArmigerDHTDatabaseSync,
-    DHTShardManifest,
-    MerkleTree,
-    QuorumAttestation,
-    QuorumVerifier,
-    ShardCryptoEngine,
-    ShardDatabase,
-    SubscriptionConfig,
-    SyncMode,
-    TorrentRecord,
-    create_mock_quorum_attestations,
-)
+try:
+    from .csam_guard import (
+        ArmigerSafetyGate,
+        ContentFilterResult,
+        CSAMGuard,
+        CSAMViolationError,
+        CSAMViolationType,
+        SignedTombstoneList,
+        TombstoneStore,
+        blind_infohash,
+        generate_ed25519_keypair,
+        normalize_text,
+        sanitize_title,
+        sign_tombstone_list,
+    )
+except ImportError:
+    from csam_guard import (
+        ArmigerSafetyGate,
+        ContentFilterResult,
+        CSAMGuard,
+        CSAMViolationError,
+        CSAMViolationType,
+        SignedTombstoneList,
+        TombstoneStore,
+        blind_infohash,
+        generate_ed25519_keypair,
+        normalize_text,
+        sanitize_title,
+        sign_tombstone_list,
+    )
+try:
+    from .armiger_dht_db_sync import (
+        ALL_CATEGORIES,
+        CATEGORIES_MAINSTREAM,
+        CATEGORY_ADULT,
+        DEFAULT_EPOCH,
+        LANGUAGES,
+        QUALITY_TIERS,
+        ArmigerDHTDatabaseSync,
+        DHTShardManifest,
+        MerkleTree,
+        QuorumAttestation,
+        QuorumVerifier,
+        ShardCryptoEngine,
+        ShardDatabase,
+        SubscriptionConfig,
+        SyncMode,
+        TorrentRecord,
+        create_mock_quorum_attestations,
+    )
+except ImportError:
+    from armiger_dht_db_sync import (
+        ALL_CATEGORIES,
+        CATEGORIES_MAINSTREAM,
+        CATEGORY_ADULT,
+        DEFAULT_EPOCH,
+        LANGUAGES,
+        QUALITY_TIERS,
+        ArmigerDHTDatabaseSync,
+        DHTShardManifest,
+        MerkleTree,
+        QuorumAttestation,
+        QuorumVerifier,
+        ShardCryptoEngine,
+        ShardDatabase,
+        SubscriptionConfig,
+        SyncMode,
+        TorrentRecord,
+        create_mock_quorum_attestations,
+    )
 
 # Friendly SDK aliases matching plugin suite documentation
 ZeroCueCatalog = ZeroCueCatalogPlugin
@@ -233,15 +367,26 @@ RULE_EVIDENCE_HINT: Dict[str, int] = {
 WORD_SPLIT_RE = re.compile(r"[^a-zA-Z0-9]+")
 
 
-from .armiger_inference import (
-    ArmigerStandaloneONNX,
-    _get_vocab_ext_map,
-    _hash_ext,
-    _hash_word,
-    _log2_size_bucket,
-    build_onnx_batch_inputs,
-    encode_torrent_features,
-)
+try:
+    from .armiger_inference import (
+        ArmigerStandaloneONNX,
+        _get_vocab_ext_map,
+        _hash_ext,
+        _hash_word,
+        _log2_size_bucket,
+        build_onnx_batch_inputs,
+        encode_torrent_features,
+    )
+except ImportError:
+    from armiger_inference import (
+        ArmigerStandaloneONNX,
+        _get_vocab_ext_map,
+        _hash_ext,
+        _hash_word,
+        _log2_size_bucket,
+        build_onnx_batch_inputs,
+        encode_torrent_features,
+    )
 
 
 _EPISODE_FILE_RE = re.compile(r"(?i)(?:\bS\d{1,2}E\d{1,3}\b|\bS\d{1,2}\b|\bSeason\s*\d+\b)")
@@ -471,39 +616,74 @@ class ArmigerUltraPrediction:
 
 
 
-from .ultra_pipeline_update_bridge import (
-    CANARY_HEALTHY_SWARM,
-    DEFAULT_CANARY_VIEWS,
-    DEFAULT_TEMPERATURE_GRID,
-    DHTUpdateRejected,
-    DHTUpdateResult,
-    DHT_UPDATE_COMPONENTS,
-    DHT_UPDATE_SCHEMA,
-    MAX_ADAPTER_DELTA_ABS,
-    MAX_ZERO_CUE_DELTA_ENTRIES,
-    RSIUpdateAggregator,
-    RSI_TELEMETRY_SCHEMA,
-    SWARM_ADAPTER_TRAINABLE,
-    SignedUpdateManifest,
-    TEMPERATURE_BOUNDS,
-    ZERO_CUE_DELTA_MAPS,
-    _CANARY_SAMPLE_SUFFIX_RE,
-    _HEX16_RE,
-    _MISSING,
-    _canary_files_for,
-    _canary_summary,
-    _nll_profile,
-    _prediction_labels,
-    _validate_calibration_delta,
-    _validate_zero_cue_delta,
-    _verified_head_labels,
-    _zero_cue_catalog_key,
-    build_canary_rows,
-    decode_safetensors,
-    encode_safetensors,
-    generate_federation_signer,
-    parse_dht_update_payload,
-)
+try:
+    from .ultra_pipeline_update_bridge import (
+        CANARY_HEALTHY_SWARM,
+        DEFAULT_CANARY_VIEWS,
+        DEFAULT_TEMPERATURE_GRID,
+        DHTUpdateRejected,
+        DHTUpdateResult,
+        DHT_UPDATE_COMPONENTS,
+        DHT_UPDATE_SCHEMA,
+        MAX_ADAPTER_DELTA_ABS,
+        MAX_ZERO_CUE_DELTA_ENTRIES,
+        RSIUpdateAggregator,
+        RSI_TELEMETRY_SCHEMA,
+        SWARM_ADAPTER_TRAINABLE,
+        SignedUpdateManifest,
+        TEMPERATURE_BOUNDS,
+        ZERO_CUE_DELTA_MAPS,
+        _CANARY_SAMPLE_SUFFIX_RE,
+        _HEX16_RE,
+        _MISSING,
+        _canary_files_for,
+        _canary_summary,
+        _nll_profile,
+        _prediction_labels,
+        _validate_calibration_delta,
+        _validate_zero_cue_delta,
+        _verified_head_labels,
+        _zero_cue_catalog_key,
+        build_canary_rows,
+        decode_safetensors,
+        encode_safetensors,
+        generate_federation_signer,
+        parse_dht_update_payload,
+    )
+except ImportError:
+    from ultra_pipeline_update_bridge import (
+        CANARY_HEALTHY_SWARM,
+        DEFAULT_CANARY_VIEWS,
+        DEFAULT_TEMPERATURE_GRID,
+        DHTUpdateRejected,
+        DHTUpdateResult,
+        DHT_UPDATE_COMPONENTS,
+        DHT_UPDATE_SCHEMA,
+        MAX_ADAPTER_DELTA_ABS,
+        MAX_ZERO_CUE_DELTA_ENTRIES,
+        RSIUpdateAggregator,
+        RSI_TELEMETRY_SCHEMA,
+        SWARM_ADAPTER_TRAINABLE,
+        SignedUpdateManifest,
+        TEMPERATURE_BOUNDS,
+        ZERO_CUE_DELTA_MAPS,
+        _CANARY_SAMPLE_SUFFIX_RE,
+        _HEX16_RE,
+        _MISSING,
+        _canary_files_for,
+        _canary_summary,
+        _nll_profile,
+        _prediction_labels,
+        _validate_calibration_delta,
+        _validate_zero_cue_delta,
+        _verified_head_labels,
+        _zero_cue_catalog_key,
+        build_canary_rows,
+        decode_safetensors,
+        encode_safetensors,
+        generate_federation_signer,
+        parse_dht_update_payload,
+    )
 
 # =====================================================================
 # Main Unified SDK Class: ArmigerUltraPipeline
@@ -562,7 +742,10 @@ class ArmigerUltraPipeline:
             env_mode = os.environ.get("ARMIGER_DHT_RSI_MODE", "").strip()
             rsi_mode = env_mode if env_mode else ("anonymous_contribute" if self.opt_in_sharing else "pull_only")
         self.allow_synthetic_fallback: bool = bool(allow_synthetic_fallback)
-        from .artifacts import model_directory
+        try:
+            from .artifacts import model_directory
+        except ImportError:
+            from artifacts import model_directory
         eff_dir = model_directory(model_dir)
         self.model_dir = Path(eff_dir).resolve()
         self.variant = variant.lower().strip()
@@ -706,7 +889,10 @@ class ArmigerUltraPipeline:
         cand_path = Path(model_name_or_path)
         if cand_path.exists() and cand_path.is_dir():
             return cls.from_Directory(cand_path, **kwargs)
-        from .artifacts import MANIFEST, download_model
+        try:
+            from .artifacts import MANIFEST, download_model
+        except ImportError:
+            from artifacts import MANIFEST, download_model
         if str(model_name_or_path) != MANIFEST["repository"]:
             raise ValueError("Use a local model directory or NorviTech/armiger-ultra")
         variant = kwargs.get("variant", "ultra")
@@ -758,6 +944,15 @@ class ArmigerUltraPipeline:
     def _run_neural_logits(self, rows: Sequence[Mapping[str, Any]]) -> Dict[str, np.ndarray]:
         """Run the 8-head neural model and return raw logits `[B, C_h]` per head."""
         if self.onnx_session is not None:
+            try:
+                try:
+                    from .v317_stage1_bridge import is_v317_session, run_v317_stage1_as_legacy_8heads
+                except ImportError:
+                    from v317_stage1_bridge import is_v317_session, run_v317_stage1_as_legacy_8heads
+            except ImportError:
+                from v317_stage1_bridge import is_v317_session, run_v317_stage1_as_legacy_8heads  # type: ignore
+            if is_v317_session(self.onnx_session):
+                return run_v317_stage1_as_legacy_8heads(self.onnx_session, rows, model_dir=self.model_dir)
             _batch_fn = build_onnx_batch_inputs
             try:
                 for _inp in self.onnx_session.get_inputs():
@@ -765,7 +960,10 @@ class ArmigerUltraPipeline:
                         _sh = getattr(_inp, "shape", None)
                         if isinstance(_sh, (list, tuple)) and len(_sh) >= 2 and type(_sh[1]) is int and _sh[1] == 41:
                             try:
-                                from .r13_features import build_onnx_batch_inputs as _r13_batch_fn
+                                try:
+                                    from .r13_features import build_onnx_batch_inputs as _r13_batch_fn
+                                except ImportError:
+                                    from r13_features import build_onnx_batch_inputs as _r13_batch_fn
                             except ImportError:
                                 from r13_features import build_onnx_batch_inputs as _r13_batch_fn
                             _batch_fn = _r13_batch_fn
@@ -1446,7 +1644,7 @@ class ArmigerUltraPipeline:
             except ImportError:
                 from armiger.oci_sqlite_catalog import build_torrent_bundle
             bobj = build_torrent_bundle(
-                bundle_name=f"armiger-weights-{self.variant}-v3.15.4",
+                bundle_name=f"armiger-weights-{self.variant}-v3.17.0",
                 files_map=files_map,
                 pubkey_32=b"\x00" * 32,
                 salt=f"armiger:weights:{self.variant}".encode("utf-8"),
@@ -1991,8 +2189,12 @@ class ArmigerUltraPipeline:
                 out_names = [o.name for o in new_sess.get_outputs()]
             except Exception as exc:  # noqa: BLE001
                 raise DHTUpdateRejected(f"onnx_session_load_failed:{type(exc).__name__}:{exc}") from None
+            try:
+                from .v317_stage1_bridge import is_v317_session as _is_v317_sess
+            except ImportError:
+                from v317_stage1_bridge import is_v317_session as _is_v317_sess
             missing_heads = [h for h in NEURAL_HEAD_CLASSES if h not in out_names]
-            if missing_heads:
+            if missing_heads and not _is_v317_sess(new_sess):
                 raise DHTUpdateRejected(f"onnx_session_missing_required_heads:{missing_heads}")
             self.onnx_session = new_sess
             self._onnx_output_names = out_names
@@ -2499,7 +2701,7 @@ class ArmigerUltraPipeline:
                 verified_files_map[str(fname)] = fbytes
 
             recomputed = build_torrent_bundle(
-                bundle_name=f"armiger-weights-{self.variant}-v3.15.4",
+                bundle_name=f"armiger-weights-{self.variant}-v3.17.0",
                 files_map=verified_files_map,
                 pubkey_32=bytes.fromhex(eff_pubkey),
                 salt=eff_salt,
@@ -2822,7 +3024,7 @@ class ArmigerUltraPipeline:
                     }
 
         recomputed_bundle = build_torrent_bundle(
-            bundle_name=f"armiger-weights-{self.variant}-v3.15.4",
+            bundle_name=f"armiger-weights-{self.variant}-v3.17.0",
             files_map=files_map,
             pubkey_32=bytes.fromhex(eff_pubkey),
             salt=eff_salt,
