@@ -1,5 +1,11 @@
 # Changelog
 
+## 3.17.0
+
+- Promote clean-sheet 4-plane hybrid model bundle `3.17.0` (`v3.17.0-rc3`, `root_sha = 181b4712311ba49f59e0aa0f0d97a4ea574568adeb0b7fedc2f237b6090fb1fd` on `NorviTech/armiger-ultra` at `13e972ac637debf07979dc0ac4268367e562c5f1` and `NorviTech/armiger` at `ec64feb9a3ba531114ffb8aeee75b8ae55f3c9df`, DHT `seq=40` / `seq=3017`), pinning `armiger_ultra.fp32.onnx` (`28,580,490` B, `sha256=d77547768dd293d3630ea1bda802db272221f2499222e4464f642564c9344cbe`), `armiger.int8.onnx` (`7,371,593` B, `sha256=89a59815e6fa4596608036fd4910798aa41122493fa5f229758c72038d6f15c6`), unified 32K SentencePiece Unigram + extension `vocab.json` (`993,823` B), `calibration.json` (`78,603` B), and `config.json` (`6,633` B).
+- Include the clean-sheet `v3.17.0` runtime and Stage-1 ONNX compatibility bridge (`v317_stage1_bridge.py`, `armiger_v317_runtime.py`, `featurizer_v317.py`, `tokenizer_v317.py`, `canonical_views.py`, `audio_features_p.py`, `authority_v317.py`, `hashed_lex_v317.py`, `safety_plane0_v317.py`) and updated `R26-live` / `R27-live` / `7`-suite / BitAgent live production cutover verification figures (`docs/assets/chart1_v317_*.png`..`chart4_v317_*.png`).
+- Keep pinned `spencernorton/Armiger-Connectors` `v1.2.10` (`99dcc59b8e733b4063bf09f61bcb80b73e802bd1`) in `examples/Dockerfile`.
+
 ## 3.15.4
 
 - Promote model bundle `3.15.4` (`v5.4-pareto` on `NorviTech/armiger-ultra` at `e47d3ee7d2f05a41c993814968b8d9a9a4042f63` and `NorviTech/armiger` at `0fd371b31c43bb1284c85e52efcee8f34bf10bc0`, DHT `seq=39` / `seq=3016`), pinning updated `armiger_ultra.fp32.onnx` (`33,861,027` B), `armiger.int8.onnx` (`8,877,572` B), `calibration.json`, and `config.json`.

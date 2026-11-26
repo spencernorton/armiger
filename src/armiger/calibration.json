@@ -1,6 +1,23 @@
 {
-  "calibrated_onnx_fp32_sha256": "e12880d60aea7abc50f39d39576f0d36d4069e66fc54599e0f388eaa6fe657f0",
-  "calibration_version": "v3.0-gold-r13_6-val-only",
+  "adm_use_meta_uncertainty": true,
+  "admit_coef": [
+    9.01012993,
+    1.16059577,
+    -0.21874642,
+    -1.97110951,
+    0.07191852,
+    -0.39184743,
+    -0.60048079,
+    -0.09492388,
+    0.04116826,
+    -0.31048754,
+    0.38757864,
+    -0.33110321
+  ],
+  "admit_intercept": -4.98239708,
+  "calibrated_onnx_fp32_sha256": "d77547768dd293d3630ea1bda802db272221f2499222e4464f642564c9344cbe",
+  "calibrated_onnx_int8_sha256": "89a59815e6fa4596608036fd4910798aa41122493fa5f229758c72038d6f15c6",
+  "calibration_version": "3.17.0",
   "feature_stats_dim": 41,
   "fitted_snapshot_id": "snap_r13_20261024T140340Z_064c8e6ccb1f",
   "fp32_vs_int8_val_parity": {
@@ -73,6 +90,14 @@
       "int8_val_macro_f1": 89.5,
       "meets_99_5pct_gate": true
     }
+  },
+  "label_contract": "v2",
+  "mahal_frame": "single_model_full_corpus_candb3_v3_zstd",
+  "median_oof_iters": {
+    "aud": 210,
+    "cat": 216,
+    "jk": 272,
+    "tab": 220
   },
   "menon_logit_adjustment_stop_fit": {
     "D100000": {
@@ -2580,10 +2605,21 @@
     },
     "val_sha256": "36b66664e7f6ee49e1aae13fc7338294d845b2c7842e682e71a3485b050d7777"
   },
+  "p_saf_adm_floor": 0.001,
+  "post_resolution_category_calibration_meta": {
+    "argmax_preserving": true,
+    "ece_15bin_val_int8": 0.006294,
+    "fitted_on": "val_r13_v3_clean.jsonl",
+    "n_rows": 1156
+  },
+  "post_resolution_category_temperature_T": 1.04,
   "r13_allow_categories": [
     "movie",
     "tv_show"
   ],
+  "release_version": "3.17.0-rc2",
+  "s1_temp_scale": 1.0,
+  "stage1_precision": "fp32_pure",
   "stratum_weighted_refit": {
     "spec_targets": {
       "allowed_coverage_at_least_98pct_test": false,
@@ -2636,6 +2672,13 @@
       "stratum": "category"
     }
   },
+  "tau_admit_bare": 0.5,
+  "tau_admit_mf": 0.32,
+  "tau_jk": 0.566457,
+  "tau_saf_hi": 0.730058,
+  "tau_saf_lo": 0.380403,
+  "tau_xxx_bare": 0.08,
+  "tau_xxx_mf": 0.08,
   "temperature_audit": {
     "anime": {
       "acc_pct": 81.8035,
@@ -2741,7 +2784,7 @@
         "fitted_on": "snap_r13_20261024T140340Z_064c8e6ccb1f_val_2fold_ht_guarded",
         "n": 1411
       },
-      "temperature_T": 1.2
+      "temperature_T": 1.0
     },
     "english_subs": {
       "cal_temp_scaled": {
@@ -2771,5 +2814,44 @@
       },
       "temperature_T": 1.0125
     }
-  }
+  },
+  "v317_runtime_config": {
+    "adm_use_meta_uncertainty": true,
+    "admit_coef": [
+      9.01012993,
+      1.16059577,
+      -0.21874642,
+      -1.97110951,
+      0.07191852,
+      -0.39184743,
+      -0.60048079,
+      -0.09492388,
+      0.04116826,
+      -0.31048754,
+      0.38757864,
+      -0.33110321
+    ],
+    "admit_intercept": -4.98239708,
+    "label_contract": "v2",
+    "mahal_frame": "single_model_full_corpus_candb3_v3_zstd",
+    "median_oof_iters": {
+      "aud": 210,
+      "cat": 216,
+      "jk": 272,
+      "tab": 220
+    },
+    "p_saf_adm_floor": 0.001,
+    "release_version": "3.17.0-rc2",
+    "s1_temp_scale": 1.0,
+    "stage1_precision": "fp32_pure",
+    "tau_admit_bare": 0.5,
+    "tau_admit_mf": 0.32,
+    "tau_jk": 0.566457,
+    "tau_saf_hi": 0.730058,
+    "tau_saf_lo": 0.380403,
+    "tau_xxx_bare": 0.08,
+    "tau_xxx_mf": 0.08,
+    "version": "3.17.0-rc3"
+  },
+  "version": "3.17.0-rc3"
 }

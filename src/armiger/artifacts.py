@@ -32,6 +32,7 @@ def model_directory(directory: str | Path | None = None) -> Path:
 # Allow both the baked HF revision digests and DHT-promoted v3.0-gold-r13.3 digests
 KNOWN_RELEASE_DIGESTS = {
     "armiger_ultra.fp32.onnx": {
+        ("d77547768dd293d3630ea1bda802db272221f2499222e4464f642564c9344cbe", 28580490),
         ("812ebfe59919085aeca004c60c821127db8bd20c0b8184892529e53704e325b8", 33861027),
         ("e12880d60aea7abc50f39d39576f0d36d4069e66fc54599e0f388eaa6fe657f0", 33260312),
         ("70286459da47287eb5d984cd67251e0f80f511ceee0ad6ad34c7c2334c9223ec", 33260312),
@@ -44,6 +45,7 @@ KNOWN_RELEASE_DIGESTS = {
         ("d092b49428dbca550d4099b168e231c35b0cc60c7632a60e55d0be63646317dc", 25387489),
     },
     "armiger.int8.onnx": {
+        ("89a59815e6fa4596608036fd4910798aa41122493fa5f229758c72038d6f15c6", 7371593),
         ("c5e88d3431b1a6ef2e61ad1baf500b28cec28f890e8e67e450ae6a82d2468fc8", 8877572),
         ("53cb6f4f11b6147fc8cc7a7e5815aa7dce8e3926eda5dc349bf37c930d131c2a", 17606362),
         ("c39bad25f5e31289d575243473589e023c63327b5d846e26aaeebf9aee7b054c", 17606362),
@@ -61,6 +63,7 @@ KNOWN_RELEASE_DIGESTS = {
         ("74aa36c7701092d198a8238462c0b7a44a55f238ba26f6c506b984a83b1c0ca1", 316931),
     },
     "calibration.json": {
+        ("c311b6b95db96a0c7166b93e5a2119f90c92c9d420e565747b01dfb991123978", 78603),
         ("68c905b29baacf08eeee7512f27fbc05e886361e5f81de5e03045b685e83f81b", 76845),
         ("27d04c6e0832b7f8bce3d9564497d85f6cca7bf4c90895c07bc8417c243f64ef", 76612),
         ("92aa6aac07a9868f7a54fc0089eec6b06aa86c759723dd0731e0afd13e617cdd", 76612),
@@ -71,6 +74,7 @@ KNOWN_RELEASE_DIGESTS = {
         ("3eb5d460bf8408fd0bc104f1cf84ddcd1e71cb8f3d2cbbfab69f38be3eb6776c", 74060),
     },
     "config.json": {
+        ("b9bb4a0f3bebcaf2dd489c41807c9026962c649036830496f9db50e5fe3d282a", 6633),
         ("45f2b113c261052df0eedb2bc88ee03ae2e24d5b01759537c720e5e50bbd11ad", 5611),
         ("e3133bf37b9bafb34bbf8ff240c8562c2a1063aabadf6df6460c80d8046aae06", 5061),
         ("87d3255383f800023bde1d596dbd85dd4d23098c30945213623ee24d4d71911d", 5482),
@@ -85,6 +89,7 @@ KNOWN_RELEASE_DIGESTS = {
         ("3de681533f672940f4c55b0b666111bf4a653db750c1d184188022905dc771d8", 5228),
     },
     "vocab.json": {
+        ("353bffcd4e8de78eb6aeb098a7f0fc11e5f674358cb2df25de8fd07f6901cef7", 993823),
         ("c10afea430188e0207752e93bf0b340fbb585858684037c5134a477cbc0dd7bb", 39996),
         ("4368a1ebfe2fb3bf5fd7258d7fb8e7bf21134ff698ee90f6dc66c85f891e1a05", 3741),
     },

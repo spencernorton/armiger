@@ -236,12 +236,48 @@ class ZCB3MapSectionView(Mapping[str, str]):
         self._buf = buf
         self._base = int(base_offset)
         self._count = int(count)
+        self._overlay: dict[str, Any] = {}
+        self._removed: set[str] = set()
 
     def __len__(self) -> int:
-        return self._count
+        return self._count + len(self._overlay)
+
+    def __setitem__(self, key: Any, value: Any) -> None:
+        target8 = _normalize_lookup_key(key)
+        k_hex = target8.hex() if target8 is not None else str(key)
+        self._removed.discard(k_hex)
+        self._overlay[k_hex] = value
+
+    def __delitem__(self, key: Any) -> None:
+        target8 = _normalize_lookup_key(key)
+        k_hex = target8.hex() if target8 is not None else str(key)
+        if k_hex in self._overlay:
+            del self._overlay[k_hex]
+            return
+        if self.get(key) is None:
+            raise KeyError(key)
+        self._removed.add(k_hex)
+
+    def pop(self, key: Any, *args: Any) -> Any:
+        target8 = _normalize_lookup_key(key)
+        k_hex = target8.hex() if target8 is not None else str(key)
+        if k_hex in self._overlay:
+            return self._overlay.pop(k_hex)
+        val = self.get(key)
+        if val is not None:
+            self._removed.add(k_hex)
+            return val
+        if args:
+            return args[0]
+        raise KeyError(key)
 
     def get(self, key: Any, default: Any = None) -> Any:
         target8 = _normalize_lookup_key(key)
+        k_hex = target8.hex() if target8 is not None else str(key)
+        if k_hex in self._overlay:
+            return self._overlay[k_hex]
+        if k_hex in self._removed:
+            return default
         if target8 is None or self._count <= 0:
             return default
         lo = 0
@@ -500,6 +536,14 @@ class ZCB3MmapCatalog(Mapping[str, Any]):
         if key == "format":
             return "zcb3_blake2b64"
         return self._sections.get(key, default)
+
+    def setdefault(self, key: str, default: Any = None) -> Any:
+        if key in self._sections:
+            return self._sections[key]
+        if default is None:
+            default = {}
+        self._sections[key] = default
+        return default
 
     def __getitem__(self, key: str) -> Any:
         if key == "format":
