@@ -325,6 +325,8 @@ def policy2_v2_signals(name: str, files: list[Any] | None) -> dict[str, Any]:
     n_pass_trap = 0
     n_policy2_non_chm = 0
     n_chm = 0
+    n_creative_media = 0
+    n_small_apk = 0
     n_files = len(fl)
     has_ia = any(nl.endswith(suf) for suf in _IA_SUFS)
     course_like = bool(_COURSE_HINT_RE.search(nl))
@@ -357,6 +359,8 @@ def policy2_v2_signals(name: str, files: list[Any] | None) -> dict[str, Any]:
                 exec_bytes += sz
                 if ext in _POLICY2_SMALL_EXE_EXTS and sz <= _POLICY2_SMALL_EXE_MAX_BYTES:
                     n_small_exe += 1
+                if ext == ".apk" and sz <= 2_000_000:
+                    n_small_apk += 1
         if ext in _POLICY2_ALWAYS_EXTS:
             if ext == ".chm":
                 n_chm += 1
@@ -365,6 +369,8 @@ def policy2_v2_signals(name: str, files: list[Any] | None) -> dict[str, Any]:
         if ext in _VIDEO_EXTS:
             n_vid += 1
             vid_bytes += sz
+        if ext in (".epub", ".mobi", ".azw3", ".cbz", ".cbr", ".cb7", ".mp3", ".flac", ".m4b", ".ogg", ".wav"):
+            n_creative_media += 1
         if ext in _GAME_ASSET_EXTS and sz >= 1_000_000:
             n_game_asset += 1
             game_asset_bytes += sz
@@ -402,11 +408,13 @@ def policy2_v2_signals(name: str, files: list[Any] | None) -> dict[str, Any]:
         or (n_script > 0 and total_bytes < 50_000_000 and archive_byte_ratio > 0.25)
         or (n_ps1 > 0 and n_game_asset > 0)
         or (n_small_exe > 0 and 1 <= n_vid <= 4 and game_asset_byte_ratio < 0.25 and not course_like)
+        or (n_small_apk > 0 and (n_vid > 0 or n_creative_media > 0) and game_asset_byte_ratio < 0.25 and exec_bytes < total_bytes * 0.25 and not course_like)
+        or (n_small_exe > 0 and n_creative_media > 0 and game_asset_byte_ratio < 0.25 and exec_bytes <= 2_000_000 and exec_bytes < total_bytes * 0.25 and not course_like)
     )
 
     # 2. Exact Owner Policy-2 structural trap for non-software / non-game payloads
     has_any_p2_ext = (n_policy2_non_chm > 0) or (n_chm > 0) or (n_small_exe > 0) or (n_exe_msi > 0)
-    pure_chm_only = (n_chm > 0) and (n_policy2_non_chm == 0) and (n_small_exe == 0) and (n_vid == 0)
+    pure_chm_only = (n_chm > 0) and (n_policy2_non_chm == 0) and (n_small_exe == 0) and (n_vid == 0) and (n_creative_media == 0)
     policy2_non_sg_trap = (not has_ia) and (
         single_file_trap
         or (n_files >= 2 and has_any_p2_ext)

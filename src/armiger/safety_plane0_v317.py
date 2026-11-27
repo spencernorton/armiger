@@ -11,7 +11,8 @@ import numpy as np
 
 from canonical_views import view_b_safety_skeleton, view_c_byte_obf_stats
 
-Implements Plane-0 deterministic full-input security inspection.
+# Implements Plane-0 deterministic full-input security inspection.
+V3161_BUNDLE = Path(__file__).resolve().parent
 
 # Strict DoS / ReDoS inspection bounds: anything exceeding these FAILS CLOSED to quarantine_review (incomplete_inspection=True)!
 MAX_TITLE_CHARS = 1024

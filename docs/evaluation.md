@@ -1,6 +1,23 @@
 # Evaluation status and limitations
 
-## Armiger Ultra v3.17.0 qualification & live production verification
+## Armiger Ultra v3.18.0 qualification & historical release comparison
+
+Software 3.18.0 uses model bundle 3.18.0 (`armiger-ultra-3.18.0-rc6-v4-mmgl-v2-onnx-fp32`, master SHA-256 `97f93fb71c8aa4a8067a2f5c3138ae9f5f93f153ce3b82d60ace933f05eb96ef`), a 100% pure-ML 4-plane ONNX runtime (`0` `.pkl` files, `0` PyTorch runtime imports, `0` handwritten torrent-title post-processing rules):
+
+- **Pristine Post-Freeze One-Shot `R32-live` (`N = 4,386`, `3,392` prod + `994` stress, zero training overlap):** `Unified Prod` **`91.83%`** vs `v3.17.0` `90.39%` (`+1.45 pp`, McNemar `p = 9.18e-5`), `Adult/XXX Prod` **`97.53%`** (`+1.28 pp`, `p = 0.0167`), `Anime` **`94.72%`** (`+2.09 pp`, `p = 1.57e-4`), `Audio Strict P(x)` **`91.92%`** (`+1.94 pp`, `p = 0.0300`), `Unknown Abstention` **`59.32%`** (`+16.95 pp`, `p = 1.54e-8`, `known_fa = 0.226%`), `Title Span F1 >= 0.80` **`71.42%`** (`+11.61 pp`, `p = 8.85e-53`), and `CSAM Bait Recall` **`21.05%`** (`+12.63 pp`, `p = 0.0169`) at parity clean specificity (`99.05%` vs `99.26%`, `p = 0.238`).
+- **All `5` Unseen Live Holdouts (`R26` + `R28`–`R32-live`, `N = 20,831` total / `15,474` prod):** `v3.18.0` wins **`5/5`** cohorts on `Unified Prod` (`442` wins vs `289` losses, `p = 1.7e-8`), `Anime`, `Audio Strict P(x)`, `Unknown Abstention`, and `Title Span`, while cutting pooled production `XXX` admission leaks by **`50%` (`34 -> 17`)**. On `R26-live` (`N = 3,104`), `v3.18.0` sets an all-time high of **`92.72%` `Unified Prod`** (vs `73.74%` in `v3.12.0`, `89.15%` in `v3.15.4`, and `91.53%` in `v3.17.0`) and recovers the `96.57%` `Anime` peak with zero rules.
+- **Historical Suites 1–4 (`N = 7,189`, honest rule-era tradeoff):** On `Suite 2 (Beyond Confirmation)`, `v3.18.0` gains **`+2.18 pp` Audio (`96.94%`)** and **`+2.20 pp` Anime (`96.07%`)** vs `v3.17.0` (`3-of-3 Cat-10 = 95.91%`). On legacy October suites (`S1 heldout_20261026 = 93.08%`, `S3 val_v3_clean = 94.89%`, `S4 fresh_balanced_1000 = 91.10%`), legacy rule+`.pkl` releases (`v3.12.0`–`v3.15.4`) score higher on the older fixed distributions while trailing `v3.18.0` by `3.6–19.0 pp` on unseen live `R26-live`; `v3.18.0` sits within `-0.24` to `-0.70 pp` of `v3.17.0` after removing all remaining post-processing rules.
+- **Safety, Invariance & Production Hardware (`512 MiB` / `1` vCPU Zen 2):** `Cert 1` untouched safety FP `1/9,695` (`CP95 UB = 0.0489% <= 0.05%`), `Cert 2` subtitle invariance `2,000/2,000` bitwise exact (`max |dP| = 0.0`), `Cert 3` fake-game malware `500/500` blocked (`0` clean FPs), `190/190` (`100.0%`) red-team canaries (`60/60` Policy-2 droppers), `2.02`-hour passive Zen 2 soak (`604,476` rows, `0` errors, `0` OOM, `11.02 ms/row`), and live 93-minute production steady-state **`355.4 MiB / 512 MiB` (`-70.7%` RSS vs `v3.15.4`'s `1,212 MiB`)** at **`13.8–14.0 ms` p50** across `127,094` live reviews (`0` failed, `0` refaults).
+
+![Armiger Ultra v3.18.0 vs Historical Releases Accuracy Progression](assets/chart1_v318_vs_older_releases_accuracy.png)
+
+![Armiger Ultra v3.18.0 Live Production Runtime Progression](assets/chart2_v318_live_production_progression.png)
+
+![Armiger Ultra v3.18.0 2-Hour Zen 2 Soak Telemetry](assets/chart3_v318_zen2_2h_soak_telemetry.png)
+
+![Armiger Ultra v3.18.0 Safety, Invariance, and Live Shadow Certifications](assets/chart4_v318_safety_and_invariance_certs.png)
+
+## Historical: Armiger Ultra v3.17.0 qualification & live production verification
 
 Software 3.17.0 uses model bundle 3.17.0 (`v3.17.0-rc3` clean-sheet 4-plane architecture, `root_sha = 181b4712311ba49f59e0aa0f0d97a4ea574568adeb0b7fedc2f237b6090fb1fd`):
 
@@ -19,7 +36,7 @@ Software 3.17.0 uses model bundle 3.17.0 (`v3.17.0-rc3` clean-sheet 4-plane arch
 
 ## Current-release comparison status
 
-Software 3.17.0 uses model bundle 3.17.0. The latest published comparison graphics
+Software 3.18.0 uses model bundle 3.18.0. The latest published comparison graphics
 are displayed as archived figures while their data and provenance remain under
 review. They do not establish verified current-release performance. No replacement
 score, new sample count or new model evaluation accompanies their restoration.
@@ -34,7 +51,7 @@ File hashes and successful image regeneration do not establish that the
 displayed statistics match the receipt or were measured for the current model.
 
 The public M4 Pro [timing receipt](../benchmarks/receipts/hardware_and_api_cost_receipt.json)
-identifies older ONNX hashes, not the pinned 3.17.0 hashes. Those measurements
+identifies older ONNX hashes, not the pinned 3.18.0 hashes. Those measurements
 must not be advertised as current-version end-to-end timing. The unqualified GPU timing headline is not supported by that receipt; see
 [resources](resources.md).
 
@@ -67,7 +84,7 @@ language, screening and swarm denominators separate.
 
 The account below describes the named historical cohorts and components. It is
 retained for traceability, rather than as validation of the newer chart images
-or model 3.17.0. Standalone neural and hybrid results must remain separate.
+or model 3.18.0. Standalone neural and hybrid results must remain separate.
 
 - **Cloud teacher comparison (identical cohorts, non-circular LOTO):** **`95.66%`** 6-dimension mean on the `N=757` Public-Tracker swarm cohort (**`96.39%`** with `N=10,278` Multi-Source Corpus Swarm AUROC). On common-support leave-one-teacher-out category panels, `OpenAI GPT (Fast Tier)` reaches `97.84%` vs. Armiger Ultra `94.56%` (`N=974`) and `Google Gemini Flash` reaches `97.05%` vs. Armiger Ultra `94.70%` (`N=982`); Armiger Ultra leads the 4-dimension LOTO composite against GPT (`95.74%` vs. `95.17%`) and trails Gemini (`95.83%` vs. `97.32%`).
 - **Fresh non-teacher baselines (identical inputs, no label-curation role):** on the `beyond_confirmation` labelled subset (category `N=967`), the v3.0.0 hybrid reaches **`92.76%`** vs. **`92.45%`** for `Claude Haiku 4.5` and **`47.67%`** for the locally served 8B-class `Qwen3-8B` (see [`benchmarks/receipts/llm_beyond_fresh_receipt.json`](../benchmarks/receipts/llm_beyond_fresh_receipt.json)).

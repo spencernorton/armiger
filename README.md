@@ -41,19 +41,19 @@ Armiger reads names, file paths, sizes and optional swarm counters. It predicts 
 
 It does not inspect media payloads. Metadata predictions can be wrong and do not prove that a download is safe. See [evaluation and limitations](docs/evaluation.md) for measured results and label coverage. Sharing is off by default.
 
-The model files are **7.4 MB INT8** (`7,371,593` bytes) or **28.6 MB FP32** (`28,580,490` bytes) on disk. These sizes do not describe working RAM: the selected runtime, reference data, batch size and loaded sessions also matter. See [resources and measurement scope](docs/resources.md).
+The model files are **8.2 MB INT8** (`8,232,221` bytes) or **31.7 MB FP32** (`31,727,281` bytes) on disk. These sizes do not describe working RAM: the selected runtime, reference data, batch size and loaded sessions also matter. See [resources and measurement scope](docs/resources.md).
 
 ## Comparison charts
 
-### Armiger Ultra v3.17.0 Qualification, Prospective R27-live Audit & Production Cutover
+### Armiger Ultra v3.18.0 (100% Pure ML, Zero Rules) vs Historical Releases (`v3.12.0` – `v3.17.0`)
 
-![Armiger Ultra v3.17.0 R26-live and 7-suite benchmark comparison](docs/assets/chart1_v317_benchmark_and_suites_comparison.png)
+![Armiger Ultra v3.18.0 vs Historical Releases Accuracy Progression](docs/assets/chart1_v318_vs_older_releases_accuracy.png)
 
-![Armiger Ultra v3.17.0 R27-live disagreement audit, Policy-2 exemption, and 180-canary verification](docs/assets/chart2_v317_r27_disagreement_and_canaries.png)
+![Armiger Ultra v3.18.0 Live Production Runtime Progression](docs/assets/chart2_v318_live_production_progression.png)
 
-![Armiger Ultra v3.17.0 R27-live prospective BitAgent shadow replay](docs/assets/chart3_v317_r27_live_shadow_replay.png)
+![Armiger Ultra v3.18.0 2-Hour Zen 2 Soak Telemetry](docs/assets/chart3_v318_zen2_2h_soak_telemetry.png)
 
-![Armiger Ultra v3.17.0 production CI soak and live BitAgent Stack 499 cutover](docs/assets/chart4_v317_production_memory_and_live_cutover.png)
+![Armiger Ultra v3.18.0 Safety, Invariance, and Live Shadow Certifications](docs/assets/chart4_v318_safety_and_invariance_certs.png)
 
 ### Archived historical comparison figures
 
@@ -83,7 +83,7 @@ or payload safety. [Source records and archived figures](docs/evaluation.md).
 - [Other integrations](https://github.com/spencernorton/Armiger-Connectors) — DH-Waypoint, Torznab and Arr.
 - [Help and bug reports](https://github.com/spencernorton/armiger/issues) · [Contributing](.github/CONTRIBUTING.md) · [Security reporting](.github/SECURITY.md)
 
-Library **3.17.0** uses model bundle **3.17.0**. The Docker image includes verified model files. Python installs download them from a fixed [Hugging Face](https://huggingface.co/NorviTech/armiger-ultra) revision and verify them before use. Apache-2.0: [license](LICENSE), [notices](NOTICE), [use policy](.github/LEGAL.md).
+Library **3.18.0** uses model bundle **3.18.0**. The Docker image includes verified model files. Python installs download them from a fixed [Hugging Face](https://huggingface.co/NorviTech/armiger-ultra) revision and verify them before use. Apache-2.0: [license](LICENSE), [notices](NOTICE), [use policy](.github/LEGAL.md).
 
 ---
 
