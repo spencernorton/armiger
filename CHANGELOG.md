@@ -1,5 +1,11 @@
 # Changelog
 
+## 3.18.0
+
+- Promote pure-ML 4-plane ONNX model bundle `3.18.0` (`armiger-ultra-3.18.0-rc6-v4-mmgl-v2-onnx-fp32`, master SHA-256 `97f93fb71c8aa4a8067a2f5c3138ae9f5f93f153ce3b82d60ace933f05eb96ef` on `NorviTech/armiger-ultra` at `24298733e81d8237e30f93f716135a6a5812e359` and `NorviTech/armiger` at `2a20e72df644f6fee0872cfee17b85d79cfa2c4d`, DHT `seq=41` / `seq=3018`), pinning `armiger_ultra.fp32.onnx` (`31,727,281` B, `sha256=f67bf4fd05a4288733820163a93ee4cd4629defd7c6ceeabd7f0bc8ded9c4e93`), `armiger.int8.onnx` (`8,232,221` B, `sha256=6eb60a01939cb6c655af31f64e14598bfe94acd5041dac0e3f04c699f9e49efb`), unified `32K` SentencePiece Unigram `vocab.json` (`993,823` B), `calibration.json` (`78,603` B), and `config.json` (`6,921` B).
+- Remove all remaining post-processing torrent-title rules (`0` `.pkl`, `0` PyTorch runtime imports, `0` title rules) while improving unseen live accuracy across all `5` zero-overlap holdouts (`R26` + `R28`–`R32-live`, `N = 20,831`; pooled `442` vs `289` wins, `p = 1.7e-8`; `R32-live` `Unified Prod +1.45 pp`, `Anime +2.09 pp`, `Audio Strict P(x) +1.94 pp`, `Unknown +16.95 pp`, `Title Span +11.61 pp`; pooled `XXX` leaks cut `-50%`).
+- Ship `armiger_v4_runtime.py`, hardened Policy-2 APK/creative-media dropper traps in `canonical_views.py` (`190/190` red-team canaries, `60/60` droppers), fix portable `V3161_BUNDLE` resolution in `safety_plane0_v317.py`, and publish updated multi-release progression, live production runtime, 2-hour Zen 2 soak, and safety certification figures (`docs/assets/chart1_v318_*.png`..`chart4_v318_*.png`).
+
 ## 3.17.0
 
 - Promote clean-sheet 4-plane hybrid model bundle `3.17.0` (`v3.17.0-rc3`, `root_sha = 181b4712311ba49f59e0aa0f0d97a4ea574568adeb0b7fedc2f237b6090fb1fd` on `NorviTech/armiger-ultra` at `13e972ac637debf07979dc0ac4268367e562c5f1` and `NorviTech/armiger` at `ec64feb9a3ba531114ffb8aeee75b8ae55f3c9df`, DHT `seq=40` / `seq=3017`), pinning `armiger_ultra.fp32.onnx` (`28,580,490` B, `sha256=d77547768dd293d3630ea1bda802db272221f2499222e4464f642564c9344cbe`), `armiger.int8.onnx` (`7,371,593` B, `sha256=89a59815e6fa4596608036fd4910798aa41122493fa5f229758c72038d6f15c6`), unified 32K SentencePiece Unigram + extension `vocab.json` (`993,823` B), `calibration.json` (`78,603` B), and `config.json` (`6,633` B).
